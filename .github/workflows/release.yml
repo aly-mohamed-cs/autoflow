@@ -1,0 +1,56 @@
+name: Release
+
+# Push a version tag to build the installers and publish them as a GitHub release:
+#   git tag v0.2.0 && git push origin v0.2.0
+# The company server picks them up with: .\deploy\windows\update-server.ps1 -Installers
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (without v), for a test build without a release"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then v="${{ inputs.version }}"; else v="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build installers
+        shell: pwsh
+        run: ./deploy/build/build-release.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Smoke test the packaged Studio (engine starts from the bundle)
+        shell: pwsh
+        run: |
+          $py = "build/studio/win-unpacked/resources/engine/python/python.exe"
+          & $py -m autoflow_engine --version
+          if ($LASTEXITCODE -ne 0) { throw "bundled engine does not start" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoflow-installers-${{ steps.version.outputs.version }}
+          path: build/release/*
+          if-no-files-found: error
+      - name: Publish GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/release/* \
+            --title "Autoflow $GITHUB_REF_NAME" --generate-notes

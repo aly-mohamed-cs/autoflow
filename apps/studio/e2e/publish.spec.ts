@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
+import { launchTarget } from './target';
 import { join, resolve } from 'node:path';
 
 const SERVER = resolve(__dirname, '..', '..', 'server', 'dist', 'index.js');
@@ -42,7 +43,7 @@ test('connect to the Orchestrator and publish an automation', async () => {
       body: JSON.stringify({ username: 'builder', displayName: 'Bea Builder', password: 'a long test password' }),
     });
 
-    const app = await electron.launch({ args: ['.'], env: { ...process.env, AUTOFLOW_USER_DATA: join(dir, 'studio') } });
+    const app = await electron.launch({ ...launchTarget(), env: { ...process.env, AUTOFLOW_USER_DATA: join(dir, 'studio') } });
     const win = await app.firstWindow();
     await win.setViewportSize({ width: 1440, height: 900 });
     await win.waitForFunction(() => window.autoflow.engine.status().then((s) => s.state === 'ready'), null, { timeout: 30_000 });

@@ -1,6 +1,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { launchTarget } from './target';
 import { join } from 'node:path';
 
 let app: ElectronApplication;
@@ -9,7 +10,7 @@ let userData: string;
 
 test.beforeEach(async () => {
   userData = mkdtempSync(join(tmpdir(), 'autoflow-e2e-'));
-  app = await electron.launch({ args: ['.'], env: { ...process.env, AUTOFLOW_USER_DATA: userData } });
+  app = await electron.launch({ ...launchTarget(), env: { ...process.env, AUTOFLOW_USER_DATA: userData } });
   win = await app.firstWindow();
   await win.setViewportSize({ width: 1440, height: 900 });
   await win.waitForFunction(() => window.autoflow.engine.status().then((s) => s.state === 'ready'), null, { timeout: 30_000 });

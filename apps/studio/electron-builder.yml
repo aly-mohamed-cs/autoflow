@@ -1,0 +1,31 @@
+# Windows installer for Autoflow Studio. The Python engine is bundled first with
+#   python deploy/build/bundle_python.py --out build/python-studio   (from the repo root)
+appId: com.autoflow.studio
+productName: Autoflow Studio
+copyright: Autoflow
+directories:
+  output: ../../build/studio
+  buildResources: build
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: ../../build/python-studio
+    to: engine/python
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: Autoflow-Studio-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Autoflow Studio
+  uninstallDisplayName: Autoflow Studio
+  deleteAppDataOnUninstall: false
