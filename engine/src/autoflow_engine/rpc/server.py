@@ -21,6 +21,7 @@ from typing import IO, Any
 from pydantic import ValidationError
 
 from .. import __version__, catalog
+from ..design.desktop_picker import DesktopPicker
 from ..design.session import DesignSession
 from ..errors import AutoflowError
 from ..flow import Flow
@@ -51,11 +52,13 @@ class EngineServer:
         self._control: RunControl | None = None
         self._run_id: str | None = None
         self._design: DesignSession | None = None
+        self._desktop_picker: DesktopPicker | None = None
         # Methods that answer later (the user is clicking in the design browser).
         self._deferred: dict[str, Callable[[dict[str, Any], Callable[..., None]], None]] = {
             "picker.web": lambda p, respond: self.design.pick(p.get("url"), respond),
             "recorder.start": lambda p, respond: self.design.record_start(p.get("url"), respond),
             "recorder.stop": lambda _p, respond: self.design.record_stop(respond),
+            "picker.desktop": lambda _p, respond: self.desktop_picker.pick(respond),
         }
         self._methods: dict[str, Callable[[dict[str, Any]], Any]] = {
             "ping": lambda _p: {"engine_version": __version__},
@@ -68,8 +71,7 @@ class EngineServer:
             "run.step": lambda _p: self._with_control(lambda c: c.step()),
             "run.stop": lambda _p: self._with_control(lambda c: c.cancel()),
             "run.set_breakpoints": lambda p: self._with_control(lambda c: c.set_breakpoints(set(p.get("step_ids", [])))),
-            "picker.cancel": lambda _p: self._design.cancel() if self._design else None,
-            "picker.desktop": self._picker_desktop,
+            "picker.cancel": lambda _p: self._cancel_pickers(),
             "design.close": lambda _p: self._close_design(),
         }
 
@@ -85,11 +87,17 @@ class EngineServer:
             self._design.close()
             self._design = None
 
-    def _picker_desktop(self, _params: dict[str, Any]) -> None:
-        raise AutoflowError(
-            "Picking elements in Windows applications arrives with the desktop automation release.",
-            "For now, use websites, or type the selectors under 'Other ways to choose an element'.",
-        )
+    @property
+    def desktop_picker(self) -> DesktopPicker:
+        if self._desktop_picker is None:
+            self._desktop_picker = DesktopPicker(self.notify)
+        return self._desktop_picker
+
+    def _cancel_pickers(self) -> None:
+        if self._design is not None:
+            self._design.cancel()
+        if self._desktop_picker is not None:
+            self._desktop_picker.cancel()
 
     # -- transport ---------------------------------------------------------
     def serve(self) -> None:

@@ -60,6 +60,32 @@ export const TEMPLATES: Template[] = [
     }),
   },
   {
+    id: 'excel-to-desktop',
+    title: 'Excel rows into a desktop app',
+    description: 'Type each row of a sheet into a Windows application (ERP, accounting...) and save the result.',
+    icon: 'app-window',
+    category: 'Desktop',
+    build: () => ({
+      variables: [{ name: 'excel_file', type: 'file', is_input: true, description: 'The Excel file to process' }],
+      steps: [
+        s('control.comment', { text: 'Pick the program, then use "Pick on screen" on each field: point at it and press Ctrl.' }),
+        s('excel.read', { file: '{{excel_file}}' }, { outputs: { table: 'rows' } }),
+        s('desktop.launch', { program: '', window: '' }),
+        s('control.for_each', { items: '{{rows}}', item_variable: 'row', index_variable: 'row_number' }, {
+          blocks: {
+            body: [
+              s('desktop.type', { element: '', text: '' }),
+              s('desktop.click', { element: '' }),
+              s('desktop.wait_for', { element: '', state: 'text contains', text: '' }),
+              s('desktop.get_text', { element: '' }, { outputs: { text: 'result' } }),
+              s('excel.update_row', { file: '{{excel_file}}', row_number: '{{row_number}}', values: { Result: '{{result}}' } }),
+            ],
+          },
+        }),
+      ],
+    }),
+  },
+  {
     id: 'merge-reports',
     title: 'Combine Excel reports',
     description: 'Stack every Excel file in a folder into one table, total it, and save a summary workbook.',

@@ -39,7 +39,10 @@ python-preference = "only-managed"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["browser: drives a real browser (Edge/Chromium) against testbed/portal"]
+markers = [
+    "browser: drives a real browser (Edge/Chromium) against testbed/portal",
+    "desktop: drives the Windows desktop (needs an unlocked interactive session)",
+]
 
 [tool.ruff]
 line-length = 110

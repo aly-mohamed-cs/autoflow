@@ -2941,8 +2941,8 @@
       "title": "Wait for element in application",
       "category": "Desktop",
       "icon": "hourglass",
-      "sentence": "Wait until {element} {state}",
-      "description": "",
+      "sentence": "Wait until {element} {state} {text}",
+      "description": "Wait for a screen, message or button state before continuing - more reliable than a fixed wait.",
       "params": {
         "additionalProperties": false,
         "properties": {
@@ -2972,9 +2972,18 @@
             "enum": [
               "appears",
               "disappears",
-              "is enabled"
+              "is enabled",
+              "is disabled",
+              "text contains",
+              "text does not contain"
             ],
             "title": "Wait until it",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "For the 'text contains' choices, e.g. Saved or a number.",
+            "title": "Text",
             "type": "string"
           }
         },

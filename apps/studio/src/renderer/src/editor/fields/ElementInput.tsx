@@ -127,7 +127,7 @@ export function ElementInput({
           />
         </div>
       )}
-      {picking && <PickingOverlay onCancel={() => void window.autoflow.engine.call('picker.cancel')} />}
+      {picking && <PickingOverlay kind={kind} onCancel={() => void window.autoflow.engine.call('picker.cancel')} />}
       <ElementDialog
         element={editing}
         onClose={() => setEditing(null)}

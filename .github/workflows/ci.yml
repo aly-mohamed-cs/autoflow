@@ -21,7 +21,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - run: uv run ruff check src tests
-      - run: uv run pytest -q
+      # Desktop tests need a signed-in, unlocked desktop; run them locally or on a robot-like VM.
+      - run: uv run pytest -q -m "not desktop"
       - name: Catalog is up to date
         shell: bash
         run: |

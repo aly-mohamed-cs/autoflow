@@ -16,7 +16,7 @@ from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
 from ..flow import Element
 from ..runtime.context import RunContext
-from ..selectors.desktop import find, find_window, uia
+from ..selectors.desktop import find, find_window, specific, uia
 from ..values import Table, to_text
 
 K = "Desktop"
@@ -240,13 +240,61 @@ class SelectParams(ElementParams):
 )
 def select(ctx: RunContext, p: SelectParams) -> None:
     control = _locate(ctx, p)
-    option = to_text(p.option)
+    option = to_text(p.option).strip()
+    names = _list_items(control)
+    exact = next((n for n in names if n.strip().casefold() == option.casefold()), None)
+    if exact is None:
+        raise ActivityError(f"The list has no option '{option}'.",
+                            f"Options: {', '.join(names)}" if names else "Check the spelling of the option.")
+    chosen = False
+    if hasattr(control, "Select"):  # ComboBoxControl: expands, clicks the item, like a person
+        with contextlib.suppress(Exception):
+            chosen = bool(control.Select(exact, simulateMove=False, waitTime=0.2))
+    if not chosen:
+        item = next((c for c in _descendants(control, 3) if c.ControlTypeName == "ListItemControl" and c.Name == exact), None)
+        selector = _pattern(item, "GetSelectionItemPattern") if item is not None else None
+        if selector is not None:
+            selector.Select()
+    # Never report success without checking: some lists ignore programmatic selection.
+    shown = _text_of(control).strip()
+    if shown.casefold() != exact.strip().casefold():
+        raise ActivityError(f"Could not choose '{exact}' - the list still shows '{shown}'.",
+                            "Try a click step on the list followed by a click on the option instead.")
+
+
+def _list_items(control: Any) -> list[str]:
+    """Names of the options, opening the list if needed to see them."""
+    items = [c.Name for c in _descendants(control, 3) if c.ControlTypeName == "ListItemControl" and c.Name]
+    if items:
+        return items
+    expander = _pattern(control, "GetExpandCollapsePattern")
+    if expander is None:
+        return []
     try:
-        if control.Select(option, simulateMove=False, waitTime=0.2):
-            return
+        expander.Expand()
+        time.sleep(0.2)
+        return [c.Name for c in _descendants(control, 3) if c.ControlTypeName == "ListItemControl" and c.Name]
     except Exception:
-        pass
-    raise ActivityError(f"The list has no option '{option}'.", "Check the spelling of the option.")
+        return []
+    finally:
+        with contextlib.suppress(Exception):
+            expander.Collapse()
+
+
+def _pattern(control: Any, getter: str) -> Any:
+    try:
+        return getattr(control, getter)()
+    except Exception:
+        return None
+
+
+def _descendants(control: Any, depth: int) -> list[Any]:
+    out: list[Any] = []
+    level = [control]
+    for _ in range(depth):
+        level = [child for parent in level for child in parent.GetChildren()]
+        out.extend(level)
+    return out
 
 
 class CheckParams(ElementParams):
@@ -280,14 +328,7 @@ def check(ctx: RunContext, p: CheckParams) -> None:
     outputs=[OutputDef("text", "Text", "text", default_variable="app_text")],
 )
 def get_text(ctx: RunContext, p: ElementParams) -> str:
-    control = _locate(ctx, p)
-    try:
-        pattern = control.GetValuePattern()
-        if pattern and pattern.Value:
-            return pattern.Value
-    except Exception:
-        pass
-    return control.Name or ""
+    return _text_of(_locate(ctx, p))
 
 
 class KeysParams(Params):
@@ -328,7 +369,10 @@ def send_keys(ctx: RunContext, p: KeysParams) -> None:
 
 
 class WaitParams(ElementParams):
-    state: Literal["appears", "disappears", "is enabled"] = Param("appears", title="Wait until it")
+    state: Literal["appears", "disappears", "is enabled", "is disabled", "text contains", "text does not contain"] = Param(
+        "appears", title="Wait until it"
+    )
+    text: str = Param("", title="Text", description="For the 'text contains' choices, e.g. Saved or a number.")
 
 
 @activity(
@@ -336,7 +380,8 @@ class WaitParams(ElementParams):
     title="Wait for element in application",
     category=K,
     icon="hourglass",
-    sentence="Wait until {element} {state}",
+    sentence="Wait until {element} {state} {text}",
+    description="Wait for a screen, message or button state before continuing - more reliable than a fixed wait.",
     params=WaitParams,
 )
 def wait_for(ctx: RunContext, p: WaitParams) -> None:
@@ -345,17 +390,36 @@ def wait_for(ctx: RunContext, p: WaitParams) -> None:
     if p.state == "appears":
         _locate(ctx, p)
         return
-    while time.monotonic() < deadline:
+    wanted = to_text(p.text).casefold()
+    while True:
         try:
             control = _locate(ctx, ElementParams(element=p.element, timeout=0))
         except ActivityError:
             if p.state == "disappears":
                 return
             control = None
-        if control is not None and p.state == "is enabled" and control.IsEnabled:
-            return
-        ctx.sleep(0.3)
-    raise ActivityError(f"The element did not become {'gone' if p.state == 'disappears' else 'enabled'} in time.")
+        if control is not None:
+            if p.state == "is enabled" and control.IsEnabled:
+                return
+            if p.state == "is disabled" and not control.IsEnabled:
+                return
+            if p.state in ("text contains", "text does not contain"):
+                shown = _text_of(control).casefold()
+                if (wanted in shown) == (p.state == "text contains"):
+                    return
+        if time.monotonic() >= deadline:
+            break
+        ctx.sleep(0.25)
+    raise ActivityError(f"'{p.state} {p.text}'".replace(" ''", "") + f" did not happen within {timeout:g} seconds.")
+
+
+def _text_of(control: Any) -> str:
+    for getter in ("GetValuePattern", "GetLegacyIAccessiblePattern"):
+        pattern = _pattern(control, getter)
+        value = getattr(pattern, "Value", None) if pattern is not None else None
+        if value:
+            return value
+    return control.Name or ""
 
 
 @activity(
@@ -373,16 +437,12 @@ def read_table(ctx: RunContext, p: ElementParams) -> Table:
     rows = []
     header: list[str] = []
     for child in control.GetChildren():
-        cells = child.GetChildren()
+        cells = [specific(c) for c in child.GetChildren()]
         values = []
         for cell in cells:
-            value = ""
-            try:
-                pattern = cell.GetValuePattern()
-                value = pattern.Value if pattern else ""
-            except Exception:
-                value = ""
-            values.append(value if value not in (None, "(null)") else cell.Name)
+            pattern = _pattern(cell, "GetValuePattern")
+            value = pattern.Value if pattern is not None else None
+            values.append(cell.Name if value in (None, "(null)") else value)
         if not values:
             continue
         name = (child.Name or "").lower()

@@ -21,7 +21,7 @@ sealed class InvoiceForm : Form
     readonly ComboBox currency = new() { Name = "cboCurrency", AccessibleName = "Currency", DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
     readonly CheckBox urgent = new() { Name = "chkUrgent", Text = "Urgent", AutoSize = true };
     readonly Button save = new() { Name = "btnSave", Text = "Save invoice", AutoSize = true };
-    readonly Label status = new() { Name = "lblStatus", AccessibleName = "Status", AutoSize = true, Text = "Ready" };
+    readonly Label status = new() { Name = "lblStatus", AutoSize = true, Text = "Ready" };
     readonly DataGridView grid = new() { Name = "gridInvoices", AccessibleName = "Saved invoices", Width = 520, Height = 180, ReadOnly = true, AllowUserToAddRows = false, RowHeadersVisible = false };
     int next = 1001;
 
@@ -67,7 +67,7 @@ sealed class InvoiceForm : Form
             await Task.Delay(500);
             var document = $"DOC-{next++}";
             grid.Rows.Add(document, invoice.Text, customer.Text, amount.Text, currency.Text);
-            status.Text = $"Saved as {document}";
+            status.Text = $"Saved {grid.Rows[grid.Rows.Count - 1].Cells[1].Value} as {document}";
             invoice.Clear();
             amount.Clear();
             customer.Clear();

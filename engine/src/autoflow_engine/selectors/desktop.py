@@ -108,12 +108,19 @@ def locate_in(window: Any, selector: Selector) -> Any | None:
     index = int(selector.options.get("index") or 0)
     if index:
         ctrl = auto.Control(searchFromControl=window, foundIndex=index, **conditions)
-        return ctrl if ctrl.Exists(0, 0) else None
+        return specific(ctrl) if ctrl.Exists(0, 0) else None
     first = auto.Control(searchFromControl=window, foundIndex=1, **conditions)
     if not first.Exists(0, 0):
         return None
     second = auto.Control(searchFromControl=window, foundIndex=2, **conditions)
-    return None if second.Exists(0, 0) else first
+    return None if second.Exists(0, 0) else specific(first)
+
+
+def specific(control: Any) -> Any:
+    """A generic search result as its real class (EditControl, ComboBoxControl...), which has
+    the value / toggle / expand helpers that the base Control lacks."""
+    auto = uia()
+    return auto.Control.CreateControlFromControl(control) or control
 
 
 def find(element: Element, timeout: float, log: Any = None) -> Any:

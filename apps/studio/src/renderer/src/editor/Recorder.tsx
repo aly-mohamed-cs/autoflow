@@ -179,18 +179,39 @@ export function Recorder() {
   );
 }
 
-/** Full-window hint while the user picks an element in the browser. */
-export function PickingOverlay({ onCancel }: { onCancel: () => void }) {
+/** Full-window hint while the user picks an element (in a browser, or in a desktop application). */
+export function PickingOverlay({ onCancel, kind = 'web' }: { onCancel: () => void; kind?: 'web' | 'desktop' }) {
+  const [hover, setHover] = useState<{ name: string; window: string } | null>(null);
+  useEffect(
+    () => window.autoflow.engine.onNotification('picker.hover', (h) => setHover(h as { name: string; window: string })),
+    [],
+  );
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 animate-fade-in" role="dialog" aria-label="Picking an element">
       <div className="flex max-w-md flex-col items-center gap-3 rounded-xl bg-surface p-6 text-center shadow-pop">
         <Spinner className="h-6 w-6 text-primary" />
-        <p className="text-base font-semibold">Click the element in the browser window</p>
-        <p className="text-[13px] text-muted">
-          Move the mouse over the page — the element under it is highlighted. Click it to pick it. Need to sign in or
-          open another page first? Hold <kbd className="rounded border border-border px-1">Ctrl</kbd> while clicking to
-          use the page normally. Press Esc in the browser to cancel.
-        </p>
+        {kind === 'desktop' ? (
+          <>
+            <p className="text-base font-semibold">Point at the element and press Ctrl</p>
+            <p className="text-[13px] text-muted">
+              Switch to the application, move the mouse over the button, box or list you want — a red outline shows
+              what will be picked — then press <kbd className="rounded border border-border px-1">Ctrl</kbd>. Press Esc
+              to cancel.
+            </p>
+            <p className="min-h-5 text-[13px] font-medium text-primary" aria-live="polite">
+              {hover ? `Pointing at: ${hover.name}${hover.window ? ` (${hover.window})` : ''}` : ''}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-base font-semibold">Click the element in the browser window</p>
+            <p className="text-[13px] text-muted">
+              Move the mouse over the page — the element under it is highlighted. Click it to pick it. Need to sign in or
+              open another page first? Hold <kbd className="rounded border border-border px-1">Ctrl</kbd> while clicking to
+              use the page normally. Press Esc in the browser to cancel.
+            </p>
+          </>
+        )}
         <Button onClick={onCancel}>Cancel</Button>
       </div>
     </div>
