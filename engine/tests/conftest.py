@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import functools
+import http.server
 import itertools
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -57,3 +60,21 @@ class Harness:
 @pytest.fixture
 def h(tmp_path: Path) -> Harness:
     return Harness(tmp_path)
+
+
+PORTAL = Path(__file__).resolve().parents[2] / "testbed" / "portal"
+
+
+class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture(scope="session")
+def portal_url():
+    """The demo portal (testbed/portal) served on a free local port."""
+    handler = functools.partial(_QuietHandler, directory=str(PORTAL))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    server.shutdown()

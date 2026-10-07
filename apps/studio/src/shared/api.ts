@@ -51,7 +51,9 @@ export interface FileFilter {
 
 export interface StudioApi {
   engine: {
-    call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
+    /** timeoutMs: how long to wait for the answer (picking waits for the user; default 60 s). */
+    call<T = unknown>(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T>;
+    onNotification(method: string, listener: (params: unknown) => void): () => void;
     status(): Promise<EngineStatus>;
     restart(): Promise<EngineStatus>;
     onStatus(listener: (status: EngineStatus) => void): () => void;
@@ -97,6 +99,7 @@ export const IPC = {
   engineStatus: 'engine:status',
   engineRestart: 'engine:restart',
   engineStatusChanged: 'engine:status-changed',
+  engineNotification: 'engine:notification',
   runStart: 'run:start',
   runControl: 'run:control',
   runBreakpoints: 'run:breakpoints',

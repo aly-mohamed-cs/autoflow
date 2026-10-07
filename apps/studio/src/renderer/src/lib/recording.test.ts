@@ -1,0 +1,64 @@
+import type { Element } from '@autoflow/flow-types';
+import { describe, expect, it } from 'vitest';
+import { firstBrowserUrl, hasBrowserOpen, stepsFromRecording, type RecordedAction } from './recording';
+
+const el = (id: string, name: string, css: string): Element => ({
+  id,
+  name,
+  kind: 'web',
+  selectors: [{ strategy: 'css', value: css }],
+});
+
+describe('stepsFromRecording', () => {
+  const actions: RecordedAction[] = [
+    { action: 'type', value: 'robot', element: el('a', 'Username box', '#user') },
+    { action: 'type', value: null, password: true, press_enter: true, element: el('b', 'Password box', '#pass') },
+    { action: 'select', option: 'US Dollar', element: el('c', 'Currency list', '#cur') },
+    { action: 'check', checked: false, element: el('d', 'Urgent checkbox', '#urgent') },
+    { action: 'click', element: el('e', 'Submit button', '#go') },
+    { action: 'click', element: el('f', 'Submit button', '#go') }, // same element again
+    { action: 'switch_tab' },
+    { action: 'goto', url: 'https://example.com/report' },
+  ];
+
+  it('makes one step per action and reuses identical elements', () => {
+    const { steps, elements } = stepsFromRecording(actions, { startUrl: 'https://portal', addOpenBrowser: true });
+    expect(steps.map((s) => s.activity)).toEqual([
+      'browser.open', 'browser.type', 'browser.type', 'browser.select', 'browser.check',
+      'browser.click', 'browser.click', 'browser.switch_tab', 'browser.go_to',
+    ]);
+    expect(elements.map((e) => e.name)).toEqual(['Username box', 'Password box', 'Currency list', 'Urgent checkbox', 'Submit button']);
+    expect(steps[5]!.params!.element).toBe(steps[6]!.params!.element);
+    expect(steps[3]!.params).toMatchObject({ option: 'US Dollar' });
+    expect(steps[4]!.params).toMatchObject({ checked: false });
+  });
+
+  it('never stores passwords', () => {
+    const { steps } = stepsFromRecording(actions, { addOpenBrowser: false });
+    const pw = steps.find((s) => s.label?.includes('password'))!;
+    expect(pw.params).toMatchObject({ text: '', press_enter: true });
+  });
+
+  it('reuses elements already in the flow and keeps names unique', () => {
+    const existing = [el('x', 'Submit button', '#go'), el('y', 'Username box', '#other')];
+    const { steps, elements } = stepsFromRecording(actions.slice(0, 1).concat(actions[4]!), {
+      existingElements: existing,
+      addOpenBrowser: false,
+    });
+    expect(steps[1]!.params!.element).toBe('x');
+    expect(elements.map((e) => e.name)).toEqual(['Username box 2']);
+  });
+});
+
+describe('flow helpers', () => {
+  const flow = {
+    id: 'f',
+    name: 'f',
+    steps: [{ id: '1', activity: 'control.if', blocks: { then: [{ id: '2', activity: 'browser.open', params: { url: 'portal.local' } }] } }],
+  };
+  it('finds the first browser address', () => {
+    expect(firstBrowserUrl(flow)).toBe('portal.local');
+    expect(hasBrowserOpen(flow)).toBe(true);
+    expect(hasBrowserOpen({ id: 'g', name: 'g', steps: [] })).toBe(false);
+  });
+});

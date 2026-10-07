@@ -12,7 +12,11 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): () => vo
 
 const api: StudioApi = {
   engine: {
-    call: (method, params) => invoke(IPC.engineCall, method, params),
+    call: (method, params, timeoutMs) => invoke(IPC.engineCall, method, params, timeoutMs),
+    onNotification: (method, listener) =>
+      subscribe<{ method: string; params: unknown }>(IPC.engineNotification, (n) => {
+        if (n.method === method) listener(n.params);
+      }),
     status: () => invoke(IPC.engineStatus),
     restart: () => invoke(IPC.engineRestart),
     onStatus: (listener) => subscribe<EngineStatus>(IPC.engineStatusChanged, listener),

@@ -10,6 +10,7 @@ import { innermostUnderPointer, useDnd, type DragItem, type DropData, type DropT
 import { FileAddon } from '../editor/fields/inputs';
 import { useFlowVariables } from '../editor/hooks';
 import { Inspector } from '../editor/Inspector';
+import { RecordButton, Recorder } from '../editor/Recorder';
 import { flowCredentialNames, RunPanel } from '../editor/RunPanel';
 import { StepLibrary } from '../editor/StepLibrary';
 import { errorMessage, useApp } from '../store/app';
@@ -312,8 +313,10 @@ function Toolbar() {
         ]}
       />
       <div className="mx-1 h-6 w-px bg-border" />
+      <RecordButton />
       <RunControls phase={phase} startedAt={startedAt} disabled={!engineReady} hasErrors={errors > 0} />
       <InputsDialog />
+      <Recorder />
     </header>
   );
 }

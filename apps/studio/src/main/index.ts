@@ -23,6 +23,7 @@ const engine = new EngineProcess(
   findPython(app.getAppPath(), process.resourcesPath),
   (method, params) => {
     if (method === 'run.event') broadcast(IPC.runEvent, params);
+    else broadcast(IPC.engineNotification, { method, params });
   },
   (status: EngineStatus) => broadcast(IPC.engineStatusChanged, status),
 );
@@ -104,7 +105,9 @@ function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => Pro
 }
 
 function registerIpc(): void {
-  handle(IPC.engineCall, (method: string, params?: Record<string, unknown>) => engine.call(method, params));
+  handle(IPC.engineCall, (method: string, params?: Record<string, unknown>, timeoutMs?: number) =>
+    engine.call(method, params, Math.min(Math.max(timeoutMs ?? 60_000, 1_000), 3_600_000)),
+  );
   handle(IPC.engineStatus, () => engine.status);
   handle(IPC.engineRestart, () => {
     engine.restart();

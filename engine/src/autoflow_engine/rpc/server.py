@@ -9,6 +9,7 @@ protocol stream.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -20,6 +21,7 @@ from typing import IO, Any
 from pydantic import ValidationError
 
 from .. import __version__, catalog
+from ..design.session import DesignSession
 from ..errors import AutoflowError
 from ..flow import Flow
 from ..runtime.context import RunControl, RunOptions
@@ -48,6 +50,13 @@ class EngineServer:
         self._run_thread: threading.Thread | None = None
         self._control: RunControl | None = None
         self._run_id: str | None = None
+        self._design: DesignSession | None = None
+        # Methods that answer later (the user is clicking in the design browser).
+        self._deferred: dict[str, Callable[[dict[str, Any], Callable[..., None]], None]] = {
+            "picker.web": lambda p, respond: self.design.pick(p.get("url"), respond),
+            "recorder.start": lambda p, respond: self.design.record_start(p.get("url"), respond),
+            "recorder.stop": lambda _p, respond: self.design.record_stop(respond),
+        }
         self._methods: dict[str, Callable[[dict[str, Any]], Any]] = {
             "ping": lambda _p: {"engine_version": __version__},
             "catalog.get": lambda _p: catalog.export_catalog(),
@@ -59,7 +68,28 @@ class EngineServer:
             "run.step": lambda _p: self._with_control(lambda c: c.step()),
             "run.stop": lambda _p: self._with_control(lambda c: c.cancel()),
             "run.set_breakpoints": lambda p: self._with_control(lambda c: c.set_breakpoints(set(p.get("step_ids", [])))),
+            "picker.cancel": lambda _p: self._design.cancel() if self._design else None,
+            "picker.desktop": self._picker_desktop,
+            "design.close": lambda _p: self._close_design(),
         }
+
+    @property
+    def design(self) -> DesignSession:
+        if self._design is None:
+            # Tests run the design browser hidden.
+            self._design = DesignSession(self.notify, headless=os.environ.get("AUTOFLOW_DESIGN_HEADLESS") == "1")
+        return self._design
+
+    def _close_design(self) -> None:
+        if self._design is not None:
+            self._design.close()
+            self._design = None
+
+    def _picker_desktop(self, _params: dict[str, Any]) -> None:
+        raise AutoflowError(
+            "Picking elements in Windows applications arrives with the desktop automation release.",
+            "For now, use websites, or type the selectors under 'Other ways to choose an element'.",
+        )
 
     # -- transport ---------------------------------------------------------
     def serve(self) -> None:
@@ -71,6 +101,7 @@ class EngineServer:
             self._handle(line)
         if self._control:
             self._control.cancel()
+        self._close_design()
 
     def _send(self, message: dict[str, Any]) -> None:
         data = json.dumps(message, default=str, ensure_ascii=False)
@@ -93,6 +124,10 @@ class EngineServer:
         try:
             if not isinstance(method, str) or not isinstance(params, dict):
                 raise RpcError(INVALID_REQUEST, "Invalid request")
+            deferred = self._deferred.get(method)
+            if deferred is not None:
+                deferred(params, self._responder(req_id))
+                return
             handler = self._methods.get(method)
             if handler is None:
                 raise RpcError(METHOD_NOT_FOUND, f"Unknown method {method}")
@@ -108,6 +143,23 @@ class EngineServer:
         except Exception as exc:  # report, never crash the engine process
             traceback.print_exc(file=sys.stderr)
             self._reply_error(req_id, INTERNAL_ERROR, str(exc))
+
+    def _responder(self, req_id: Any) -> Callable[..., None]:
+        """Callback that sends the answer to a deferred request exactly once."""
+        done = threading.Event()
+
+        def respond(result: Any = None, error: BaseException | None = None) -> None:
+            if done.is_set() or req_id is None:
+                return
+            done.set()
+            if error is None:
+                self._send({"jsonrpc": "2.0", "id": req_id, "result": to_jsonable(result)})
+            elif isinstance(error, AutoflowError):
+                self._reply_error(req_id, APP_ERROR, error.message, {"hint": error.hint})
+            else:
+                self._reply_error(req_id, INTERNAL_ERROR, str(error))
+
+        return respond
 
     def _reply_error(self, req_id: Any, code: int, message: str, data: Any = None) -> None:
         if req_id is None:

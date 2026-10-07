@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import functools
-import http.server
 import shutil
-import threading
 from pathlib import Path
 
 import pytest
@@ -17,25 +14,10 @@ from autoflow_engine.runtime.context import RunOptions
 from autoflow_engine.runtime.interpreter import FlowRunner
 from autoflow_engine.values import Credential
 
-PORTAL = Path(__file__).resolve().parents[2] / "testbed" / "portal"
 BROWSER = "edge" if shutil.which("msedge") or Path(
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").exists() else "chromium"
 
 pytestmark = pytest.mark.browser
-
-
-@pytest.fixture(scope="module")
-def portal_url():
-    handler = functools.partial(_QuietHandler, directory=str(PORTAL))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
-    server.shutdown()
-
-
-class _QuietHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, *args):
-        pass
 
 
 ELEMENTS = [

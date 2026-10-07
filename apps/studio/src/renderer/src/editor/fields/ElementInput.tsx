@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { newStepId } from '../../lib/flowOps';
 import { errorMessage, useApp } from '../../store/app';
 import { useEditor } from '../../store/editor';
+import { firstBrowserUrl } from '../../lib/recording';
 import { useElements } from '../hooks';
+import { PickingOverlay } from '../Recorder';
 
 export const STRATEGY_LABELS: Record<SelectorStrategy, string> = {
   role: 'Role and name (most reliable)',
@@ -52,9 +54,11 @@ export function ElementInput({
   const pick = async () => {
     setPicking(true);
     try {
+      const flow = useEditor.getState().flow;
       const picked = await window.autoflow.engine.call<Element | null>(
         kind === 'web' ? 'picker.web' : 'picker.desktop',
-        { url: lastUrl(sameKind) },
+        { url: lastUrl(sameKind) ?? (flow ? firstBrowserUrl(flow) : undefined) },
+        15 * 60_000,
       );
       if (picked) {
         const el = { ...picked, id: picked.id || `el_${newStepId()}` };
@@ -123,6 +127,7 @@ export function ElementInput({
           />
         </div>
       )}
+      {picking && <PickingOverlay onCancel={() => void window.autoflow.engine.call('picker.cancel')} />}
       <ElementDialog
         element={editing}
         onClose={() => setEditing(null)}
