@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { readdirSync, statSync } from 'node:fs';
+import { connect as tlsConnect } from 'node:tls';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_LDAP, LdapError, ldapAuthenticate, type LdapSettings } from '../auth/ldap.js';
@@ -171,6 +172,13 @@ export async function adminRoutes(app: FastifyInstance) {
     return { entries: rows.map((r) => ({ ...r, details: json(r.details, {}) })) };
   });
 
+  /** Address and certificate fingerprint shown when adding a robot (to verify a self-signed certificate). */
+  let fingerprint: string | null | undefined;
+  app.get('/api/server-info', { preHandler: requireRole('viewer') }, async () => {
+    if (fingerprint === undefined) fingerprint = config.tls ? await ownFingerprint(config.port) : null;
+    return { publicUrl: config.publicUrl, fingerprint };
+  });
+
   app.get('/api/downloads', { preHandler: requireRole('viewer') }, async () => {
     const dir = join(config.dataDir, 'installers');
     let files: string[] = [];
@@ -187,5 +195,20 @@ export async function adminRoutes(app: FastifyInstance) {
         })
         .sort((a, b) => b.modified.localeCompare(a.modified)),
     };
+  });
+}
+
+function ownFingerprint(port: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const socket = tlsConnect({ host: '127.0.0.1', port, rejectUnauthorized: false }, () => {
+      const cert = socket.getPeerX509Certificate();
+      socket.end();
+      resolve(cert?.fingerprint256 ?? null);
+    });
+    socket.on('error', () => resolve(null));
+    socket.setTimeout(3000, () => {
+      socket.destroy();
+      resolve(null);
+    });
   });
 }

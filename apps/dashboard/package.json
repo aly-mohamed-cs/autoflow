@@ -1,0 +1,30 @@
+{
+  "name": "@autoflow/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Autoflow Orchestrator web dashboard",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@autoflow/flow-types": "workspace:*",
+    "@autoflow/ui": "workspace:*",
+    "lucide-react": "^1.52.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0",
+    "vitest": "^5.0.0"
+  }
+}

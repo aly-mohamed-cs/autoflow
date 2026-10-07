@@ -119,7 +119,8 @@ export async function buildApp(svc: Services, options: FastifyServerOptions = {}
 
   // The dashboard (single-page app).
   if (existsSync(config.dashboardDir)) {
-    await app.register(fastifyStatic, { root: config.dashboardDir, prefix: '/', wildcard: false });
+    // wildcard: files are looked up per request, so a rebuilt dashboard is served without a restart.
+    await app.register(fastifyStatic, { root: config.dashboardDir, prefix: '/', wildcard: true });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith('/api/') || request.method !== 'GET') return reply.code(404).send({ error: 'Not found' });
       return reply.sendFile('index.html');
