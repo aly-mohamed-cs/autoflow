@@ -8,7 +8,7 @@ __pycache__/
 # Build output
 dist/
 out/
-build/
+/build/
 release/
 *.tsbuildinfo
 .turbo/

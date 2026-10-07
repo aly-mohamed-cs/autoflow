@@ -66,21 +66,40 @@ def _page_numbers(spec: str, count: int) -> list[int]:
     return out
 
 
-def _text_of(path: Path, pages: str) -> str:
+OcrMode = Literal["auto", "always", "never"]
+OCR_DPI = 200
+
+
+def _text_of(path: Path, pages: str, ocr: OcrMode = "auto") -> str:
+    """Text of the chosen pages. Scanned pages (no text inside) are read with OCR unless ocr="never"."""
+    texts = []
     with _open(path) as pdf:
-        texts = [pdf.pages[i].extract_text() or "" for i in _page_numbers(pages, len(pdf.pages))]
+        for i in _page_numbers(pages, len(pdf.pages)):
+            page = pdf.pages[i]
+            text = "" if ocr == "always" else (page.extract_text() or "")
+            if not text.strip() and ocr != "never":
+                from ..ocr import read_image
+
+                text = read_image(page.to_image(resolution=OCR_DPI).original)
+            texts.append(text)
     text = "\n".join(texts).strip()
     if not text:
         raise ActivityError(
-            f"'{path.name}' contains no readable text.",
-            "It is probably a scanned image. Use 'Read scanned PDF (OCR)' instead.",
+            f"No text could be read from '{path.name}'.",
+            "If it is a scan, check that it is sharp and not upside down.",
         )
     return text
+
+
+def _ocr_param() -> Any:
+    return Param("auto", title="Scanned pages", advanced=True,
+                 description="auto: read pages without text using OCR; always: OCR every page; never: text only.")
 
 
 class ReadTextParams(Params):
     file: str = Param(title="PDF file", ui="file", file_types=["pdf"])
     pages: str = Param("all", title="Pages", placeholder="all, 1, 1-3, 2,5", advanced=True)
+    ocr: OcrMode = _ocr_param()
 
 
 @activity(
@@ -89,12 +108,12 @@ class ReadTextParams(Params):
     category=P,
     icon="file-text",
     sentence="Read text from {file}",
-    description="Get all the text of a PDF, e.g. to find values in it with 'Get text between'.",
+    description="Get all the text of a PDF, e.g. to find values in it with 'Get text between'. Scanned pages are read with OCR.",
     params=ReadTextParams,
     outputs=[OutputDef("text", "Text", "text", default_variable="pdf_text")],
 )
 def read_text(ctx: RunContext, p: ReadTextParams) -> str:
-    return _text_of(_pdf(p.file), p.pages)
+    return _text_of(_pdf(p.file), p.pages, p.ocr)
 
 
 class ExtractTablesParams(Params):
@@ -161,6 +180,7 @@ class ExtractFieldsParams(Params):
     )
     pages: str = Param("all", title="Pages", advanced=True)
     fail_if_missing: bool = Param(False, title="Fail if a field is not found")
+    ocr: OcrMode = _ocr_param()
 
 
 @activity(
@@ -174,7 +194,7 @@ class ExtractFieldsParams(Params):
     outputs=[OutputDef("fields", "Fields (use as fields.Name)", "any", default_variable="invoice")],
 )
 def extract_fields(ctx: RunContext, p: ExtractFieldsParams) -> dict[str, Any]:
-    text = _text_of(_pdf(p.file), p.pages)
+    text = _text_of(_pdf(p.file), p.pages, p.ocr)
     values: dict[str, Any] = {}
     missing: list[str] = []
     for field in p.fields:
@@ -296,3 +316,26 @@ def split(ctx: RunContext, p: SplitParams) -> list[str]:
             writer.write(fh)
         out.append(str(target))
     return out
+
+
+class ReadImageParams(Params):
+    file: str = Param(title="Image file", ui="file", file_types=["png", "jpg", "jpeg", "bmp", "tif", "tiff"])
+
+
+@activity(
+    "pdf.read_image",
+    title="Read text from image (OCR)",
+    category=P,
+    icon="scan-eye",
+    sentence="Read text from image {file}",
+    description="Recognise the text in a picture or screenshot, e.g. from a scanner or a remote (Citrix) screen.",
+    params=ReadImageParams,
+    outputs=[OutputDef("text", "Text", "text", default_variable="image_text")],
+)
+def read_image_text(ctx: RunContext, p: ReadImageParams) -> str:
+    from ..ocr import read_image
+
+    path = Path(to_text(p.file).strip().strip('"'))
+    if not path.is_file():
+        raise ActivityError(f"The image '{path}' does not exist.")
+    return read_image(path)

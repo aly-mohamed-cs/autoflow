@@ -173,3 +173,43 @@ def test_send_email_via_smtp(h, tmp_path):
         assert "Subject: Daily report 2026-03-15" in text and 'filename="report.csv"' in text
     finally:
         controller.stop()
+
+
+def test_scanned_invoice_is_read_with_ocr(h, tmp_path):
+    """An image-only PDF (like a scan) gives the same fields through automatic OCR."""
+    import pdfplumber
+
+    scanned = tmp_path / "scanned-invoice.pdf"
+    with pdfplumber.open(INVOICE) as pdf:
+        image = pdf.pages[0].to_image(resolution=150).original.convert("RGB")
+    image.save(scanned, "PDF", resolution=150)
+    with pdfplumber.open(scanned) as pdf:
+        assert not (pdf.pages[0].extract_text() or "").strip()  # really no text inside
+
+    result = h.run([
+        step("pdf.extract_fields", {"file": str(scanned), "fields": [
+            {"name": "Number", "after": "Invoice No:"},
+            {"name": "Customer", "after": "Customer:"},
+            {"name": "Total", "after": "Total due:", "find": "number"},
+        ]}, outputs={"fields": "invoice"}),
+        step("pdf.read_text", {"file": str(scanned), "ocr": "never"}, on_error={"action": "continue"}),
+    ])
+    assert result.status == "succeeded", result.error
+    invoice = h.vars["invoice"]
+    assert invoice["Number"].replace(" ", "") == "INV-2026-0042"
+    assert invoice["Customer"] == "Globex Corporation"
+    assert invoice["Total"] == 9599.5
+    assert any("No text could be read" in (e.get("error") or {}).get("message", "") for e in h.of("step_finished"))
+
+
+def test_read_text_from_image(h, tmp_path):
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (520, 90), "white")
+    font = ImageFont.truetype("arial.ttf", 34)  # like text on a real screen
+    ImageDraw.Draw(image).text((20, 25), "Order 4711 approved", fill="black", font=font)
+    path = tmp_path / "screen.png"
+    image.save(path)
+    result = h.run([step("pdf.read_image", {"file": str(path)}, outputs={"text": "seen"})])
+    assert result.status == "succeeded", result.error
+    assert "4711" in h.vars["seen"] and "approved" in h.vars["seen"].lower()

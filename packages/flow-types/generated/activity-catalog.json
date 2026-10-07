@@ -4856,7 +4856,7 @@
       "category": "PDF",
       "icon": "file-text",
       "sentence": "Read text from {file}",
-      "description": "Get all the text of a PDF, e.g. to find values in it with 'Get text between'.",
+      "description": "Get all the text of a PDF, e.g. to find values in it with 'Get text between'. Scanned pages are read with OCR.",
       "params": {
         "additionalProperties": false,
         "properties": {
@@ -4874,6 +4874,18 @@
             "type": "string",
             "x-advanced": true,
             "x-placeholder": "all, 1, 1-3, 2,5"
+          },
+          "ocr": {
+            "default": "auto",
+            "description": "auto: read pages without text using OCR; always: OCR every page; never: text only.",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "title": "Scanned pages",
+            "type": "string",
+            "x-advanced": true
           }
         },
         "required": [
@@ -5023,6 +5035,18 @@
             "default": false,
             "title": "Fail if a field is not found",
             "type": "boolean"
+          },
+          "ocr": {
+            "default": "auto",
+            "description": "auto: read pages without text using OCR; always: OCR every page; never: text only.",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "title": "Scanned pages",
+            "type": "string",
+            "x-advanced": true
           }
         },
         "required": [
@@ -5165,6 +5189,49 @@
           "type": "list",
           "description": "",
           "default_variable": "page_files"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.read_image",
+      "title": "Read text from image (OCR)",
+      "category": "PDF",
+      "icon": "scan-eye",
+      "sentence": "Read text from image {file}",
+      "description": "Recognise the text in a picture or screenshot, e.g. from a scanner or a remote (Citrix) screen.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Image file",
+            "type": "string",
+            "x-file-types": [
+              "png",
+              "jpg",
+              "jpeg",
+              "bmp",
+              "tif",
+              "tiff"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ReadImageParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "image_text"
         }
       ],
       "blocks": [],
