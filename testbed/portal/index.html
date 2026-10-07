@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Vendor Portal</title>
+<style>
+  :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f3f4f6; }
+  body { margin: 0; }
+  header { background: #1e3a8a; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+  header nav a { color: #c7d2fe; margin-left: 16px; }
+  main { max-width: 760px; margin: 32px auto; background: white; padding: 24px 32px; border-radius: 8px; box-shadow: 0 1px 3px #0002; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  input, select { padding: 8px; width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; }
+  button { margin-top: 16px; padding: 8px 20px; background: #1e40af; color: white; border: 0; border-radius: 4px; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+  .error { color: #b91c1c; margin-top: 12px; }
+  .ok { background: #dcfce7; padding: 12px; border-radius: 4px; margin-top: 16px; }
+  .spinner { color: #6b7280; margin-top: 16px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Demo Vendor Portal</strong>
+  <nav id="nav" hidden>
+    <a href="#entry">New invoice</a>
+    <a href="#reports">Reports</a>
+    <a href="#login" id="logout">Sign out</a>
+  </nav>
+</header>
+
+<main>
+  <section id="login-page">
+    <h1>Sign in</h1>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="off">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password">
+      <button type="submit">Sign in</button>
+      <p class="error" id="login-error" hidden>Wrong username or password.</p>
+    </form>
+    <p><small>Demo account: <code>robot</code> / <code>demo123</code></small></p>
+  </section>
+
+  <section id="entry-page" hidden>
+    <h1>New invoice</h1>
+    <form id="invoice-form">
+      <label for="invoice-no">Invoice number</label>
+      <input id="invoice-no" name="invoice">
+      <label for="customer">Customer</label>
+      <input id="customer" name="customer">
+      <label for="amount">Amount</label>
+      <input id="amount" name="amount" inputmode="decimal">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="">Choose...</option>
+        <option value="EGP">Egyptian Pound</option>
+        <option value="USD">US Dollar</option>
+        <option value="EUR">Euro</option>
+      </select>
+      <label><input type="checkbox" id="urgent" style="width:auto"> Urgent</label>
+      <button type="submit">Submit invoice</button>
+    </form>
+    <p class="spinner" id="saving" hidden>Saving…</p>
+    <div class="ok" id="confirmation" hidden>
+      Invoice saved. Reference number: <strong id="reference"></strong>
+    </div>
+    <p class="error" id="entry-error" hidden></p>
+  </section>
+
+  <section id="reports-page" hidden>
+    <h1>Reports</h1>
+    <table id="invoices-table">
+      <thead><tr><th>Reference</th><th>Invoice</th><th>Customer</th><th>Amount</th><th>Currency</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="download-report">Download CSV report</button>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get invoices() { return JSON.parse(sessionStorage.getItem('invoices') || '[]'); },
+  set invoices(v) { sessionStorage.setItem('invoices', JSON.stringify(v)); },
+};
+const seed = [
+  { reference: 'REF-1001', invoice: 'INV-OLD-1', customer: 'Acme', amount: '450.00', currency: 'USD' },
+  { reference: 'REF-1002', invoice: 'INV-OLD-2', customer: 'Globex', amount: '1200.00', currency: 'EGP' },
+];
+if (!sessionStorage.getItem('invoices')) store.invoices = seed;
+
+function show(page) {
+  const loggedIn = sessionStorage.getItem('user');
+  if (!loggedIn) page = 'login';
+  for (const name of ['login', 'entry', 'reports']) $(name + '-page').hidden = name !== page;
+  $('nav').hidden = !loggedIn;
+  if (page === 'reports') renderTable();
+}
+
+function renderTable() {
+  const body = $('invoices-table').querySelector('tbody');
+  body.innerHTML = '';
+  for (const row of store.invoices) {
+    const tr = document.createElement('tr');
+    for (const key of ['reference', 'invoice', 'customer', 'amount', 'currency']) {
+      const td = document.createElement('td');
+      td.textContent = row[key];
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+$('login-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if ($('username').value === 'robot' && $('password').value === 'demo123') {
+    sessionStorage.setItem('user', 'robot');
+    $('login-error').hidden = true;
+    location.hash = 'entry';
+    show('entry');
+  } else {
+    $('login-error').hidden = false;
+  }
+});
+
+$('logout').addEventListener('click', () => { sessionStorage.removeItem('user'); });
+
+$('invoice-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  $('confirmation').hidden = true;
+  $('entry-error').hidden = true;
+  const invoice = $('invoice-no').value.trim();
+  const amount = $('amount').value.trim();
+  if (!invoice || !amount || !$('currency').value) {
+    $('entry-error').textContent = 'Invoice number, amount and currency are required.';
+    $('entry-error').hidden = false;
+    return;
+  }
+  $('saving').hidden = false;
+  setTimeout(() => {  // simulate a slow server so robots must wait
+    const reference = 'REF-' + (1000 + store.invoices.length + 1);
+    store.invoices = [...store.invoices, {
+      reference, invoice, customer: $('customer').value, amount, currency: $('currency').value,
+    }];
+    $('saving').hidden = true;
+    $('reference').textContent = reference;
+    $('confirmation').hidden = false;
+    $('invoice-form').reset();
+  }, 600);
+});
+
+$('download-report').addEventListener('click', () => {
+  const rows = [['Reference', 'Invoice', 'Customer', 'Amount', 'Currency'],
+    ...store.invoices.map((r) => [r.reference, r.invoice, r.customer, r.amount, r.currency])];
+  const csv = rows.map((r) => r.join(',')).join('\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  link.download = 'invoices-report.csv';
+  link.click();
+});
+
+window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'entry'));
+show(location.hash.slice(1) || 'entry');
+</script>
+</body>
+</html>

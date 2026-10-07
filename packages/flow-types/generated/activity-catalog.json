@@ -59,6 +59,1027 @@
   ],
   "activities": [
     {
+      "id": "browser.open",
+      "title": "Open browser",
+      "category": "Browser",
+      "icon": "globe",
+      "sentence": "Open {url} in {browser}",
+      "description": "Start a browser and go to a web page. Later browser steps use this window.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "title": "Web address",
+            "type": "string",
+            "x-placeholder": "https://portal.example.com",
+            "x-ui": "url"
+          },
+          "browser": {
+            "default": "edge",
+            "enum": [
+              "edge",
+              "chrome",
+              "chromium"
+            ],
+            "title": "Browser",
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "description": "Keep cookies between runs in a named profile, e.g. for sites with 'remember me'.",
+            "title": "Remember logins using profile",
+            "type": "string",
+            "x-advanced": true
+          },
+          "new_tab": {
+            "default": false,
+            "title": "Open in a new tab if a browser is already open",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "OpenParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.go_to",
+      "title": "Go to web page",
+      "category": "Browser",
+      "icon": "navigation",
+      "sentence": "Go to {url}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "title": "Web address",
+            "type": "string",
+            "x-ui": "url"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "GoToParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.navigate",
+      "title": "Back / forward / reload",
+      "category": "Browser",
+      "icon": "history",
+      "sentence": "Browser {action}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "default": "back",
+            "enum": [
+              "back",
+              "forward",
+              "reload"
+            ],
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "title": "NavigateParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.click",
+      "title": "Click",
+      "category": "Browser",
+      "icon": "mouse-pointer-click",
+      "sentence": "Click {element}",
+      "description": "Click a button, link or any element on the page.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "click": {
+            "default": "single",
+            "enum": [
+              "single",
+              "double",
+              "right"
+            ],
+            "title": "Click type",
+            "type": "string"
+          }
+        },
+        "title": "ClickParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.type",
+      "title": "Type text",
+      "category": "Browser",
+      "icon": "keyboard",
+      "sentence": "Type {text} into {element}",
+      "description": "Fill in a text box. Passwords from credentials are never shown in logs.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "text": {
+            "title": "Text to type",
+            "type": "string"
+          },
+          "clear_first": {
+            "default": true,
+            "title": "Clear the field first",
+            "type": "boolean"
+          },
+          "press_enter": {
+            "default": false,
+            "title": "Press Enter afterwards",
+            "type": "boolean"
+          },
+          "slowly": {
+            "default": false,
+            "description": "For pages that react to every key press.",
+            "title": "Type one key at a time",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TypeParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.select",
+      "title": "Choose from dropdown",
+      "category": "Browser",
+      "icon": "list-checks",
+      "sentence": "Choose {option} in {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "option": {
+            "description": "The visible text (or value) of the option to choose.",
+            "title": "Option",
+            "type": "string"
+          }
+        },
+        "required": [
+          "option"
+        ],
+        "title": "SelectParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.check",
+      "title": "Tick / untick checkbox",
+      "category": "Browser",
+      "icon": "square-check",
+      "sentence": "Set {element} ticked: {checked}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "checked": {
+            "default": true,
+            "title": "Ticked",
+            "type": "boolean"
+          }
+        },
+        "title": "CheckParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.hover",
+      "title": "Hover over element",
+      "category": "Browser",
+      "icon": "pointer",
+      "sentence": "Hover over {element}",
+      "description": "Move the mouse over an element, e.g. to open a menu.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.press_key",
+      "title": "Press key",
+      "category": "Browser",
+      "icon": "keyboard",
+      "sentence": "Press {keys}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "title": "Keys",
+            "type": "string",
+            "x-placeholder": "Enter, Tab, Control+A",
+            "x-ui": "keys"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "PressKeyParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.upload",
+      "title": "Upload file",
+      "category": "Browser",
+      "icon": "upload",
+      "sentence": "Upload {file} using {element}",
+      "description": "Pick the page's file input (or its upload button).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "file": {
+            "title": "File to upload",
+            "type": "string",
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "UploadParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.get_text",
+      "title": "Get text",
+      "category": "Browser",
+      "icon": "text-cursor",
+      "sentence": "Get text of {element}",
+      "description": "Read the text of an element, or the value typed in a text box.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "page_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.get_attribute",
+      "title": "Get attribute",
+      "category": "Browser",
+      "icon": "tag",
+      "sentence": "Get {attribute} of {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "attribute": {
+            "default": "href",
+            "title": "Attribute",
+            "type": "string",
+            "x-placeholder": "href"
+          }
+        },
+        "title": "AttributeParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "text",
+          "description": "",
+          "default_variable": "attribute_value"
+        }
+      ],
+      "blocks": [],
+      "advanced": true,
+      "requires": null
+    },
+    {
+      "id": "browser.extract_table",
+      "title": "Extract table from page",
+      "category": "Browser",
+      "icon": "table",
+      "sentence": "Extract table {element}",
+      "description": "Copy an HTML table from the page into a table variable.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "has_header": {
+            "default": true,
+            "title": "First row has column names",
+            "type": "boolean"
+          }
+        },
+        "title": "ExtractTableParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "web_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.wait_for",
+      "title": "Wait for element",
+      "category": "Browser",
+      "icon": "hourglass",
+      "sentence": "Wait until {element} {state}",
+      "description": "Wait for something to show up (or go away), like a results table or a loading spinner.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "state": {
+            "default": "appears",
+            "enum": [
+              "appears",
+              "disappears"
+            ],
+            "title": "Wait until it",
+            "type": "string"
+          },
+          "fail_if_not": {
+            "default": true,
+            "title": "Fail if it doesn't happen in time",
+            "type": "boolean"
+          }
+        },
+        "title": "WaitForParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "ok",
+          "title": "Happened in time",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "element_ready"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.element_exists",
+      "title": "Check if element exists",
+      "category": "Browser",
+      "icon": "scan-eye",
+      "sentence": "Check if {element} is on the page",
+      "description": "True/false, for use with 'If'. Waits only briefly (2 seconds by default).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ExistsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "exists",
+          "title": "Exists",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "element_found"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.page_info",
+      "title": "Get page address and title",
+      "category": "Browser",
+      "icon": "link",
+      "sentence": "Get page address and title",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "PageInfoParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "url",
+          "title": "Address",
+          "type": "text",
+          "description": "",
+          "default_variable": "page_url"
+        },
+        {
+          "name": "title",
+          "title": "Title",
+          "type": "text",
+          "description": "",
+          "default_variable": "page_title"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.download",
+      "title": "Download file",
+      "category": "Browser",
+      "icon": "download",
+      "sentence": "Download by clicking {element} into {folder}",
+      "description": "Click a download link or button and save the file.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "folder": {
+            "title": "Save to folder",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "file_name": {
+            "default": "",
+            "title": "File name",
+            "type": "string",
+            "x-placeholder": "(keep the website's name)"
+          },
+          "overwrite": {
+            "default": true,
+            "title": "Replace if it exists",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "DownloadParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Downloaded file",
+          "type": "file",
+          "description": "",
+          "default_variable": "downloaded_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.screenshot",
+      "title": "Take screenshot of page",
+      "category": "Browser",
+      "icon": "camera",
+      "sentence": "Save screenshot to {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "png"
+            ],
+            "x-ui": "save_file"
+          },
+          "full_page": {
+            "default": false,
+            "title": "Whole page (not just the visible part)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ScreenshotParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Screenshot",
+          "type": "file",
+          "description": "",
+          "default_variable": "screenshot_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.switch_tab",
+      "title": "Switch tab",
+      "category": "Browser",
+      "icon": "panels-top-left",
+      "sentence": "Switch to tab: {match} {text}",
+      "description": "Work in another tab, e.g. one opened by clicking a link.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "match": {
+            "default": "newest",
+            "enum": [
+              "newest",
+              "title contains",
+              "address contains",
+              "first"
+            ],
+            "title": "Switch to",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text to look for",
+            "type": "string"
+          }
+        },
+        "title": "SwitchTabParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.close",
+      "title": "Close browser",
+      "category": "Browser",
+      "icon": "x",
+      "sentence": "Close {what}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "what": {
+            "default": "browser",
+            "enum": [
+              "tab",
+              "browser"
+            ],
+            "title": "Close",
+            "type": "string"
+          }
+        },
+        "title": "CloseTabParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.run_script",
+      "title": "Run JavaScript",
+      "category": "Browser",
+      "icon": "code",
+      "sentence": "Run JavaScript on the page",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "script": {
+            "title": "JavaScript",
+            "type": "string",
+            "x-placeholder": "() => document.title",
+            "x-ui": "code"
+          }
+        },
+        "required": [
+          "script"
+        ],
+        "title": "ScriptParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "any",
+          "description": "",
+          "default_variable": "script_result"
+        }
+      ],
+      "blocks": [],
+      "advanced": true,
+      "requires": null
+    },
+    {
       "id": "control.comment",
       "title": "Note",
       "category": "Control",

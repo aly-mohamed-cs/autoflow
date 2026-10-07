@@ -6,6 +6,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "pydantic>=2.11",
     "openpyxl>=3.1",
+    "playwright>=1.55",
 ]
 
 [project.scripts]
@@ -30,6 +31,7 @@ python-preference = "only-managed"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["browser: drives a real browser (Edge/Chromium) against testbed/portal"]
 
 [tool.ruff]
 line-length = 110

@@ -218,10 +218,15 @@ class FlowRunner:
 
     def _execute(self, step: Step, adef: ActivityDef) -> Any:
         variables = self.ctx.variables
-        resolved = {
-            key: (value if key in adef.lazy_fields else resolve(value, variables))
-            for key, value in step.params.items()
-        }
+        resolved: dict[str, Any] = {}
+        for key, value in step.params.items():
+            if key in adef.lazy_fields:
+                resolved[key] = value
+                continue
+            value = resolve(value, variables)
+            if key in adef.text_fields and value is not None and not isinstance(value, str):
+                value = to_text(value)  # e.g. a number read from Excel typed into a text box
+            resolved[key] = value
         params = adef.params.model_validate(resolved)
         if adef.blocks:
             return adef.func(self.ctx, params, BlockRunner(self, step))

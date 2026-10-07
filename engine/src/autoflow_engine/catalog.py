@@ -112,6 +112,7 @@ class ActivityDef:
     advanced: bool = False
     requires: str | None = None
     lazy_fields: frozenset[str] = field(default_factory=frozenset)
+    text_fields: frozenset[str] = field(default_factory=frozenset)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -187,6 +188,7 @@ def activity(
             if _is_condition(f.annotation)
             or (isinstance(f.json_schema_extra, dict) and f.json_schema_extra.get("x-lazy"))
         )
+        text = frozenset(name for name, f in params.model_fields.items() if _is_text(f.annotation))
         REGISTRY[activity_id] = ActivityDef(
             id=activity_id,
             title=title,
@@ -201,10 +203,19 @@ def activity(
             advanced=advanced,
             requires=requires,
             lazy_fields=lazy,
+            text_fields=text,
         )
         return func
 
     return register
+
+
+def _is_text(annotation: Any) -> bool:
+    """str or str | None: values like 1500.25 from Excel are turned into text for these."""
+    if annotation is str:
+        return True
+    args = getattr(annotation, "__args__", ())
+    return str in args and all(a in (str, type(None)) for a in args)
 
 
 def _is_condition(annotation: Any) -> bool:
