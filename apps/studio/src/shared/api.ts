@@ -44,6 +44,12 @@ export interface RunStartOptions {
 
 export type RunControlAction = 'pause' | 'resume' | 'step' | 'stop';
 
+export type UpdateStatus =
+  | { state: 'idle' | 'checking' | 'none' }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  | { state: 'error'; message: string };
+
 export interface QuickLaunchEntry {
   /** Electron accelerator, e.g. "CommandOrControl+Alt+1". */
   accelerator: string;
@@ -118,6 +124,11 @@ export interface StudioApi {
     save(entries: QuickLaunchEntry[]): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
     run(entry: QuickLaunchEntry): Promise<void>;
   };
+  updates: {
+    status(): Promise<UpdateStatus>;
+    install(): Promise<void>;
+    onChange(listener: (status: UpdateStatus) => void): () => void;
+  };
   app: {
     version(): Promise<string>;
     openPath(path: string): Promise<void>;
@@ -160,6 +171,9 @@ export const IPC = {
   quickList: 'quick:list',
   quickSave: 'quick:save',
   quickRun: 'quick:run',
+  updateStatus: 'update:status',
+  updateInstall: 'update:install',
+  updateChanged: 'update:changed',
   appVersion: 'app:version',
   appOpenPath: 'app:open-path',
 } as const;

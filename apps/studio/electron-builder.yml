@@ -31,3 +31,8 @@ nsis:
   shortcutName: Autoflow Studio
   uninstallDisplayName: Autoflow Studio
   deleteAppDataOnUninstall: false
+# latest.yml is generated for in-app updates. The real feed address (the company
+# Orchestrator's /downloads/) is set at run time, so this URL is only a placeholder.
+publish:
+  - provider: generic
+    url: https://orchestrator.invalid/downloads/

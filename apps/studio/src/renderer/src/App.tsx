@@ -3,6 +3,7 @@ import { cn, Icon, Tooltip } from '@autoflow/ui';
 import { useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toasts } from './components/Toasts';
+import { UpdateBanner } from './components/UpdateBanner';
 import { CredentialsPage } from './pages/CredentialsPage';
 import { EditorPage } from './pages/EditorPage';
 import { HomePage } from './pages/HomePage';
@@ -18,13 +19,16 @@ export function App() {
   return (
     <div className="flex h-full">
       <NavRail />
-      <main className="min-w-0 flex-1">
+      <main className="flex min-w-0 flex-1 flex-col">
+        <UpdateBanner />
+        <div className="min-h-0 flex-1">
         <ErrorBoundary area="this page" resetKey={route}>
           {route.page === 'home' && <HomePage />}
           {route.page === 'editor' && <EditorPage key={route.flowId} flowId={route.flowId} />}
           {route.page === 'credentials' && <CredentialsPage />}
           {route.page === 'settings' && <SettingsPage />}
         </ErrorBoundary>
+        </div>
       </main>
       <Toasts />
     </div>

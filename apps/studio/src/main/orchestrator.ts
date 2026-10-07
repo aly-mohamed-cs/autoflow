@@ -39,6 +39,12 @@ export class Orchestrator {
     return saved ? { url: saved.url, username: saved.username, displayName: saved.displayName, role: saved.role } : null;
   }
 
+  /** Address and pinned certificate (if any), for the in-app updater. */
+  async connection(): Promise<{ url: string; fingerprint?: string } | null> {
+    const saved = await this.read();
+    return saved ? { url: saved.url, fingerprint: saved.fingerprint } : null;
+  }
+
   async connect(rawUrl: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo> {
     const url = normalize(rawUrl);
     const res = await this.call<{ token: string; user: { username: string; displayName: string; role: string } }>(

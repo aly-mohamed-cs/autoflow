@@ -36,6 +36,9 @@ try {
         & pnpm exec electron-builder --win --publish never "-c.extraMetadata.version=$Version"; Check "electron-builder"
     } finally { Pop-Location }
     Copy-Item "build\studio\Autoflow-Studio-Setup-$Version.exe" $Out -Force
+    # Update feed for Studio's in-app updates (served from the Orchestrator's Downloads).
+    Copy-Item "build\studio\Autoflow-Studio-Setup-$Version.exe.blockmap" $Out -Force
+    Copy-Item "build\studio\latest.yml" $Out -Force
 
     Step "Packaging Autoflow Robot $Version"
     $staging = Join-Path $Repo "build\robot-staging\Autoflow-Robot"

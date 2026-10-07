@@ -60,7 +60,7 @@ if ($Installers) {
     } else {
         $remote = (& git -C $Repo remote get-url origin).Trim()
         $slug = ($remote -replace '^.*github\.com[:/]', '') -replace '\.git$', ''
-        & gh release download --repo $slug --pattern "*.exe" --pattern "*.zip" --dir (Join-Path $DataDir "installers") --clobber
+        & gh release download --repo $slug --pattern "*.exe" --pattern "*.zip" --pattern "*.blockmap" --pattern "latest.yml" --dir (Join-Path $DataDir "installers") --clobber
         if ($LASTEXITCODE -ne 0) { Write-Warning "Could not download installers (no release yet, or gh is not signed in)." }
     }
 }

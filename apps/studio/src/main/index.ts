@@ -7,6 +7,7 @@ import { FILE_PROTOCOL, IPC, type EngineStatus, type PublishedFlow, type QuickLa
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
 import { QuickLaunch } from './quicklaunch';
+import { Updates } from './updates';
 import { FlowStore, newFlowId, Vault } from './storage';
 
 // Tests point Studio at a throwaway folder so they never touch real automations.
@@ -20,6 +21,7 @@ let mainWindow: BrowserWindow | null = null;
 let quitting = false;
 const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'build', 'icon.png');
 const quickLaunch = new QuickLaunch(userData, orchestrator, () => showWindow(), iconPath);
+const updates = new Updates(orchestrator, (state) => broadcast(IPC.updateChanged, state));
 
 function showWindow(): void {
   if (!mainWindow) createWindow();
@@ -210,7 +212,9 @@ function registerIpc(): void {
   handle(IPC.orchInfo, () => orchestrator.info());
   handle(IPC.orchConnect, async (url: string, username: string, password: string, fingerprint?: string) => {
     try {
-      return await orchestrator.connect(url, username, password, fingerprint);
+      const info = await orchestrator.connect(url, username, password, fingerprint);
+      void updates.start();
+      return info;
     } catch (err) {
       if (err instanceof UntrustedCertificateError) throw new Error(`UNTRUSTED_CERTIFICATE ${err.fingerprint}`);
       throw err;
@@ -230,6 +234,12 @@ function registerIpc(): void {
   handle(IPC.quickList, () => quickLaunch.list());
   handle(IPC.quickSave, (entries: QuickLaunchEntry[]) => quickLaunch.save(entries));
   handle(IPC.quickRun, (entry: QuickLaunchEntry) => quickLaunch.run(entry));
+
+  handle(IPC.updateStatus, () => updates.state);
+  handle(IPC.updateInstall, () => {
+    quitting = true;
+    updates.install();
+  });
 
   handle(IPC.appVersion, () => app.getVersion());
   handle(IPC.appOpenPath, async (path: string) => {
@@ -266,6 +276,7 @@ if (!singleInstance) {
     engine.start();
     createWindow();
     void quickLaunch.load();
+    void updates.start();
   });
   app.on('window-all-closed', () => {
     engine.stop();
