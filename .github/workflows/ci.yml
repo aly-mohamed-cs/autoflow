@@ -27,3 +27,43 @@ jobs:
         run: |
           uv run autoflow-engine catalog --out ../packages/flow-types/generated
           git diff --exit-code -- ../packages/flow-types/generated || (echo "::error::Run 'pnpm catalog' and commit the result" && exit 1)
+
+  typescript:
+    name: Studio, Orchestrator, dashboard (TypeScript)
+    runs-on: windows-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @autoflow/server --filter @autoflow/dashboard build
+
+  integration:
+    name: Orchestrator + robot end-to-end
+    runs-on: windows-latest
+    needs: [engine, typescript]
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @autoflow/server build
+      - name: Robot tests (real server + robot + engine, incl. HTTPS and DPAPI)
+        working-directory: robot
+        run: |
+          uv sync --locked
+          uv run ruff check src tests
+          uv run pytest -q
