@@ -500,9 +500,7 @@ def element_exists(ctx: RunContext, p: ExistsParams) -> bool:
         _locate(ctx, ElementParams(element=p.element, selector=p.selector, timeout=timeout))
         return True
     except ActivityError as exc:
-        if "several elements" in exc.message:
-            return True
-        return False
+        return "several elements" in exc.message
 
 
 class PageInfoParams(Params):

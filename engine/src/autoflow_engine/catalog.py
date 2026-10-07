@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_core import PydanticUndefined
@@ -214,7 +215,9 @@ def _is_text(annotation: Any) -> bool:
     """str or str | None: values like 1500.25 from Excel are turned into text for these."""
     if annotation is str:
         return True
-    args = getattr(annotation, "__args__", ())
+    if get_origin(annotation) not in (Union, UnionType):
+        return False  # e.g. list[str] is a list, not text
+    args = get_args(annotation)
     return str in args and all(a in (str, type(None)) for a in args)
 
 
