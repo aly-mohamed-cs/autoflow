@@ -1,0 +1,53 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 810 >>
+stream
+50 670 m 545 670 l S
+50 648 m 545 648 l S
+50 626 m 545 626 l S
+50 670 m 50 626 l S
+300 670 m 300 626 l S
+380 670 m 380 626 l S
+470 670 m 470 626 l S
+545 670 m 545 626 l S
+BT /F1 18 Tf 50 790 Td (ACME SUPPLIES LTD) Tj ET
+BT /F1 11 Tf 50 760 Td (Invoice No: INV-2026-0043) Tj ET
+BT /F1 11 Tf 50 742 Td (Invoice Date: 15/03/2026) Tj ET
+BT /F1 11 Tf 50 724 Td (Customer: Initech) Tj ET
+BT /F1 11 Tf 50 706 Td (Payment terms: 30 days) Tj ET
+BT /F1 10 Tf 55 655 Td (Description) Tj ET
+BT /F1 10 Tf 305 655 Td (Qty) Tj ET
+BT /F1 10 Tf 385 655 Td (Unit price) Tj ET
+BT /F1 10 Tf 475 655 Td (Amount) Tj ET
+BT /F1 10 Tf 55 633 Td (USB keyboard) Tj ET
+BT /F1 10 Tf 305 633 Td (5) Tj ET
+BT /F1 10 Tf 385 633 Td (450.00) Tj ET
+BT /F1 10 Tf 475 633 Td (2,250.00) Tj ET
+BT /F1 12 Tf 380 596 Td (Total due: 2,250.00 EGP) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1172
+%%EOF

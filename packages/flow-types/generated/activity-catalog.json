@@ -2534,6 +2534,256 @@
       "requires": null
     },
     {
+      "id": "email.send",
+      "title": "Send email",
+      "category": "Email",
+      "icon": "send",
+      "sentence": "Send email {subject} to {to}",
+      "description": "Send an email, optionally with attachments such as a report.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "to": {
+            "title": "To",
+            "x-placeholder": "name@company.com, other@company.com"
+          },
+          "cc": {
+            "default": "",
+            "title": "Cc",
+            "x-advanced": true
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Message",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "attachments": {
+            "default": null,
+            "description": "A file, or a list of files.",
+            "title": "Attachments",
+            "x-ui": "variable"
+          },
+          "via": {
+            "default": "exchange",
+            "enum": [
+              "exchange",
+              "smtp"
+            ],
+            "title": "Send with",
+            "type": "string"
+          },
+          "server": {
+            "title": "Mail server",
+            "type": "string",
+            "x-placeholder": "mail.company.local"
+          },
+          "credential": {
+            "default": "",
+            "description": "Exchange: the mailbox to send from. SMTP: leave empty if the server needs no sign-in.",
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "sender": {
+            "default": "",
+            "title": "From address (SMTP)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "port": {
+            "default": 25,
+            "title": "SMTP port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "use_tls": {
+            "default": true,
+            "title": "Encrypt (STARTTLS) when the server supports it",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "server"
+        ],
+        "title": "SendParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "email.read",
+      "title": "Read emails",
+      "category": "Email",
+      "icon": "mail-open",
+      "sentence": "Read emails in {folder}",
+      "description": "Get messages from an Exchange mailbox as a table (from, subject, received, text).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "description": "The Exchange server name (ask IT). Autoflow connects to its EWS service.",
+            "title": "Exchange server",
+            "type": "string",
+            "x-placeholder": "mail.company.local"
+          },
+          "credential": {
+            "description": "Username as COMPANY\\user or user@company.local.",
+            "title": "Mailbox credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "mailbox": {
+            "default": "",
+            "title": "Mailbox address",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "(the credential's own mailbox)"
+          },
+          "folder": {
+            "default": "Inbox",
+            "title": "Folder",
+            "type": "string",
+            "x-placeholder": "Inbox, or Inbox/Invoices"
+          },
+          "unread_only": {
+            "default": true,
+            "title": "Only unread messages",
+            "type": "boolean"
+          },
+          "from_contains": {
+            "default": "",
+            "title": "From contains",
+            "type": "string"
+          },
+          "subject_contains": {
+            "default": "",
+            "title": "Subject contains",
+            "type": "string"
+          },
+          "max_count": {
+            "default": 50,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "At most",
+            "type": "integer"
+          },
+          "mark_as_read": {
+            "default": false,
+            "title": "Mark them as read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "server",
+          "credential"
+        ],
+        "title": "ReadParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "messages",
+          "title": "Messages",
+          "type": "table",
+          "description": "",
+          "default_variable": "emails"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "email.save_attachments",
+      "title": "Save email attachments",
+      "category": "Email",
+      "icon": "paperclip",
+      "sentence": "Save attachments of {message} to {folder}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "A row from \"Read emails\" (e.g. the loop item).",
+            "title": "Message",
+            "x-ui": "variable"
+          },
+          "folder": {
+            "title": "Save to folder",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "pattern": {
+            "default": "*",
+            "title": "Only files named",
+            "type": "string",
+            "x-placeholder": "*.pdf"
+          }
+        },
+        "required": [
+          "message",
+          "folder"
+        ],
+        "title": "AttachmentParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Saved files",
+          "type": "list",
+          "description": "",
+          "default_variable": "attachment_files"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "email.move",
+      "title": "Move email",
+      "category": "Email",
+      "icon": "folder-input",
+      "sentence": "Move {message} to {folder}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "x-ui": "variable"
+          },
+          "folder": {
+            "title": "Move to folder",
+            "type": "string",
+            "x-placeholder": "Inbox/Processed"
+          }
+        },
+        "required": [
+          "message",
+          "folder"
+        ],
+        "title": "MoveParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
       "id": "excel.read",
       "title": "Read Excel sheet",
       "category": "Excel",
@@ -4050,6 +4300,539 @@
       ],
       "blocks": [],
       "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.read_text",
+      "title": "Read PDF text",
+      "category": "PDF",
+      "icon": "file-text",
+      "sentence": "Read text from {file}",
+      "description": "Get all the text of a PDF, e.g. to find values in it with 'Get text between'.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "pages": {
+            "default": "all",
+            "title": "Pages",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "all, 1, 1-3, 2,5"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ReadTextParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "pdf_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.extract_tables",
+      "title": "Extract table from PDF",
+      "category": "PDF",
+      "icon": "table",
+      "sentence": "Extract table from {file}",
+      "description": "Read the lines of a table in a PDF, such as the items of an invoice.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "pages": {
+            "default": "all",
+            "title": "Pages",
+            "type": "string",
+            "x-placeholder": "all, 1, 1-3"
+          },
+          "has_header": {
+            "default": true,
+            "title": "First row has column names",
+            "type": "boolean"
+          },
+          "combine": {
+            "default": true,
+            "description": "Useful when one long table continues over several pages.",
+            "title": "Combine tables with the same columns",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ExtractTablesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "pdf_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.extract_fields",
+      "title": "Get fields from PDF",
+      "category": "PDF",
+      "icon": "scan-text",
+      "sentence": "Get fields from {file}",
+      "description": "Read values such as invoice number, date and total, found right after their labels.",
+      "params": {
+        "$defs": {
+          "Field": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "after": {
+                "default": "",
+                "title": "After",
+                "type": "string"
+              },
+              "before": {
+                "default": "",
+                "title": "Before",
+                "type": "string"
+              },
+              "find": {
+                "default": "text",
+                "enum": [
+                  "text",
+                  "number",
+                  "whole_number",
+                  "date",
+                  "email",
+                  "phone"
+                ],
+                "title": "Find",
+                "type": "string"
+              }
+            },
+            "title": "Field",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "fields": {
+            "description": "For each field: the label before the value (e.g. 'Invoice No:') and what kind of value it is.",
+            "items": {
+              "$ref": "#/$defs/Field"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "pages": {
+            "default": "all",
+            "title": "Pages",
+            "type": "string",
+            "x-advanced": true
+          },
+          "fail_if_missing": {
+            "default": false,
+            "title": "Fail if a field is not found",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file",
+          "fields"
+        ],
+        "title": "ExtractFieldsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "fields",
+          "title": "Fields (use as fields.Name)",
+          "type": "any",
+          "description": "",
+          "default_variable": "invoice"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.page_count",
+      "title": "Count PDF pages",
+      "category": "PDF",
+      "icon": "files",
+      "sentence": "Count pages of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "PageCountParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Pages",
+          "type": "number",
+          "description": "",
+          "default_variable": "page_count"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.merge",
+      "title": "Merge PDFs",
+      "category": "PDF",
+      "icon": "merge",
+      "sentence": "Merge {files} into {output}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "files": {
+            "description": "A list of PDF files, e.g. from 'List files in folder'.",
+            "title": "PDF files",
+            "x-ui": "variable"
+          },
+          "output": {
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "files",
+          "output"
+        ],
+        "title": "MergeParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Merged PDF",
+          "type": "file",
+          "description": "",
+          "default_variable": "merged_pdf"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.split",
+      "title": "Split PDF into pages",
+      "category": "PDF",
+      "icon": "scissors",
+      "sentence": "Split {file} into pages",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "folder": {
+            "title": "Save pages to folder",
+            "type": "string",
+            "x-ui": "folder"
+          }
+        },
+        "required": [
+          "file",
+          "folder"
+        ],
+        "title": "SplitParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Page files",
+          "type": "list",
+          "description": "",
+          "default_variable": "page_files"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "http.request",
+      "title": "Call web service (API)",
+      "category": "Web & APIs",
+      "icon": "plug",
+      "sentence": "{method} {url}",
+      "description": "Send a request to a REST API and use the answer. JSON answers become records and tables.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "default": "GET",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "url": {
+            "title": "Address",
+            "type": "string",
+            "x-placeholder": "https://api.example.com/orders",
+            "x-ui": "url"
+          },
+          "query": {
+            "additionalProperties": true,
+            "title": "Query values",
+            "type": "object",
+            "x-ui": "key_values"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "title": "Headers",
+            "type": "object",
+            "x-advanced": true,
+            "x-ui": "key_values"
+          },
+          "body": {
+            "default": null,
+            "title": "Body (JSON)",
+            "x-placeholder": "{\"customer\": \"{{customer}}\"}",
+            "x-ui": "code"
+          },
+          "credential": {
+            "default": "",
+            "title": "Sign in with credential (basic auth)",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "credential"
+          },
+          "bearer_token": {
+            "default": "",
+            "title": "Bearer token",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 1,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-advanced": true
+          },
+          "fail_on_error": {
+            "default": true,
+            "title": "Fail when the server answers with an error (4xx/5xx)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "RequestParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "response",
+          "title": "Response body",
+          "type": "any",
+          "description": "",
+          "default_variable": "response"
+        },
+        {
+          "name": "status",
+          "title": "Status code",
+          "type": "number",
+          "description": "",
+          "default_variable": "status_code"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "db.query",
+      "title": "Read from database",
+      "category": "Database",
+      "icon": "database",
+      "sentence": "Run query on database",
+      "description": "Run a SELECT query and get the rows as a table.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "description": "A connection string. Ask IT for it. Use a credential below instead of a password inside it.",
+            "title": "Database",
+            "type": "string",
+            "x-placeholder": "mssql+pyodbc://server/db?driver=ODBC+Driver+18+for+SQL+Server&trusted_connection=yes",
+            "x-ui": "multiline"
+          },
+          "credential": {
+            "default": "",
+            "title": "Sign in with credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "sql": {
+            "title": "SQL",
+            "type": "string",
+            "x-placeholder": "SELECT * FROM orders WHERE status = :status",
+            "x-ui": "code"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Values for :names in the SQL",
+            "type": "object",
+            "x-ui": "key_values"
+          }
+        },
+        "required": [
+          "connection",
+          "sql"
+        ],
+        "title": "QueryParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Rows",
+          "type": "table",
+          "description": "",
+          "default_variable": "query_rows"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "db.execute",
+      "title": "Change data in database",
+      "category": "Database",
+      "icon": "database-zap",
+      "sentence": "Run SQL on database",
+      "description": "Run INSERT, UPDATE or DELETE. Changes are saved only if the statement succeeds.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "description": "A connection string. Ask IT for it. Use a credential below instead of a password inside it.",
+            "title": "Database",
+            "type": "string",
+            "x-placeholder": "mssql+pyodbc://server/db?driver=ODBC+Driver+18+for+SQL+Server&trusted_connection=yes",
+            "x-ui": "multiline"
+          },
+          "credential": {
+            "default": "",
+            "title": "Sign in with credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "sql": {
+            "title": "SQL",
+            "type": "string",
+            "x-placeholder": "SELECT * FROM orders WHERE status = :status",
+            "x-ui": "code"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Values for :names in the SQL",
+            "type": "object",
+            "x-ui": "key_values"
+          }
+        },
+        "required": [
+          "connection",
+          "sql"
+        ],
+        "title": "QueryParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Rows changed",
+          "type": "number",
+          "description": "",
+          "default_variable": "rows_changed"
+        }
+      ],
+      "blocks": [],
+      "advanced": true,
       "requires": null
     }
   ],

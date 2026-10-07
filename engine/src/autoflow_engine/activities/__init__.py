@@ -1,3 +1,3 @@
 """Activity modules. Importing this package registers every activity."""
 
-from . import browser, control, data, excel, files, text  # noqa: F401
+from . import browser, control, data, email, excel, files, pdf, text, web  # noqa: F401
