@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Build output
+dist/
+out/
+build/
+release/
+*.tsbuildinfo
+.turbo/
+
+# Runtime data (never commit: databases, screenshots, secrets, certs)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# Test / tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage/
+playwright-report/
+test-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

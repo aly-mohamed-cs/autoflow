@@ -1,0 +1,327 @@
+{
+  "$defs": {
+    "Element": {
+      "additionalProperties": false,
+      "description": "A UI element captured by the recorder or element picker, stored once per flow.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "web",
+            "desktop"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "selectors": {
+          "items": {
+            "$ref": "#/$defs/Selector"
+          },
+          "minItems": 1,
+          "title": "Selectors",
+          "type": "array"
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Small PNG thumbnail as a data URI.",
+          "title": "Screenshot"
+        },
+        "context": {
+          "additionalProperties": true,
+          "description": "web: url/title/frame; desktop: process/window.",
+          "title": "Context",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "selectors"
+      ],
+      "title": "Element",
+      "type": "object"
+    },
+    "FlowSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "default_timeout": {
+          "default": 30,
+          "description": "Seconds to wait for elements.",
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Default Timeout",
+          "type": "number"
+        },
+        "screenshot_each_step": {
+          "default": false,
+          "title": "Screenshot Each Step",
+          "type": "boolean"
+        },
+        "screenshot_on_error": {
+          "default": true,
+          "title": "Screenshot On Error",
+          "type": "boolean"
+        }
+      },
+      "title": "FlowSettings",
+      "type": "object"
+    },
+    "OnError": {
+      "additionalProperties": false,
+      "properties": {
+        "retries": {
+          "default": 0,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "retry_delay": {
+          "default": 1.0,
+          "description": "Seconds between retries.",
+          "maximum": 600,
+          "minimum": 0,
+          "title": "Retry Delay",
+          "type": "number"
+        },
+        "action": {
+          "default": "stop",
+          "enum": [
+            "stop",
+            "continue"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "OnError",
+      "type": "object"
+    },
+    "Selector": {
+      "additionalProperties": false,
+      "description": "One way of locating an element. Elements keep several, tried in order.",
+      "properties": {
+        "strategy": {
+          "enum": [
+            "role",
+            "text",
+            "label",
+            "placeholder",
+            "testid",
+            "css",
+            "xpath",
+            "uia",
+            "image",
+            "ocr"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "options": {
+          "additionalProperties": true,
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "strategy",
+        "value"
+      ],
+      "title": "Selector",
+      "type": "object"
+    },
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "activity": {
+          "title": "Activity",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "outputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Activity output name -> variable that receives it.",
+          "title": "Outputs",
+          "type": "object"
+        },
+        "blocks": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/Step"
+            },
+            "type": "array"
+          },
+          "description": "Nested step lists for control activities (then/else/body...).",
+          "title": "Blocks",
+          "type": "object"
+        },
+        "on_error": {
+          "$ref": "#/$defs/OnError"
+        },
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "activity"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "Variable": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "default": "any",
+          "enum": [
+            "any",
+            "text",
+            "number",
+            "boolean",
+            "date",
+            "list",
+            "table",
+            "file",
+            "credential"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "is_input": {
+          "default": false,
+          "description": "Value can be supplied when the flow is started.",
+          "title": "Is Input",
+          "type": "boolean"
+        },
+        "is_output": {
+          "default": false,
+          "description": "Value is returned when the flow finishes.",
+          "title": "Is Output",
+          "type": "boolean"
+        },
+        "sensitive": {
+          "default": false,
+          "description": "Value is masked in logs and run history.",
+          "title": "Sensitive",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Variable",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "variables": {
+      "items": {
+        "$ref": "#/$defs/Variable"
+      },
+      "title": "Variables",
+      "type": "array"
+    },
+    "elements": {
+      "items": {
+        "$ref": "#/$defs/Element"
+      },
+      "title": "Elements",
+      "type": "array"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/Step"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "settings": {
+      "$ref": "#/$defs/FlowSettings"
+    }
+  },
+  "required": [
+    "id",
+    "name"
+  ],
+  "title": "Flow",
+  "type": "object"
+}

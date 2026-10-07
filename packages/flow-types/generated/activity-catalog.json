@@ -1,0 +1,3383 @@
+{
+  "engine_version": "0.1.0",
+  "categories": [
+    {
+      "id": "Control",
+      "icon": "workflow",
+      "description": "Decisions, loops, waits and error handling"
+    },
+    {
+      "id": "Browser",
+      "icon": "globe",
+      "description": "Websites and web applications"
+    },
+    {
+      "id": "Desktop",
+      "icon": "app-window",
+      "description": "Windows desktop applications"
+    },
+    {
+      "id": "Excel",
+      "icon": "sheet",
+      "description": "Excel workbooks"
+    },
+    {
+      "id": "Files",
+      "icon": "folder",
+      "description": "Files, folders, CSV and ZIP"
+    },
+    {
+      "id": "Data",
+      "icon": "table",
+      "description": "Tables and lists"
+    },
+    {
+      "id": "Text",
+      "icon": "type",
+      "description": "Text and dates"
+    },
+    {
+      "id": "PDF",
+      "icon": "file-text",
+      "description": "PDF documents"
+    },
+    {
+      "id": "Email",
+      "icon": "mail",
+      "description": "Send and read email"
+    },
+    {
+      "id": "Web & APIs",
+      "icon": "plug",
+      "description": "HTTP requests and web services"
+    },
+    {
+      "id": "Database",
+      "icon": "database",
+      "description": "SQL databases"
+    }
+  ],
+  "activities": [
+    {
+      "id": "control.comment",
+      "title": "Note",
+      "category": "Control",
+      "icon": "sticky-note",
+      "sentence": "Note: {text}",
+      "description": "A note for people reading the flow. It does nothing when the flow runs.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "default": "",
+            "title": "Note",
+            "type": "string",
+            "x-placeholder": "Explain what the next steps do",
+            "x-ui": "multiline"
+          }
+        },
+        "title": "CommentParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.log",
+      "title": "Write to log",
+      "category": "Control",
+      "icon": "scroll-text",
+      "sentence": "Log {message}",
+      "description": "Add a message to the run log. Useful to track progress.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "x-placeholder": "Processed invoice {{invoice_no}}",
+            "x-ui": "multiline"
+          },
+          "level": {
+            "default": "info",
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "LogParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.set_variable",
+      "title": "Set variable",
+      "category": "Control",
+      "icon": "variable",
+      "sentence": "Set {variable} to {value}",
+      "description": "Store a value in a variable so later steps can use it.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "variable": {
+            "title": "Variable",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "value": {
+            "default": null,
+            "title": "New value",
+            "x-placeholder": "Type a value or insert a variable"
+          }
+        },
+        "required": [
+          "variable"
+        ],
+        "title": "SetVariableParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.increase",
+      "title": "Increase number",
+      "category": "Control",
+      "icon": "plus",
+      "sentence": "Increase {variable} by {by}",
+      "description": "Add to a number variable, e.g. to count processed items.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "variable": {
+            "title": "Variable",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "by": {
+            "default": 1,
+            "title": "Increase by",
+            "type": "number"
+          }
+        },
+        "required": [
+          "variable"
+        ],
+        "title": "IncreaseParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.add_to_list",
+      "title": "Add item to list",
+      "category": "Control",
+      "icon": "list-plus",
+      "sentence": "Add {value} to {variable}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "variable": {
+            "title": "List variable",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "value": {
+            "default": null,
+            "title": "Item to add"
+          }
+        },
+        "required": [
+          "variable"
+        ],
+        "title": "AddToListParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.if",
+      "title": "If / Otherwise",
+      "category": "Control",
+      "icon": "split",
+      "sentence": "If {condition}",
+      "description": "Run some steps only when a condition is true, and others when it is not.",
+      "params": {
+        "$defs": {
+          "Condition": {
+            "additionalProperties": false,
+            "description": "All (or any) of the rules must hold. ``expression`` is an advanced alternative.",
+            "properties": {
+              "match": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "title": "Match",
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/Rule"
+                },
+                "title": "Rules",
+                "type": "array"
+              },
+              "expression": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Advanced: a {{formula}} that is true or false.",
+                "title": "Expression"
+              }
+            },
+            "title": "Condition",
+            "type": "object",
+            "x-ui": "condition"
+          },
+          "Rule": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "default": null,
+                "title": "Left"
+              },
+              "op": {
+                "default": "equals",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater",
+                  "greater_or_equal",
+                  "less",
+                  "less_or_equal",
+                  "contains",
+                  "not_contains",
+                  "starts_with",
+                  "ends_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "is_true",
+                  "is_false",
+                  "is_number",
+                  "matches"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "right": {
+                "default": null,
+                "title": "Right"
+              }
+            },
+            "title": "Rule",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "$ref": "#/$defs/Condition",
+            "title": "If"
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "IfParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "then",
+          "title": "Then"
+        },
+        {
+          "name": "else",
+          "title": "Otherwise"
+        }
+      ],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.for_each",
+      "title": "For each",
+      "category": "Control",
+      "icon": "repeat",
+      "sentence": "For each {item_variable} in {items}",
+      "description": "Repeat steps for every row of a table, item of a list or line of text.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "title": "For each item in",
+            "x-placeholder": "A table, list or text",
+            "x-ui": "variable"
+          },
+          "item_variable": {
+            "default": "item",
+            "title": "Name of current item",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "index_variable": {
+            "default": "",
+            "description": "Starts at 1. Leave empty if not needed.",
+            "title": "Name of position counter",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "variable_name"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ForEachParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Do"
+        }
+      ],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.repeat",
+      "title": "Repeat",
+      "category": "Control",
+      "icon": "rotate-cw",
+      "sentence": "Repeat {times} times",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "times": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "title": "Times",
+            "type": "integer"
+          },
+          "counter_variable": {
+            "default": "counter",
+            "title": "Name of counter",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "variable_name"
+          }
+        },
+        "required": [
+          "times"
+        ],
+        "title": "RepeatParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Do"
+        }
+      ],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.while",
+      "title": "Repeat while",
+      "category": "Control",
+      "icon": "refresh-cw",
+      "sentence": "Repeat while {condition}",
+      "description": "Repeat steps as long as a condition stays true.",
+      "params": {
+        "$defs": {
+          "Condition": {
+            "additionalProperties": false,
+            "description": "All (or any) of the rules must hold. ``expression`` is an advanced alternative.",
+            "properties": {
+              "match": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "title": "Match",
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/Rule"
+                },
+                "title": "Rules",
+                "type": "array"
+              },
+              "expression": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Advanced: a {{formula}} that is true or false.",
+                "title": "Expression"
+              }
+            },
+            "title": "Condition",
+            "type": "object",
+            "x-ui": "condition"
+          },
+          "Rule": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "default": null,
+                "title": "Left"
+              },
+              "op": {
+                "default": "equals",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater",
+                  "greater_or_equal",
+                  "less",
+                  "less_or_equal",
+                  "contains",
+                  "not_contains",
+                  "starts_with",
+                  "ends_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "is_true",
+                  "is_false",
+                  "is_number",
+                  "matches"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "right": {
+                "default": null,
+                "title": "Right"
+              }
+            },
+            "title": "Rule",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "$ref": "#/$defs/Condition",
+            "title": "While"
+          },
+          "max_iterations": {
+            "default": 10000,
+            "description": "Stop with an error after this many rounds, so a mistake can't loop forever.",
+            "minimum": 1,
+            "title": "Safety limit",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "WhileParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Do"
+        }
+      ],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.break",
+      "title": "Exit loop",
+      "category": "Control",
+      "icon": "log-out",
+      "sentence": "Exit loop",
+      "description": "Stop the loop this step is in and continue after it.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "NoParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.continue",
+      "title": "Next item",
+      "category": "Control",
+      "icon": "skip-forward",
+      "sentence": "Skip to next item",
+      "description": "Skip the remaining steps of this loop round and go to the next item.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "NoParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.try",
+      "title": "Try / If it fails",
+      "category": "Control",
+      "icon": "shield",
+      "sentence": "Try",
+      "description": "Run steps and, if one fails, run other steps instead of stopping the flow.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "error_variable": {
+            "default": "error",
+            "title": "Save error message as",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "variable_name"
+          }
+        },
+        "title": "TryParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "try",
+          "title": "Try"
+        },
+        {
+          "name": "catch",
+          "title": "If it fails"
+        },
+        {
+          "name": "finally",
+          "title": "Always"
+        }
+      ],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.fail",
+      "title": "Raise error",
+      "category": "Control",
+      "icon": "octagon-alert",
+      "sentence": "Raise error {message}",
+      "description": "Fail on purpose with your own message (caught by 'Try / If it fails').",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Error message",
+            "type": "string",
+            "x-placeholder": "Invoice {{invoice_no}} has no total"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "FailParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.stop",
+      "title": "Stop flow",
+      "category": "Control",
+      "icon": "square",
+      "sentence": "Stop flow as {outcome}",
+      "description": "End the flow immediately.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "default": "succeeded",
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Finish as",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "StopParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.wait",
+      "title": "Wait",
+      "category": "Control",
+      "icon": "timer",
+      "sentence": "Wait {seconds} seconds",
+      "description": "Pause for a fixed time. Prefer 'Wait for element' when waiting for a screen.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "seconds": {
+            "maximum": 86400,
+            "minimum": 0,
+            "title": "Seconds",
+            "type": "number",
+            "x-ui": "duration"
+          }
+        },
+        "required": [
+          "seconds"
+        ],
+        "title": "WaitParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.get_credential",
+      "title": "Get credential",
+      "category": "Control",
+      "icon": "key-round",
+      "sentence": "Get credential {credential}",
+      "description": "Load a saved username and password. The password is never shown in logs.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "GetCredentialParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "credential",
+          "title": "Credential",
+          "type": "credential",
+          "description": "",
+          "default_variable": "login"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.create_table",
+      "title": "Create table",
+      "category": "Data",
+      "icon": "table-2",
+      "sentence": "Create table with columns {columns}",
+      "description": "Start an empty table, e.g. to collect results row by row.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Column names",
+            "type": "array",
+            "x-ui": "list"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "CreateTableParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "results"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.add_row",
+      "title": "Add row to table",
+      "category": "Data",
+      "icon": "between-horizontal-end",
+      "sentence": "Add row to {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table variable",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "Column name -> value",
+            "title": "Values",
+            "type": "object",
+            "x-ui": "key_values"
+          }
+        },
+        "required": [
+          "table",
+          "values"
+        ],
+        "title": "AddRowParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.filter",
+      "title": "Filter rows",
+      "category": "Data",
+      "icon": "filter",
+      "sentence": "Keep rows of {table} where {condition}",
+      "description": "",
+      "params": {
+        "$defs": {
+          "Condition": {
+            "additionalProperties": false,
+            "description": "All (or any) of the rules must hold. ``expression`` is an advanced alternative.",
+            "properties": {
+              "match": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "title": "Match",
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/Rule"
+                },
+                "title": "Rules",
+                "type": "array"
+              },
+              "expression": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Advanced: a {{formula}} that is true or false.",
+                "title": "Expression"
+              }
+            },
+            "title": "Condition",
+            "type": "object",
+            "x-ui": "condition"
+          },
+          "Rule": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "default": null,
+                "title": "Left"
+              },
+              "op": {
+                "default": "equals",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater",
+                  "greater_or_equal",
+                  "less",
+                  "less_or_equal",
+                  "contains",
+                  "not_contains",
+                  "starts_with",
+                  "ends_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "is_true",
+                  "is_false",
+                  "is_number",
+                  "matches"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "right": {
+                "default": null,
+                "title": "Right"
+              }
+            },
+            "title": "Rule",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "condition": {
+            "$ref": "#/$defs/Condition",
+            "description": "Use row[\"Column\"] to refer to a column.",
+            "title": "Keep rows where"
+          }
+        },
+        "required": [
+          "table",
+          "condition"
+        ],
+        "title": "FilterParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.sort",
+      "title": "Sort table",
+      "category": "Data",
+      "icon": "arrow-down-wide-narrow",
+      "sentence": "Sort {table} by {column}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "column": {
+            "title": "Sort by column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          },
+          "descending": {
+            "default": false,
+            "title": "Largest / latest first",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ],
+        "title": "SortParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.select_columns",
+      "title": "Keep columns",
+      "category": "Data",
+      "icon": "columns-3",
+      "sentence": "Keep columns {columns} of {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns to keep (in this order)",
+            "type": "array",
+            "x-ui": "list"
+          }
+        },
+        "required": [
+          "table",
+          "columns"
+        ],
+        "title": "SelectColumnsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.rename_column",
+      "title": "Rename column",
+      "category": "Data",
+      "icon": "text-cursor-input",
+      "sentence": "Rename column {column} to {new_name}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          },
+          "new_name": {
+            "title": "New name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "column",
+          "new_name"
+        ],
+        "title": "RenameColumnParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.add_column",
+      "title": "Add calculated column",
+      "category": "Data",
+      "icon": "between-vertical-end",
+      "sentence": "Add column {column} to {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "column": {
+            "title": "New column name",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "description": "Calculated for every row. Example: {{row[\"Price\"] * row[\"Qty\"]}}",
+            "title": "Value for each row",
+            "x-lazy": true
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ],
+        "title": "AddColumnParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.remove_duplicates",
+      "title": "Remove duplicate rows",
+      "category": "Data",
+      "icon": "copy-minus",
+      "sentence": "Remove duplicate rows from {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "columns": {
+            "description": "Rows count as duplicates when these columns match. Empty = all columns.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Compare columns",
+            "type": "array",
+            "x-ui": "list"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "RemoveDuplicatesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.merge",
+      "title": "Merge tables (lookup)",
+      "category": "Data",
+      "icon": "merge",
+      "sentence": "Merge {right} into {left} on {left_column}",
+      "description": "Like VLOOKUP for a whole table: add the other table's columns to matching rows.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "left": {
+            "title": "Main table",
+            "x-ui": "variable"
+          },
+          "right": {
+            "title": "Table to bring data from",
+            "x-ui": "variable"
+          },
+          "left_column": {
+            "title": "Match column in main table",
+            "type": "string",
+            "x-source": "left",
+            "x-ui": "column"
+          },
+          "right_column": {
+            "title": "Match column in other table",
+            "type": "string",
+            "x-source": "right",
+            "x-ui": "column"
+          },
+          "keep": {
+            "default": "all",
+            "description": "all = every row of the main table; matching = only rows found in both",
+            "enum": [
+              "all",
+              "matching"
+            ],
+            "title": "Keep",
+            "type": "string"
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "left_column",
+          "right_column"
+        ],
+        "title": "MergeParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.append_tables",
+      "title": "Combine tables (stack)",
+      "category": "Data",
+      "icon": "rows-3",
+      "sentence": "Stack {second} under {first}",
+      "description": "Put the rows of two tables one under the other, e.g. reports from several files.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "first": {
+            "title": "First table",
+            "x-ui": "variable"
+          },
+          "second": {
+            "title": "Second table",
+            "x-ui": "variable"
+          }
+        },
+        "required": [
+          "first",
+          "second"
+        ],
+        "title": "AppendTablesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.group",
+      "title": "Group and summarize",
+      "category": "Data",
+      "icon": "sigma",
+      "sentence": "Group {table} by {group_by}",
+      "description": "Like a pivot table: totals, counts or averages per group.",
+      "params": {
+        "$defs": {
+          "Aggregation": {
+            "additionalProperties": false,
+            "properties": {
+              "column": {
+                "default": "",
+                "title": "Column",
+                "type": "string"
+              },
+              "function": {
+                "default": "sum",
+                "enum": [
+                  "count",
+                  "sum",
+                  "average",
+                  "min",
+                  "max",
+                  "first",
+                  "join"
+                ],
+                "title": "Function",
+                "type": "string"
+              },
+              "result_column": {
+                "default": "",
+                "title": "Result Column",
+                "type": "string"
+              }
+            },
+            "title": "Aggregation",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "group_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Group by columns",
+            "type": "array",
+            "x-ui": "list"
+          },
+          "calculations": {
+            "items": {
+              "$ref": "#/$defs/Aggregation"
+            },
+            "title": "Calculations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "table",
+          "group_by",
+          "calculations"
+        ],
+        "title": "GroupParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Result table",
+          "type": "table",
+          "description": "",
+          "default_variable": "result_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.lookup",
+      "title": "Look up value",
+      "category": "Data",
+      "icon": "search",
+      "sentence": "Look up {value} in {column} and return {return_column}",
+      "description": "Like VLOOKUP: find a row by one column and return another column. Empty if not found.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "column": {
+            "title": "Find in column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          },
+          "value": {
+            "title": "Value to find"
+          },
+          "return_column": {
+            "title": "Return value of column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          }
+        },
+        "required": [
+          "table",
+          "column",
+          "value",
+          "return_column"
+        ],
+        "title": "LookupParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Found value",
+          "type": "any",
+          "description": "",
+          "default_variable": "found_value"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.get_cell",
+      "title": "Get cell from table",
+      "category": "Data",
+      "icon": "grid-2x2",
+      "sentence": "Get {column} of row {row_number} in {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "row_number": {
+            "default": 1,
+            "description": "1 = first data row",
+            "minimum": 1,
+            "title": "Row number",
+            "type": "integer"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ],
+        "title": "GetCellParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "any",
+          "description": "",
+          "default_variable": "cell_value"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.column_to_list",
+      "title": "Get column as list",
+      "category": "Data",
+      "icon": "list",
+      "sentence": "Get column {column} of {table} as a list",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string",
+            "x-source": "table",
+            "x-ui": "column"
+          },
+          "skip_empty": {
+            "default": true,
+            "title": "Skip empty values",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ],
+        "title": "ColumnToListParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "list",
+          "title": "List",
+          "type": "list",
+          "description": "",
+          "default_variable": "values"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.count",
+      "title": "Count rows",
+      "category": "Data",
+      "icon": "hash",
+      "sentence": "Count rows of {table}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table or list",
+            "x-ui": "variable"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "CountRowsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Count",
+          "type": "number",
+          "description": "",
+          "default_variable": "row_count"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.read",
+      "title": "Read Excel sheet",
+      "category": "Excel",
+      "icon": "sheet",
+      "sentence": "Read {sheet} from {file}",
+      "description": "Read a sheet (or part of it) into a table you can loop over.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "default": "",
+            "title": "Cells",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "(all used cells), e.g. A1:F200"
+          },
+          "has_header": {
+            "default": true,
+            "title": "First row has column names",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ReadExcelParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "excel_data"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.read_cell",
+      "title": "Read Excel cell",
+      "category": "Excel",
+      "icon": "square-mouse-pointer",
+      "sentence": "Read cell {cell} from {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "cell": {
+            "title": "Cell",
+            "type": "string",
+            "x-placeholder": "B2"
+          }
+        },
+        "required": [
+          "file",
+          "cell"
+        ],
+        "title": "ReadCellParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "any",
+          "description": "",
+          "default_variable": "cell_value"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.write_cell",
+      "title": "Write Excel cell",
+      "category": "Excel",
+      "icon": "pencil-line",
+      "sentence": "Write {value} into cell {cell} of {file}",
+      "description": "Creates the file or sheet if it doesn't exist yet.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "save_file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "cell": {
+            "title": "Cell",
+            "type": "string",
+            "x-placeholder": "B2"
+          },
+          "value": {
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "required": [
+          "file",
+          "cell"
+        ],
+        "title": "WriteCellParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.write_table",
+      "title": "Write table to Excel",
+      "category": "Excel",
+      "icon": "sheet",
+      "sentence": "Write {table} to {sheet} in {file}",
+      "description": "Save a table into a sheet. Creates the file or sheet if needed.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "save_file"
+          },
+          "sheet": {
+            "default": "Sheet1",
+            "title": "Sheet",
+            "type": "string"
+          },
+          "mode": {
+            "default": "replace",
+            "description": "replace = clear the sheet first; append = add below existing rows; at_cell = start at a cell",
+            "enum": [
+              "replace",
+              "append",
+              "at_cell"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "start_cell": {
+            "default": "A1",
+            "title": "Start cell (for 'at_cell')",
+            "type": "string",
+            "x-advanced": true
+          },
+          "include_header": {
+            "default": true,
+            "title": "Write column names",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table",
+          "file"
+        ],
+        "title": "WriteTableParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.append_row",
+      "title": "Add row to Excel",
+      "category": "Excel",
+      "icon": "list-plus",
+      "sentence": "Add a row to {sheet} in {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "save_file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "Column name -> value. New columns are added at the end.",
+            "title": "Values",
+            "type": "object",
+            "x-ui": "key_values"
+          }
+        },
+        "required": [
+          "file",
+          "values"
+        ],
+        "title": "AppendRowParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.update_row",
+      "title": "Update Excel row",
+      "category": "Excel",
+      "icon": "file-pen-line",
+      "sentence": "Update row {row_number} of {sheet} in {file}",
+      "description": "Write results back into the row you are processing, e.g. a Status or Reference column.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "row_number": {
+            "description": "1 = first row under the column names (use the loop's position counter).",
+            "minimum": 1,
+            "title": "Row number",
+            "type": "integer"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "Column name -> new value",
+            "title": "Values",
+            "type": "object",
+            "x-ui": "key_values"
+          },
+          "header_row": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Row with column names",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "row_number",
+          "values"
+        ],
+        "title": "UpdateRowParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.list_sheets",
+      "title": "Get sheet names",
+      "category": "Excel",
+      "icon": "layers",
+      "sentence": "Get sheet names of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ListSheetsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "sheets",
+          "title": "Sheet names",
+          "type": "list",
+          "description": "",
+          "default_variable": "sheet_names"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.create",
+      "title": "Create Excel file",
+      "category": "Excel",
+      "icon": "file-plus-2",
+      "sentence": "Create Excel file {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "New Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx"
+            ],
+            "x-ui": "save_file"
+          },
+          "sheet": {
+            "default": "Sheet1",
+            "title": "First sheet name",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Column names (optional)",
+            "type": "array",
+            "x-ui": "list"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Replace if it exists",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "CreateWorkbookParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "File",
+          "type": "file",
+          "description": "",
+          "default_variable": "excel_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.copy",
+      "title": "Copy file",
+      "category": "Files",
+      "icon": "copy",
+      "sentence": "Copy {source} to {destination}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          },
+          "destination": {
+            "title": "To folder or new file path",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Replace if it exists",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ],
+        "title": "CopyMoveParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "New file",
+          "type": "file",
+          "description": "",
+          "default_variable": "copied_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.move",
+      "title": "Move file",
+      "category": "Files",
+      "icon": "file-output",
+      "sentence": "Move {source} to {destination}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          },
+          "destination": {
+            "title": "To folder or new file path",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Replace if it exists",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ],
+        "title": "CopyMoveParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "New location",
+          "type": "file",
+          "description": "",
+          "default_variable": "moved_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.rename",
+      "title": "Rename file",
+      "category": "Files",
+      "icon": "pencil",
+      "sentence": "Rename {file} to {new_name}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          },
+          "new_name": {
+            "title": "New name",
+            "type": "string",
+            "x-placeholder": "report-{{FORMATDATE(TODAY(), 'YYYY-MM-DD')}}.xlsx"
+          },
+          "keep_extension": {
+            "default": true,
+            "title": "Keep the file extension if none is given",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file",
+          "new_name"
+        ],
+        "title": "RenameParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Renamed file",
+          "type": "file",
+          "description": "",
+          "default_variable": "renamed_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.delete",
+      "title": "Delete file or folder",
+      "category": "Files",
+      "icon": "trash-2",
+      "sentence": "Delete {path}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "File or folder",
+            "type": "string",
+            "x-ui": "file"
+          },
+          "missing_ok": {
+            "default": true,
+            "title": "Don't fail if it doesn't exist",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DeleteParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.create_folder",
+      "title": "Create folder",
+      "category": "Files",
+      "icon": "folder-plus",
+      "sentence": "Create folder {folder}",
+      "description": "Creates the folder (and any missing parent folders). Does nothing if it already exists.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "title": "Folder",
+            "type": "string",
+            "x-ui": "folder"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "CreateFolderParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "folder",
+          "title": "Folder",
+          "type": "file",
+          "description": "",
+          "default_variable": "folder"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.list",
+      "title": "List files in folder",
+      "category": "Files",
+      "icon": "folder-search",
+      "sentence": "List {pattern} files in {folder}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "title": "Folder",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "pattern": {
+            "default": "*",
+            "description": "* matches anything.",
+            "title": "Name pattern",
+            "type": "string",
+            "x-placeholder": "*.xlsx"
+          },
+          "include_subfolders": {
+            "default": false,
+            "title": "Include subfolders",
+            "type": "boolean"
+          },
+          "sort_by": {
+            "default": "name",
+            "enum": [
+              "name",
+              "newest",
+              "oldest"
+            ],
+            "title": "Sort by",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "ListFilesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Files",
+          "type": "list",
+          "description": "",
+          "default_variable": "files"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.exists",
+      "title": "Check if file exists",
+      "category": "Files",
+      "icon": "file-question",
+      "sentence": "Check if {path} exists",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "File or folder",
+            "type": "string",
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ExistsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "exists",
+          "title": "Exists",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "file_exists"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.wait_for_file",
+      "title": "Wait for file",
+      "category": "Files",
+      "icon": "file-clock",
+      "sentence": "Wait for {pattern} in {folder}",
+      "description": "Wait until a file appears, for example a download or an export from another system.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "title": "Folder",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "pattern": {
+            "default": "*",
+            "title": "Name pattern",
+            "type": "string",
+            "x-placeholder": "report*.xlsx"
+          },
+          "timeout": {
+            "default": 60,
+            "maximum": 86400,
+            "minimum": 1,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-ui": "duration"
+          },
+          "newer_than_start": {
+            "default": true,
+            "description": "Ignore files that were already there.",
+            "title": "Only files created after this step started",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "WaitForFileParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "File",
+          "type": "file",
+          "description": "",
+          "default_variable": "new_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.info",
+      "title": "Get file details",
+      "category": "Files",
+      "icon": "info",
+      "sentence": "Get details of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "FileInfoParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "info",
+          "title": "Details (name, folder, extension, size_kb, modified)",
+          "type": "any",
+          "description": "",
+          "default_variable": "file_info"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.read_text",
+      "title": "Read text file",
+      "category": "Files",
+      "icon": "file-text",
+      "sentence": "Read text from {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-file-types": [
+              "txt",
+              "csv",
+              "json",
+              "xml",
+              "log"
+            ],
+            "x-ui": "file"
+          },
+          "encoding": {
+            "default": "utf-8",
+            "title": "Encoding",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ReadTextParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "file_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.write_text",
+      "title": "Write text file",
+      "category": "Files",
+      "icon": "file-pen",
+      "sentence": "Write text to {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "save_file"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "append": {
+            "default": false,
+            "title": "Add to the end instead of replacing",
+            "type": "boolean"
+          },
+          "encoding": {
+            "default": "utf-8",
+            "title": "Encoding",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "text"
+        ],
+        "title": "WriteTextParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.read_csv",
+      "title": "Read CSV file",
+      "category": "Files",
+      "icon": "file-spreadsheet",
+      "sentence": "Read CSV {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "CSV file",
+            "type": "string",
+            "x-file-types": [
+              "csv",
+              "txt"
+            ],
+            "x-ui": "file"
+          },
+          "delimiter": {
+            "default": "auto",
+            "description": "auto, comma (,), semicolon (;), tab",
+            "title": "Separator",
+            "type": "string"
+          },
+          "has_header": {
+            "default": true,
+            "title": "First row has column names",
+            "type": "boolean"
+          },
+          "encoding": {
+            "default": "utf-8-sig",
+            "title": "Encoding",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ReadCsvParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "csv_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.write_csv",
+      "title": "Write CSV file",
+      "category": "Files",
+      "icon": "file-down",
+      "sentence": "Write {table} to CSV {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "file": {
+            "title": "CSV file",
+            "type": "string",
+            "x-file-types": [
+              "csv"
+            ],
+            "x-ui": "save_file"
+          },
+          "delimiter": {
+            "default": ",",
+            "title": "Separator",
+            "type": "string"
+          },
+          "include_header": {
+            "default": true,
+            "title": "Write column names",
+            "type": "boolean"
+          },
+          "encoding": {
+            "default": "utf-8-sig",
+            "description": "utf-8-sig opens correctly in Excel.",
+            "title": "Encoding",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "table",
+          "file"
+        ],
+        "title": "WriteCsvParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.zip",
+      "title": "Create ZIP",
+      "category": "Files",
+      "icon": "file-archive",
+      "sentence": "Compress {source} into {zip_file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "title": "File or folder to compress",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "zip_file": {
+            "title": "ZIP file",
+            "type": "string",
+            "x-file-types": [
+              "zip"
+            ],
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "source",
+          "zip_file"
+        ],
+        "title": "ZipParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "ZIP file",
+          "type": "file",
+          "description": "",
+          "default_variable": "zip_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "files.unzip",
+      "title": "Extract ZIP",
+      "category": "Files",
+      "icon": "package-open",
+      "sentence": "Extract {zip_file} to {destination}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "zip_file": {
+            "title": "ZIP file",
+            "type": "string",
+            "x-file-types": [
+              "zip"
+            ],
+            "x-ui": "file"
+          },
+          "destination": {
+            "title": "Extract to folder",
+            "type": "string",
+            "x-ui": "folder"
+          }
+        },
+        "required": [
+          "zip_file",
+          "destination"
+        ],
+        "title": "UnzipParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Extracted files",
+          "type": "list",
+          "description": "",
+          "default_variable": "extracted_files"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.extract_between",
+      "title": "Get text between",
+      "category": "Text",
+      "icon": "text-select",
+      "sentence": "Get text between {after} and {before}",
+      "description": "Pick out a value that sits between two known pieces of text.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-ui": "variable"
+          },
+          "after": {
+            "default": "",
+            "title": "Text that comes before",
+            "type": "string",
+            "x-placeholder": "Invoice No:"
+          },
+          "before": {
+            "default": "",
+            "title": "Text that comes after",
+            "type": "string",
+            "x-placeholder": "(empty = end of line)"
+          },
+          "all_matches": {
+            "default": false,
+            "title": "Get all occurrences (as a list)",
+            "type": "boolean"
+          },
+          "trim": {
+            "default": true,
+            "title": "Remove surrounding spaces",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ExtractBetweenParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "text",
+          "description": "",
+          "default_variable": "extracted_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.extract_pattern",
+      "title": "Find in text",
+      "category": "Text",
+      "icon": "scan-search",
+      "sentence": "Find {find} in {text}",
+      "description": "Find numbers, emails, dates and more inside text.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-ui": "variable"
+          },
+          "find": {
+            "default": "number",
+            "enum": [
+              "number",
+              "whole_number",
+              "email",
+              "date",
+              "phone",
+              "url",
+              "custom"
+            ],
+            "title": "Find",
+            "type": "string"
+          },
+          "pattern": {
+            "default": "",
+            "description": "A regular expression.",
+            "title": "Custom pattern",
+            "type": "string",
+            "x-advanced": true
+          },
+          "all_matches": {
+            "default": false,
+            "title": "Get all occurrences (as a list)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ExtractPatternParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "any",
+          "description": "",
+          "default_variable": "found"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.replace",
+      "title": "Replace text",
+      "category": "Text",
+      "icon": "replace",
+      "sentence": "Replace {find} with {replace_with}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-ui": "variable"
+          },
+          "find": {
+            "title": "Find",
+            "type": "string"
+          },
+          "replace_with": {
+            "default": "",
+            "title": "Replace with",
+            "type": "string"
+          },
+          "ignore_case": {
+            "default": true,
+            "title": "Ignore upper/lower case",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text",
+          "find"
+        ],
+        "title": "ReplaceTextParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "text",
+          "description": "",
+          "default_variable": "new_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.split",
+      "title": "Split text into list",
+      "category": "Text",
+      "icon": "split-square-horizontal",
+      "sentence": "Split {text} at {separator}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-ui": "variable"
+          },
+          "separator": {
+            "default": "comma",
+            "enum": [
+              "new line",
+              "comma",
+              "semicolon",
+              "space",
+              "tab",
+              "custom"
+            ],
+            "title": "Split at",
+            "type": "string"
+          },
+          "custom_separator": {
+            "default": "",
+            "title": "Custom separator",
+            "type": "string",
+            "x-advanced": true
+          },
+          "skip_empty": {
+            "default": true,
+            "title": "Skip empty parts",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SplitTextParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "list",
+          "title": "List",
+          "type": "list",
+          "description": "",
+          "default_variable": "parts"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.change_case",
+      "title": "Change text case",
+      "category": "Text",
+      "icon": "case-sensitive",
+      "sentence": "Change {text} to {case}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-ui": "variable"
+          },
+          "case": {
+            "default": "UPPER CASE",
+            "enum": [
+              "UPPER CASE",
+              "lower case",
+              "Title Case",
+              "Trim spaces only"
+            ],
+            "title": "Change to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ChangeCaseParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "text",
+          "description": "",
+          "default_variable": "new_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.to_number",
+      "title": "Convert text to number",
+      "category": "Text",
+      "icon": "binary",
+      "sentence": "Convert {text} to a number",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "x-placeholder": "$1,250.50",
+            "x-ui": "variable"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ToNumberParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "number",
+          "title": "Number",
+          "type": "number",
+          "description": "",
+          "default_variable": "number"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.current_date",
+      "title": "Get current date",
+      "category": "Text",
+      "icon": "calendar",
+      "sentence": "Get today's date",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "include_time": {
+            "default": false,
+            "title": "Include time",
+            "type": "boolean"
+          }
+        },
+        "title": "CurrentDateParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "date",
+          "title": "Date",
+          "type": "date",
+          "description": "",
+          "default_variable": "today"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.add_to_date",
+      "title": "Add to date",
+      "category": "Text",
+      "icon": "calendar-plus",
+      "sentence": "Add {amount} {unit} to {date}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "title": "Date",
+            "x-ui": "variable"
+          },
+          "amount": {
+            "title": "Add (use a minus sign to subtract)",
+            "type": "number"
+          },
+          "unit": {
+            "default": "days",
+            "enum": [
+              "days",
+              "weeks",
+              "months",
+              "years",
+              "hours",
+              "minutes"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "amount"
+        ],
+        "title": "AddToDateParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "date",
+          "title": "New date",
+          "type": "date",
+          "description": "",
+          "default_variable": "new_date"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.format_date",
+      "title": "Format date as text",
+      "category": "Text",
+      "icon": "calendar-range",
+      "sentence": "Format {date} as {format}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "title": "Date",
+            "x-ui": "variable"
+          },
+          "format": {
+            "default": "DD/MM/YYYY",
+            "description": "YYYY year, MM month, DD day, HH:mm time",
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "FormatDateParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "date_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    }
+  ],
+  "functions": [
+    {
+      "name": "TEXT",
+      "signature": "TEXT(value)",
+      "description": "Convert a value to text.",
+      "category": "Text"
+    },
+    {
+      "name": "NUMBER",
+      "signature": "NUMBER(value)",
+      "description": "Convert text like '1,250.50' to a number.",
+      "category": "Number"
+    },
+    {
+      "name": "INT",
+      "signature": "INT(value)",
+      "description": "Whole-number part of a number.",
+      "category": "Number"
+    },
+    {
+      "name": "UPPER",
+      "signature": "UPPER(text)",
+      "description": "Text in UPPER CASE.",
+      "category": "Text"
+    },
+    {
+      "name": "LOWER",
+      "signature": "LOWER(text)",
+      "description": "Text in lower case.",
+      "category": "Text"
+    },
+    {
+      "name": "PROPER",
+      "signature": "PROPER(text)",
+      "description": "Text In Title Case.",
+      "category": "Text"
+    },
+    {
+      "name": "TRIM",
+      "signature": "TRIM(text)",
+      "description": "Remove spaces at the start and end.",
+      "category": "Text"
+    },
+    {
+      "name": "LEN",
+      "signature": "LEN(value)",
+      "description": "Number of characters in text, or items in a list/table.",
+      "category": "Text"
+    },
+    {
+      "name": "LEFT",
+      "signature": "LEFT(text, count)",
+      "description": "First characters of text.",
+      "category": "Text"
+    },
+    {
+      "name": "RIGHT",
+      "signature": "RIGHT(text, count)",
+      "description": "Last characters of text.",
+      "category": "Text"
+    },
+    {
+      "name": "MID",
+      "signature": "MID(text, start, count)",
+      "description": "Characters from the middle of text (start counts from 1).",
+      "category": "Text"
+    },
+    {
+      "name": "REPLACE",
+      "signature": "REPLACE(text, find, replace_with)",
+      "description": "Replace every occurrence of some text.",
+      "category": "Text"
+    },
+    {
+      "name": "CONTAINS",
+      "signature": "CONTAINS(text, part)",
+      "description": "True if text contains part (ignores case).",
+      "category": "Text"
+    },
+    {
+      "name": "STARTSWITH",
+      "signature": "STARTSWITH(text, part)",
+      "description": "True if text starts with part (ignores case).",
+      "category": "Text"
+    },
+    {
+      "name": "ENDSWITH",
+      "signature": "ENDSWITH(text, part)",
+      "description": "True if text ends with part (ignores case).",
+      "category": "Text"
+    },
+    {
+      "name": "SPLIT",
+      "signature": "SPLIT(text, separator)",
+      "description": "Split text into a list.",
+      "category": "Text"
+    },
+    {
+      "name": "JOIN",
+      "signature": "JOIN(list, separator)",
+      "description": "Join a list into text.",
+      "category": "Text"
+    },
+    {
+      "name": "CONCAT",
+      "signature": "CONCAT(value1, value2, ...)",
+      "description": "Join values into one text.",
+      "category": "Text"
+    },
+    {
+      "name": "REGEXEXTRACT",
+      "signature": "REGEXEXTRACT(text, pattern, group)",
+      "description": "Part of text matching a pattern (advanced).",
+      "category": "Text"
+    },
+    {
+      "name": "ROUND",
+      "signature": "ROUND(number, decimals)",
+      "description": "Round a number.",
+      "category": "Number"
+    },
+    {
+      "name": "ABS",
+      "signature": "ABS(number)",
+      "description": "Number without its sign.",
+      "category": "Number"
+    },
+    {
+      "name": "SUM",
+      "signature": "SUM(values...)",
+      "description": "Total of numbers or a list of numbers.",
+      "category": "Number"
+    },
+    {
+      "name": "AVERAGE",
+      "signature": "AVERAGE(values...)",
+      "description": "Average of numbers or a list.",
+      "category": "Number"
+    },
+    {
+      "name": "MIN",
+      "signature": "MIN(values...)",
+      "description": "Smallest number.",
+      "category": "Number"
+    },
+    {
+      "name": "MAX",
+      "signature": "MAX(values...)",
+      "description": "Largest number.",
+      "category": "Number"
+    },
+    {
+      "name": "FORMATNUMBER",
+      "signature": "FORMATNUMBER(number, decimals)",
+      "description": "Number as text with thousands separators, e.g. 1,250.50.",
+      "category": "Number"
+    },
+    {
+      "name": "COUNT",
+      "signature": "COUNT(list)",
+      "description": "Number of items in a list or rows in a table.",
+      "category": "Lists"
+    },
+    {
+      "name": "FIRST",
+      "signature": "FIRST(list)",
+      "description": "First item of a list or first row of a table.",
+      "category": "Lists"
+    },
+    {
+      "name": "LAST",
+      "signature": "LAST(list)",
+      "description": "Last item of a list or last row of a table.",
+      "category": "Lists"
+    },
+    {
+      "name": "COLUMN",
+      "signature": "COLUMN(table, column)",
+      "description": "All values of one table column as a list.",
+      "category": "Lists"
+    },
+    {
+      "name": "IF",
+      "signature": "IF(condition, value_if_true, value_if_false)",
+      "description": "Choose a value based on a condition.",
+      "category": "Logic"
+    },
+    {
+      "name": "ISEMPTY",
+      "signature": "ISEMPTY(value)",
+      "description": "True if the value is empty.",
+      "category": "Logic"
+    },
+    {
+      "name": "COALESCE",
+      "signature": "COALESCE(value1, value2, ...)",
+      "description": "First value that is not empty.",
+      "category": "Logic"
+    },
+    {
+      "name": "TODAY",
+      "signature": "TODAY()",
+      "description": "Today's date.",
+      "category": "Dates"
+    },
+    {
+      "name": "NOW",
+      "signature": "NOW()",
+      "description": "Current date and time.",
+      "category": "Dates"
+    },
+    {
+      "name": "DATE",
+      "signature": "DATE(year, month, day)",
+      "description": "Build a date.",
+      "category": "Dates"
+    },
+    {
+      "name": "PARSEDATE",
+      "signature": "PARSEDATE(text, format)",
+      "description": "Read a date from text, e.g. PARSEDATE('31/01/2026', 'DD/MM/YYYY').",
+      "category": "Dates"
+    },
+    {
+      "name": "FORMATDATE",
+      "signature": "FORMATDATE(date, format)",
+      "description": "Date as text, e.g. FORMATDATE(TODAY(), 'DD/MM/YYYY').",
+      "category": "Dates"
+    },
+    {
+      "name": "DATEADD",
+      "signature": "DATEADD(date, amount, unit)",
+      "description": "Add days, weeks, months or years (unit) to a date.",
+      "category": "Dates"
+    },
+    {
+      "name": "DAYSBETWEEN",
+      "signature": "DAYSBETWEEN(start, end)",
+      "description": "Number of days from start to end.",
+      "category": "Dates"
+    },
+    {
+      "name": "YEAR",
+      "signature": "YEAR(date)",
+      "description": "Year of a date.",
+      "category": "Dates"
+    },
+    {
+      "name": "MONTH",
+      "signature": "MONTH(date)",
+      "description": "Month number (1-12) of a date.",
+      "category": "Dates"
+    },
+    {
+      "name": "DAY",
+      "signature": "DAY(date)",
+      "description": "Day of the month of a date.",
+      "category": "Dates"
+    },
+    {
+      "name": "WEEKDAY",
+      "signature": "WEEKDAY(date)",
+      "description": "Day of the week, Monday = 1 ... Sunday = 7.",
+      "category": "Dates"
+    }
+  ],
+  "operators": [
+    {
+      "name": "equals",
+      "label": "is equal to",
+      "needs_value": true
+    },
+    {
+      "name": "not_equals",
+      "label": "is not equal to",
+      "needs_value": true
+    },
+    {
+      "name": "greater",
+      "label": "is greater than",
+      "needs_value": true
+    },
+    {
+      "name": "greater_or_equal",
+      "label": "is greater than or equal to",
+      "needs_value": true
+    },
+    {
+      "name": "less",
+      "label": "is less than",
+      "needs_value": true
+    },
+    {
+      "name": "less_or_equal",
+      "label": "is less than or equal to",
+      "needs_value": true
+    },
+    {
+      "name": "contains",
+      "label": "contains",
+      "needs_value": true
+    },
+    {
+      "name": "not_contains",
+      "label": "does not contain",
+      "needs_value": true
+    },
+    {
+      "name": "starts_with",
+      "label": "starts with",
+      "needs_value": true
+    },
+    {
+      "name": "ends_with",
+      "label": "ends with",
+      "needs_value": true
+    },
+    {
+      "name": "is_empty",
+      "label": "is empty",
+      "needs_value": false
+    },
+    {
+      "name": "is_not_empty",
+      "label": "is not empty",
+      "needs_value": false
+    },
+    {
+      "name": "is_true",
+      "label": "is true",
+      "needs_value": false
+    },
+    {
+      "name": "is_false",
+      "label": "is false",
+      "needs_value": false
+    },
+    {
+      "name": "is_number",
+      "label": "is a number",
+      "needs_value": false
+    },
+    {
+      "name": "matches",
+      "label": "matches pattern (advanced)",
+      "needs_value": true
+    }
+  ]
+}

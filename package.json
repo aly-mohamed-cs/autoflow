@@ -1,0 +1,24 @@
+{
+  "name": "autoflow",
+  "private": true,
+  "description": "Autoflow - no-code RPA platform: Studio (designer), Orchestrator (server + dashboard) and Robot.",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "catalog": "uv run --project engine autoflow-engine catalog --out packages/flow-types/generated",
+    "engine:test": "uv run --project engine pytest -q engine/tests",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.0"
+  }
+}

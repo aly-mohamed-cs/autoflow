@@ -1,0 +1,248 @@
+"""Activity registry and catalog export.
+
+Every automation building block ("Read Excel file", "Click element", "If") is a
+Python function registered with :func:`activity`. The registration carries
+everything Studio needs to show it to non-technical users: a title, an icon, a
+category, a plain-English sentence and a pydantic model describing its settings
+(with ``x-ui`` hints that pick the right input widget). ``export_catalog`` turns
+the registry into ``activity-catalog.json`` for Studio and the Orchestrator.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic_core import PydanticUndefined
+
+from . import __version__
+from .flow import VariableType
+from .runtime.conditions import OPERATORS, Condition
+from .runtime.expressions import FUNCTIONS
+
+# Widget kinds Studio knows how to render. Anything else falls back to a text box.
+#   variable       - pick a value: inserts {{name}} (the step receives the value)
+#   variable_name  - pick or create a variable to write to (the step receives the name)
+UI_KINDS = {
+    "text", "multiline", "number", "boolean", "choice", "file", "folder", "save_file",
+    "variable", "variable_name", "condition", "element", "credential", "column", "keys",
+    "url", "key_values", "list", "code", "duration", "password",
+}
+
+
+def Param(  # noqa: N802 - reads like a type in model definitions
+    default: Any = PydanticUndefined,
+    *,
+    title: str,
+    description: str = "",
+    ui: str | None = None,
+    placeholder: str | None = None,
+    advanced: bool = False,
+    lazy: bool = False,
+    source: str | None = None,
+    file_types: list[str] | None = None,
+    **kwargs: Any,
+) -> Any:
+    """Describe one activity setting.
+
+    ui: widget kind (see UI_KINDS); inferred from the type when omitted.
+    advanced: hidden under "More options" in Studio.
+    lazy: not resolved before the activity runs (e.g. per-row formulas).
+    source: for ui="column", the setting holding the table whose columns to offer.
+    file_types: for file pickers, e.g. ["xlsx", "xls"].
+    """
+    if ui is not None and ui not in UI_KINDS:
+        raise ValueError(f"Unknown ui kind {ui!r}")
+    extra = {
+        "x-ui": ui,
+        "x-placeholder": placeholder,
+        "x-advanced": advanced or None,
+        "x-lazy": lazy or None,
+        "x-source": source,
+        "x-file-types": file_types,
+    }
+    return Field(
+        default,
+        title=title,
+        description=description or None,
+        json_schema_extra={k: v for k, v in extra.items() if v is not None},
+        **kwargs,
+    )
+
+
+class Params(BaseModel):
+    """Base class for activity settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class NoParams(Params):
+    pass
+
+
+@dataclass(frozen=True)
+class OutputDef:
+    name: str
+    title: str
+    type: VariableType = "any"
+    description: str = ""
+    default_variable: str | None = None
+
+
+@dataclass(frozen=True)
+class BlockDef:
+    name: str
+    title: str
+
+
+@dataclass
+class ActivityDef:
+    id: str
+    title: str
+    category: str
+    icon: str
+    sentence: str
+    description: str
+    params: type[Params]
+    outputs: tuple[OutputDef, ...]
+    blocks: tuple[BlockDef, ...]
+    func: Callable[..., Any]
+    advanced: bool = False
+    requires: str | None = None
+    lazy_fields: frozenset[str] = field(default_factory=frozenset)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "category": self.category,
+            "icon": self.icon,
+            "sentence": self.sentence,
+            "description": self.description,
+            "params": self.params.model_json_schema(),
+            "outputs": [
+                {
+                    "name": o.name,
+                    "title": o.title,
+                    "type": o.type,
+                    "description": o.description,
+                    "default_variable": o.default_variable or o.name,
+                }
+                for o in self.outputs
+            ],
+            "blocks": [{"name": b.name, "title": b.title} for b in self.blocks],
+            "advanced": self.advanced,
+            "requires": self.requires,
+        }
+
+
+REGISTRY: dict[str, ActivityDef] = {}
+
+# Display order and icons (lucide icon names) of the categories in the step panel.
+CATEGORIES: list[dict[str, str]] = [
+    {"id": "Control", "icon": "workflow", "description": "Decisions, loops, waits and error handling"},
+    {"id": "Browser", "icon": "globe", "description": "Websites and web applications"},
+    {"id": "Desktop", "icon": "app-window", "description": "Windows desktop applications"},
+    {"id": "Excel", "icon": "sheet", "description": "Excel workbooks"},
+    {"id": "Files", "icon": "folder", "description": "Files, folders, CSV and ZIP"},
+    {"id": "Data", "icon": "table", "description": "Tables and lists"},
+    {"id": "Text", "icon": "type", "description": "Text and dates"},
+    {"id": "PDF", "icon": "file-text", "description": "PDF documents"},
+    {"id": "Email", "icon": "mail", "description": "Send and read email"},
+    {"id": "Web & APIs", "icon": "plug", "description": "HTTP requests and web services"},
+    {"id": "Database", "icon": "database", "description": "SQL databases"},
+]
+_CATEGORY_IDS = {c["id"] for c in CATEGORIES}
+
+
+def activity(
+    activity_id: str,
+    *,
+    title: str,
+    category: str,
+    icon: str,
+    sentence: str,
+    description: str = "",
+    params: type[Params] = NoParams,
+    outputs: tuple[OutputDef, ...] | list[OutputDef] = (),
+    blocks: tuple[BlockDef, ...] | list[BlockDef] = (),
+    advanced: bool = False,
+    requires: str | None = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Register an activity. The function receives ``(ctx, params)``, plus a
+    ``BlockRunner`` when the activity has blocks, and returns its outputs: a dict
+    keyed by output name, or a single value when it has exactly one output."""
+
+    if category not in _CATEGORY_IDS:
+        raise ValueError(f"Unknown category {category!r} for {activity_id}")
+
+    def register(func: Callable[..., Any]) -> Callable[..., Any]:
+        if activity_id in REGISTRY:
+            raise ValueError(f"Activity {activity_id!r} is registered twice")
+        lazy = frozenset(
+            name
+            for name, f in params.model_fields.items()
+            if _is_condition(f.annotation)
+            or (isinstance(f.json_schema_extra, dict) and f.json_schema_extra.get("x-lazy"))
+        )
+        REGISTRY[activity_id] = ActivityDef(
+            id=activity_id,
+            title=title,
+            category=category,
+            icon=icon,
+            sentence=sentence,
+            description=description,
+            params=params,
+            outputs=tuple(outputs),
+            blocks=tuple(blocks),
+            func=func,
+            advanced=advanced,
+            requires=requires,
+            lazy_fields=lazy,
+        )
+        return func
+
+    return register
+
+
+def _is_condition(annotation: Any) -> bool:
+    if annotation is Condition:
+        return True
+    return Condition in getattr(annotation, "__args__", ())
+
+
+def get(activity_id: str) -> ActivityDef | None:
+    load_activities()
+    return REGISTRY.get(activity_id)
+
+
+_loaded = False
+
+
+def load_activities() -> dict[str, ActivityDef]:
+    """Import every activity module so they register themselves."""
+    global _loaded
+    if not _loaded:
+        from . import activities  # noqa: F401  (import has side effects)
+
+        _loaded = True
+    return REGISTRY
+
+
+def export_catalog() -> dict[str, Any]:
+    load_activities()
+    return {
+        "engine_version": __version__,
+        "categories": CATEGORIES,
+        "activities": [a.to_json() for a in REGISTRY.values()],
+        "functions": [
+            {"name": name, "signature": sig, "description": desc, "category": cat}
+            for name, (_fn, sig, desc, cat) in FUNCTIONS.items()
+        ],
+        "operators": [
+            {"name": name, "label": label, "needs_value": needs}
+            for name, (label, needs, _check) in OPERATORS.items()
+        ],
+    }

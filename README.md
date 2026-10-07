@@ -1,0 +1,55 @@
+# Autoflow
+
+No-code RPA for the whole company: people who don't write code build automations by
+recording or arranging plain-English steps, and robots run them unattended on
+dedicated Windows machines.
+
+| Part | What it is | Where it runs |
+|---|---|---|
+| **Autoflow Studio** | Designer: step builder, recorder, test-run debugger | Designer PCs (Windows app) |
+| **Autoflow Orchestrator** | Web dashboard + API: publishing, schedules, queues, vault, run history | Company server (Windows service) |
+| **Autoflow Robot** | Runs published flows unattended | Robot PCs (Windows service) |
+| **Engine** | Python runtime shared by Studio and Robot | Bundled inside both |
+
+## Repository layout
+
+```
+apps/studio       Electron + React designer
+apps/dashboard    React web dashboard (served by the server)
+apps/server       Orchestrator API (Fastify + SQLite)
+packages/ui       Shared design system
+packages/flow-types  Generated catalog + flow schema used by the TS apps
+engine/           Python engine (flows, activities, JSON-RPC for Studio)
+robot/            Python robot agent
+deploy/windows/   Server install / update / backup scripts
+```
+
+## Development setup (Windows)
+
+Prerequisites: Git, Node.js 24, [pnpm](https://pnpm.io) 10, [uv](https://docs.astral.sh/uv/).
+
+```powershell
+pnpm install
+cd engine; uv sync; cd ..
+pnpm engine:test     # engine tests
+pnpm catalog         # regenerate packages/flow-types/generated after changing activities
+```
+
+Run a flow from the command line:
+
+```powershell
+cd engine
+uv run autoflow-engine run path\to\flow.json --inputs '{"name": "Mona"}'
+```
+
+## Adding an automation step
+
+Activities live in `engine/src/autoflow_engine/activities/`. Register a function with
+`@activity(...)`, describe its settings with a `Params` model using `Param(...)`
+(title, widget kind, help text), then run `pnpm catalog`. Studio renders the new
+step automatically. `tests/test_catalog_and_validation.py` checks every activity is
+complete.
+
+## Deployment
+
+See [deploy/SERVER-SETUP.md](deploy/SERVER-SETUP.md) (added with the Orchestrator).
