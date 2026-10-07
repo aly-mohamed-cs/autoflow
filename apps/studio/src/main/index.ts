@@ -5,6 +5,7 @@ import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { FILE_PROTOCOL, IPC, type EngineStatus, type RunStartOptions } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
+import { Orchestrator, UntrustedCertificateError } from './orchestrator';
 import { FlowStore, newFlowId, Vault } from './storage';
 
 // Tests point Studio at a throwaway folder so they never touch real automations.
@@ -13,6 +14,7 @@ const userData = app.getPath('userData');
 const runsDir = join(userData, 'runs');
 const flows = new FlowStore(userData);
 const vault = new Vault(userData, safeStorage);
+const orchestrator = new Orchestrator(userData, safeStorage);
 let mainWindow: BrowserWindow | null = null;
 
 const broadcast = (channel: string, payload: unknown) => {
@@ -52,7 +54,7 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   // Links open in the user's browser, never inside Studio.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url);
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -180,6 +182,22 @@ function registerIpc(): void {
   handle(IPC.dialogSaveFile, async (options?: { filters?: Electron.FileFilter[]; title?: string; defaultPath?: string }) => {
     const r = await dialog.showSaveDialog(mainWindow!, options ?? {});
     return r.canceled ? null : (r.filePath ?? null);
+  });
+
+  handle(IPC.orchInfo, () => orchestrator.info());
+  handle(IPC.orchConnect, async (url: string, username: string, password: string, fingerprint?: string) => {
+    try {
+      return await orchestrator.connect(url, username, password, fingerprint);
+    } catch (err) {
+      if (err instanceof UntrustedCertificateError) throw new Error(`UNTRUSTED_CERTIFICATE ${err.fingerprint}`);
+      throw err;
+    }
+  });
+  handle(IPC.orchDisconnect, () => orchestrator.disconnect());
+  handle(IPC.orchPublish, async (flow: Flow, notes: string) => {
+    const result = await orchestrator.request<{ version: number }>('POST', `/api/flows/${encodeURIComponent(flow.id)}/versions`, { flow, notes });
+    const info = await orchestrator.info();
+    return { version: result.version, url: `${info?.url}/#/automations/${encodeURIComponent(flow.id)}` };
   });
 
   handle(IPC.appVersion, () => app.getVersion());

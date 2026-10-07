@@ -1,5 +1,6 @@
 import { Badge, Button, Field, Icon, Segmented } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
+import { OrchestratorSettings } from '../components/OrchestratorSettings';
 import { useApp, type Theme } from '../store/app';
 
 export function SettingsPage() {
@@ -59,10 +60,7 @@ export function SettingsPage() {
 
         <section className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-card">
           <h2 className="font-semibold">Orchestrator</h2>
-          <p className="text-[13px] text-muted">
-            Connecting Studio to your company's Orchestrator — to publish automations and run them on robots — arrives
-            with the Orchestrator release.
-          </p>
+          <OrchestratorSettings />
         </section>
 
         <p className="text-xs text-subtle">Autoflow Studio {version}</p>

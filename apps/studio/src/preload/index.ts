@@ -48,6 +48,12 @@ const api: StudioApi = {
     openFolder: (options) => invoke(IPC.dialogOpenFolder, options),
     saveFile: (options) => invoke(IPC.dialogSaveFile, options),
   },
+  orchestrator: {
+    info: () => invoke(IPC.orchInfo),
+    connect: (url, username, password, trustFingerprint) => invoke(IPC.orchConnect, url, username, password, trustFingerprint),
+    disconnect: () => invoke(IPC.orchDisconnect),
+    publish: (flow, notes) => invoke(IPC.orchPublish, flow, notes),
+  },
   app: {
     version: () => invoke(IPC.appVersion),
     openPath: (path) => invoke(IPC.appOpenPath, path),

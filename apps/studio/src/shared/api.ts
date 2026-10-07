@@ -44,6 +44,13 @@ export interface RunStartOptions {
 
 export type RunControlAction = 'pause' | 'resume' | 'step' | 'stop';
 
+export interface OrchestratorInfo {
+  url: string;
+  username: string;
+  displayName: string;
+  role: string;
+}
+
 export interface FileFilter {
   name: string;
   extensions: string[];
@@ -85,6 +92,13 @@ export interface StudioApi {
     openFolder(options?: { title?: string }): Promise<string | null>;
     saveFile(options?: { filters?: FileFilter[]; title?: string; defaultPath?: string }): Promise<string | null>;
   };
+  orchestrator: {
+    info(): Promise<OrchestratorInfo | null>;
+    /** Rejects with "UNTRUSTED_CERTIFICATE <fingerprint>" for self-signed servers until trusted. */
+    connect(url: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo>;
+    disconnect(): Promise<void>;
+    publish(flow: Flow, notes: string): Promise<{ version: number; url: string }>;
+  };
   app: {
     version(): Promise<string>;
     openPath(path: string): Promise<void>;
@@ -119,6 +133,10 @@ export const IPC = {
   dialogOpenFile: 'dialog:open-file',
   dialogOpenFolder: 'dialog:open-folder',
   dialogSaveFile: 'dialog:save-file',
+  orchInfo: 'orch:info',
+  orchConnect: 'orch:connect',
+  orchDisconnect: 'orch:disconnect',
+  orchPublish: 'orch:publish',
   appVersion: 'app:version',
   appOpenPath: 'app:open-path',
 } as const;

@@ -44,6 +44,7 @@ function useEngineConnection() {
       }
     };
     void api.engine.status().then(onStatus);
+    void api.orchestrator.info().then((info) => useApp.getState().setOrchestrator(info));
     const offStatus = api.engine.onStatus(onStatus);
     const offEvents = api.run.onEvent((event) => useRun.getState().handle(event));
     return () => {

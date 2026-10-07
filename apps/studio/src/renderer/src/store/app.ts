@@ -1,7 +1,7 @@
 import type { Catalog } from '@autoflow/flow-types';
 import bundledCatalog from '@autoflow/flow-types/activity-catalog.json';
 import { create } from 'zustand';
-import type { EngineStatus } from '../../../shared/api';
+import type { EngineStatus, OrchestratorInfo } from '../../../shared/api';
 import { CatalogIndex } from '../lib/catalog';
 
 export type Route =
@@ -25,6 +25,8 @@ interface AppState {
   index: CatalogIndex;
   theme: Theme;
   toasts: Toast[];
+  orchestrator: OrchestratorInfo | null;
+  setOrchestrator(info: OrchestratorInfo | null): void;
   navigate(route: Route): void;
   setEngine(status: EngineStatus): void;
   setCatalog(catalog: Catalog): void;
@@ -49,6 +51,8 @@ export const useApp = create<AppState>((set, get) => ({
   index: new CatalogIndex(bundledCatalog as unknown as Catalog),
   theme: storedTheme(),
   toasts: [],
+  orchestrator: null,
+  setOrchestrator: (orchestrator) => set({ orchestrator }),
   navigate: (route) => set({ route }),
   setEngine: (engine) => set({ engine }),
   setCatalog: (catalog) => set({ index: new CatalogIndex(catalog) }),
