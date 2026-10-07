@@ -57,6 +57,13 @@ export interface QuickLaunchEntry {
   flowName: string;
 }
 
+/** An automation drafted by the AI assistant; the person reviews it in the editor. */
+export interface AiDraft {
+  flow: Omit<Flow, 'id'>;
+  /** Step types the model suggested that Autoflow doesn't have (left out of the draft). */
+  dropped: string[];
+}
+
 export interface PublishedFlow {
   id: string;
   name: string;
@@ -119,6 +126,13 @@ export interface StudioApi {
     publish(flow: Flow, notes: string): Promise<{ version: number; url: string }>;
     flows(): Promise<PublishedFlow[]>;
   };
+  /** The company's local AI model, through the Orchestrator (only when an admin turned it on). */
+  ai: {
+    /** enabled is false when Studio isn't connected or the assistant is off. */
+    status(): Promise<{ enabled: boolean; model: string | null }>;
+    draftFlow(description: string): Promise<AiDraft>;
+    explainError(input: { activity: string; message: string; hint?: string | null; params?: Record<string, unknown> }): Promise<string>;
+  };
   quickLaunch: {
     list(): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
     save(entries: QuickLaunchEntry[]): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
@@ -168,6 +182,9 @@ export const IPC = {
   orchDisconnect: 'orch:disconnect',
   orchPublish: 'orch:publish',
   orchFlows: 'orch:flows',
+  aiStatus: 'ai:status',
+  aiDraft: 'ai:draft',
+  aiExplain: 'ai:explain',
   quickList: 'quick:list',
   quickSave: 'quick:save',
   quickRun: 'quick:run',

@@ -55,6 +55,11 @@ const api: StudioApi = {
     publish: (flow, notes) => invoke(IPC.orchPublish, flow, notes),
     flows: () => invoke(IPC.orchFlows),
   },
+  ai: {
+    status: () => invoke(IPC.aiStatus),
+    draftFlow: (description) => invoke(IPC.aiDraft, description),
+    explainError: (input) => invoke(IPC.aiExplain, input),
+  },
   quickLaunch: {
     list: () => invoke(IPC.quickList),
     save: (entries) => invoke(IPC.quickSave, entries),

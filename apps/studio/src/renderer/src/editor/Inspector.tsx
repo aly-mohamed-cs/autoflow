@@ -1,9 +1,10 @@
 import type { ActivityDef, Step } from '@autoflow/flow-types';
-import { Field, Icon, IconTile, Input, Segmented, Select, Switch } from '@autoflow/ui';
+import { Button, Field, Icon, IconTile, Input, Segmented, Select, Switch } from '@autoflow/ui';
 import { useMemo, useState } from 'react';
+import { useAiEnabled } from '../lib/ai';
 import type { FieldInfo } from '../lib/catalog';
 import { findStep, setParam, updateStep } from '../lib/flowOps';
-import { useApp } from '../store/app';
+import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun } from '../store/run';
 import { FlowPanel } from './FlowPanel';
@@ -85,6 +86,7 @@ function StepInspector({ step, def }: { step: Step; def: ActivityDef }) {
             <p className="font-medium text-danger">This step failed in the last test run</p>
             <p className="mt-0.5 text-fg">{runError.message}</p>
             {runError.hint && <p className="mt-1 text-muted">{runError.hint}</p>}
+            <ExplainError activity={step.activity} params={params} error={runError} />
           </div>
         )}
         {stepIssues.map((i, n) => (
@@ -218,5 +220,39 @@ function ErrorHandling({ step, onChange }: { step: Step; onChange: (fn: (s: Step
         </div>
       )}
     </section>
+  );
+}
+
+/** Ask the company's local AI model what went wrong (hidden unless an admin turned it on). */
+function ExplainError({ activity, params, error }: { activity: string; params: Record<string, unknown>; error: { message: string; hint?: string | null } }) {
+  const enabled = useAiEnabled();
+  const [state, setState] = useState<{ busy: boolean; text?: string; failed?: boolean }>({ busy: false });
+  if (!enabled) return null;
+  if (state.text) {
+    return (
+      <p className={`mt-2 flex gap-2 rounded border border-border bg-surface p-2 ${state.failed ? 'text-muted' : 'text-fg'}`}>
+        <Icon name="sparkles" size={15} className="mt-0.5 shrink-0 text-primary" />
+        <span className="whitespace-pre-line">{state.text}</span>
+      </p>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      className="mt-2"
+      disabled={state.busy}
+      icon={<Icon name="sparkles" size={14} />}
+      onClick={async () => {
+        setState({ busy: true });
+        try {
+          const text = await window.autoflow.ai.explainError({ activity, message: error.message, hint: error.hint ?? null, params });
+          setState({ busy: false, text });
+        } catch (e) {
+          setState({ busy: false, text: errorMessage(e), failed: true });
+        }
+      }}
+    >
+      {state.busy ? 'Asking the AI assistant…' : 'Explain this error'}
+    </Button>
   );
 }

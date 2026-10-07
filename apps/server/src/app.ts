@@ -10,6 +10,7 @@ import { sessionToken, userForToken } from './auth/sessions.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { adminRoutes } from './routes/admin.js';
+import { aiRoutes } from './routes/ai.js';
 import { authRoutes } from './routes/auth.js';
 import { flowRoutes } from './routes/flows.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -111,6 +112,7 @@ export async function buildApp(svc: Services, options: FastifyServerOptions = {}
   await app.register(robotRoutes);
   await app.register(triggerRoutes);
   await app.register(adminRoutes);
+  await app.register(aiRoutes);
 
   // Installers for Studio and Robot (copied here by update-server.ps1).
   const installers = join(config.dataDir, 'installers');

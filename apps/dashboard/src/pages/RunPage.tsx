@@ -1,4 +1,4 @@
-import type { Flow } from '@autoflow/flow-types';
+import { findStep, type Flow } from '@autoflow/flow-types';
 import { Button, Dialog, Icon } from '@autoflow/ui';
 import { useMemo, useState } from 'react';
 import { useMe } from '../App';
@@ -80,6 +80,7 @@ export function RunPage({ id }: { id: string }) {
                 <Icon name="circle-x" size={18} /> {job.error.message}
               </p>
               {job.error.hint && <p className="mt-1 text-[13px] text-muted">{job.error.hint}</p>}
+              {can(me.role, 'operator') && <ExplainError flow={data.definition} error={job.error} />}
             </div>
           )}
           {job.status === 'queued' && (
@@ -135,6 +136,43 @@ export function RunPage({ id }: { id: string }) {
         {shot && <img src={`/api/artifacts/${shot}`} alt="Screenshot taken during the run" className="w-full rounded border border-border" />}
       </Dialog>
     </>
+  );
+}
+
+/** Ask the company's local AI model what went wrong (only shown when an admin turned it on). */
+function ExplainError({ flow, error }: { flow: Flow; error: NonNullable<Job['error']> }) {
+  const { data: ai } = useApi<{ enabled: boolean }>('/api/ai/status');
+  const [state, setState] = useState<{ busy: boolean; text?: string; failed?: boolean }>({ busy: false });
+  if (!ai?.enabled) return null;
+  const step = error.step_id ? findStep(flow, error.step_id) : undefined;
+  if (state.text) {
+    return (
+      <div className={`mt-3 flex gap-2 rounded-md border p-3 text-[13px] ${state.failed ? 'border-border text-muted' : 'border-primary/30 bg-surface'}`}>
+        <Icon name="sparkles" size={16} className="mt-0.5 shrink-0 text-primary" />
+        <p className="whitespace-pre-line">{state.text}</p>
+      </div>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      className="mt-3"
+      disabled={state.busy}
+      icon={<Icon name="sparkles" size={14} />}
+      onClick={async () => {
+        setState({ busy: true });
+        try {
+          const r = await api<{ explanation: string }>('/api/ai/explain-error', {
+            body: { activity: step?.activity ?? 'unknown', message: error.message, hint: error.hint ?? null, params: step?.params ?? {} },
+          });
+          setState({ busy: false, text: r.explanation });
+        } catch (e) {
+          setState({ busy: false, text: (e as Error).message, failed: true });
+        }
+      }}
+    >
+      {state.busy ? 'Asking the AI assistant…' : 'Explain this error'}
+    </Button>
   );
 }
 

@@ -72,11 +72,11 @@ export class Orchestrator {
   }
 
   /** Call the API as the signed-in user. */
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30_000): Promise<T> {
     const saved = await this.read();
     if (!saved) throw new Error('Studio is not connected to an Orchestrator. Connect it in Settings.');
     const token = this.crypto.decryptString(Buffer.from(saved.token, 'base64'));
-    return this.call<T>({ url: saved.url, fingerprint: saved.fingerprint, token }, method, path, body);
+    return this.call<T>({ url: saved.url, fingerprint: saved.fingerprint, token }, method, path, body, timeoutMs);
   }
 
   private async read(): Promise<Saved | null> {
@@ -87,7 +87,13 @@ export class Orchestrator {
     }
   }
 
-  private call<T>(target: { url: string; fingerprint?: string; token?: string }, method: string, path: string, body?: unknown): Promise<T> {
+  private call<T>(
+    target: { url: string; fingerprint?: string; token?: string },
+    method: string,
+    path: string,
+    body?: unknown,
+    timeoutMs = 30_000,
+  ): Promise<T> {
     const u = new URL(path, target.url);
     const isHttps = u.protocol === 'https:';
     const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
@@ -96,7 +102,7 @@ export class Orchestrator {
         u,
         {
           method,
-          timeout: 30_000,
+          timeout: timeoutMs,
           headers: {
             Accept: 'application/json',
             ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {}),

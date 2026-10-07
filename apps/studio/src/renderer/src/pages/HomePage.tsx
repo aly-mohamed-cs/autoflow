@@ -1,6 +1,7 @@
 import { Badge, Button, Dialog, EmptyState, Field, Icon, IconTile, Input, Menu, Textarea, cn } from '@autoflow/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FlowSummary } from '../../../shared/api';
+import { useAiEnabled } from '../lib/ai';
 import { TEMPLATES, type Template } from '../lib/templates';
 import { errorMessage, useApp } from '../store/app';
 
@@ -11,6 +12,8 @@ export function HomePage() {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState<Template | null>(null);
   const [deleting, setDeleting] = useState<FlowSummary | null>(null);
+  const [describing, setDescribing] = useState(false);
+  const aiEnabled = useAiEnabled();
 
   const refresh = useCallback(() => {
     window.autoflow.flows
@@ -45,6 +48,11 @@ export function HomePage() {
           <Button variant="secondary" icon={<Icon name="upload" size={15} />} onClick={importFlow}>
             Import
           </Button>
+          {aiEnabled && (
+            <Button variant="secondary" icon={<Icon name="sparkles" size={15} />} onClick={() => setDescribing(true)}>
+              Describe it
+            </Button>
+          )}
           <Button variant="primary" icon={<Icon name="plus" size={16} />} onClick={() => setCreating(TEMPLATES[0]!)}>
             New automation
           </Button>
@@ -122,6 +130,7 @@ export function HomePage() {
       </div>
 
       <NewFlowDialog template={creating} onClose={() => setCreating(null)} />
+      <DescribeDialog open={describing} onClose={() => setDescribing(false)} />
       <Dialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
@@ -274,6 +283,88 @@ function NewFlowDialog({ template, onClose }: { template: Template | null; onClo
         </Field>
         <button type="submit" hidden />
       </form>
+    </Dialog>
+  );
+}
+
+/** Plain-language description -> draft automation from the company's local AI model. */
+function DescribeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useApp((s) => s.navigate);
+  const toast = useApp((s) => s.toast);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const attempt = useRef(0);
+
+  const close = () => {
+    attempt.current++; // ignore an answer that arrives after closing
+    setBusy(false);
+    setError('');
+    onClose();
+  };
+
+  const draft = async () => {
+    const mine = ++attempt.current;
+    setBusy(true);
+    setError('');
+    try {
+      const { flow, dropped } = await window.autoflow.ai.draftFlow(text.trim());
+      if (mine !== attempt.current) return;
+      const id = `flow_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+      await window.autoflow.flows.save({ ...flow, id, description: flow.description || text.trim() });
+      setText('');
+      close();
+      navigate({ page: 'editor', flowId: id });
+      toast('Draft ready. Check each step and fill in the settings marked in red before testing it.', 'success');
+      if (dropped.length) toast(`The assistant also suggested steps Autoflow doesn't have (${dropped.join(', ')}); they were left out.`, 'info');
+    } catch (e) {
+      if (mine === attempt.current) setError(errorMessage(e));
+    } finally {
+      if (mine === attempt.current) setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && close()}
+      title="Describe the automation"
+      description="The AI assistant drafts the steps. You review them and fill in details like web addresses and screen elements before anything runs."
+      width="lg"
+      footer={
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button variant="primary" icon={<Icon name="sparkles" size={15} />} disabled={busy || text.trim().length < 10} onClick={draft}>
+            {busy ? 'Drafting…' : 'Draft it'}
+          </Button>
+        </>
+      }
+    >
+      <Field
+        label="What should it do?"
+        htmlFor="describe-text"
+        help="Explain it like you would to a new colleague: where the data comes from, what to do with each item, and where the results go."
+      >
+        <Textarea
+          id="describe-text"
+          autoFocus
+          rows={6}
+          value={text}
+          disabled={busy}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Open the invoices Excel file. For each row, type the customer and amount into the vendor portal and press Save, then write the reference number back into the Result column."
+        />
+      </Field>
+      {busy && (
+        <p className="mt-3 flex items-center gap-2 text-[13px] text-muted" role="status">
+          <Icon name="loader-circle" size={15} className="animate-spin" /> The assistant is drafting. Without a graphics card this can take a minute or two.
+        </p>
+      )}
+      {error && (
+        <p className="mt-3 text-[13px] text-danger" role="alert">
+          {error}
+        </p>
+      )}
     </Dialog>
   );
 }

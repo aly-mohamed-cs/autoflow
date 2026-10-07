@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell 
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { FILE_PROTOCOL, IPC, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions } from '../shared/api';
+import { FILE_PROTOCOL, IPC, type AiDraft, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
 import { QuickLaunch } from './quicklaunch';
@@ -230,6 +230,16 @@ function registerIpc(): void {
   handle(IPC.orchFlows, async () => {
     const res = await orchestrator.request<{ flows: PublishedFlow[] }>('GET', '/api/flows');
     return res.flows.map((f) => ({ id: f.id, name: f.name, latestVersion: f.latestVersion }));
+  });
+  // AI calls wait on a local model that can be slow without a GPU (the server caps it at 10 minutes).
+  handle(IPC.aiStatus, async () => {
+    if (!(await orchestrator.info())) return { enabled: false, model: null };
+    return orchestrator.request<{ enabled: boolean; model: string | null }>('GET', '/api/ai/status').catch(() => ({ enabled: false, model: null }));
+  });
+  handle(IPC.aiDraft, (description: string) => orchestrator.request<AiDraft>('POST', '/api/ai/draft-flow', { description }, 620_000));
+  handle(IPC.aiExplain, async (input: Record<string, unknown>) => {
+    const res = await orchestrator.request<{ explanation: string }>('POST', '/api/ai/explain-error', input, 620_000);
+    return res.explanation;
   });
   handle(IPC.quickList, () => quickLaunch.list());
   handle(IPC.quickSave, (entries: QuickLaunchEntry[]) => quickLaunch.save(entries));

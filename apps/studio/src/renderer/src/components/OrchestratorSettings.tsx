@@ -1,6 +1,7 @@
 import { Badge, Button, Dialog, Field, Icon, Input } from '@autoflow/ui';
 import { useState } from 'react';
 import { errorMessage, useApp } from '../store/app';
+import { forgetAiStatus } from '../lib/ai';
 
 /** Connect Studio to the company Orchestrator to publish automations. */
 export function OrchestratorSettings() {
@@ -17,6 +18,7 @@ export function OrchestratorSettings() {
     setError('');
     try {
       const result = await window.autoflow.orchestrator.connect(form.url, form.username, form.password, trust);
+      forgetAiStatus();
       setInfo(result);
       setFingerprint(null);
       setForm({ ...form, password: '' });
@@ -39,7 +41,7 @@ export function OrchestratorSettings() {
         </p>
         <div className="flex gap-2">
           <Button onClick={() => window.open(info.url, '_blank')} icon={<Icon name="external-link" size={14} />}>Open dashboard</Button>
-          <Button variant="ghost" onClick={async () => { await window.autoflow.orchestrator.disconnect(); setInfo(null); }}>Disconnect</Button>
+          <Button variant="ghost" onClick={async () => { await window.autoflow.orchestrator.disconnect(); forgetAiStatus(); setInfo(null); }}>Disconnect</Button>
         </div>
       </div>
     );

@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
+import { extractJson } from '../src/services/ai.js';
 import type { Config } from '../src/config.js';
 import { Db } from '../src/db.js';
 import { Vault } from '../src/security.js';
@@ -230,6 +232,113 @@ describe('publishing, robots and runs', () => {
   it('records an audit trail', async () => {
     const actions = (await api('GET', '/api/audit')).body.entries.map((e: any) => e.action);
     expect(actions).toEqual(expect.arrayContaining(['setup.admin_created', 'flow.published', 'credential.created', 'robot.enrolled', 'credentials.read', 'job.started']));
+  });
+});
+
+describe('AI assistant (local model)', () => {
+  let model: Server;
+  let modelUrl: string;
+  const received: { auth?: string; body: any }[] = [];
+  let reply: (body: any) => { status?: number; content: string } = () => ({ content: '' });
+
+  beforeAll(async () => {
+    model = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        const body = JSON.parse(raw);
+        received.push({ auth: req.headers.authorization, body });
+        const r = reply(body);
+        res.writeHead(r.status ?? 200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: r.content } }] }));
+      });
+    });
+    await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
+    modelUrl = `http://127.0.0.1:${(model.address() as { port: number }).port}/v1`;
+  });
+
+  afterAll(() => new Promise<void>((resolve) => model.close(() => resolve())));
+
+  it('is off until an administrator turns it on', async () => {
+    expect((await api('GET', '/api/ai/status')).body).toEqual({ enabled: false, model: null });
+    expect((await api('POST', '/api/ai/draft-flow', { description: 'Read invoices from Excel and log each one' })).status).toBe(404);
+  });
+
+  it('stores the model server key encrypted and never returns it', async () => {
+    const saved = await api('PUT', '/api/settings/ai', { enabled: true, baseUrl: modelUrl, model: 'test-model', apiKey: 'sk-local-123', timeoutS: 30 });
+    expect(saved.status).toBe(200);
+    const stored = svc.settings.get<{ apiKey: string }>('ai', { apiKey: '' });
+    expect(stored.apiKey).not.toContain('sk-local-123');
+    const shown = await api('GET', '/api/settings/ai');
+    expect(shown.body.ai).toMatchObject({ enabled: true, model: 'test-model', apiKey: '••••••' });
+    // Saving the masked value again keeps the stored key.
+    await api('PUT', '/api/settings/ai', { ...shown.body.ai, apiKey: '••••••' });
+    expect(svc.settings.get<{ apiKey: string }>('ai', { apiKey: '' }).apiKey).toBe(stored.apiKey);
+    expect((await api('GET', '/api/ai/status')).body).toEqual({ enabled: true, model: 'test-model' });
+  });
+
+  it('drafts a flow from a description and keeps only known steps and settings', async () => {
+    reply = () => ({
+      content:
+        'Here is the automation:\n```json\n' +
+        JSON.stringify({
+          name: 'Log invoices',
+          description: 'Reads the invoice sheet and logs each row',
+          variables: [{ name: 'invoice_file', type: 'file', is_input: true }, { name: 'bad name!', type: 'text' }],
+          steps: [
+            { activity: 'excel.read', params: { file: '{{invoice_file}}', sheet: 'Invoices', has_header: true, evil: 'x' }, outputs: { table: 'invoices' } },
+            {
+              activity: 'control.for_each',
+              params: { items: '{{invoices}}', item_variable: 'row' },
+              blocks: { body: [{ activity: 'control.log', label: 'Log it', params: { message: 'Invoice {{row["Number"]}}' } }, { activity: 'shell.format_disk', params: {} }] },
+            },
+            { activity: 'browser.run_script', params: { script: 'alert(1)' } },
+          ],
+        }) +
+        '\n```',
+    });
+    const res = await api('POST', '/api/ai/draft-flow', { description: 'Read invoices from Excel and log each one' });
+    expect(res.status).toBe(200);
+    const { flow, dropped } = res.body;
+    expect(dropped.sort()).toEqual(['browser.run_script', 'shell.format_disk']);
+    expect(flow.name).toBe('Log invoices');
+    expect(flow.variables.map((v: { name: string }) => v.name)).toEqual(['invoice_file']);
+    expect(flow.steps.map((s: { activity: string }) => s.activity)).toEqual(['excel.read', 'control.for_each']);
+    expect(flow.steps[0].params).toEqual({ file: '{{invoice_file}}', sheet: 'Invoices', has_header: true });
+    expect(flow.steps[0].outputs).toEqual({ table: 'invoices' });
+    expect(flow.steps[1].blocks.body).toHaveLength(1);
+    expect(flow.steps[1].blocks.body[0]).toMatchObject({ activity: 'control.log', label: 'Log it' });
+    expect(new Set(JSON.stringify(flow).match(/"id":"s[0-9a-f]+"/g)).size).toBe(3);
+
+    const sent = received.at(-1)!;
+    expect(sent.auth).toBe('Bearer sk-local-123');
+    expect(sent.body).toMatchObject({ model: 'test-model', response_format: { type: 'json_object' } });
+    expect(sent.body.messages[0].content).toContain('control.for_each');
+    expect(sent.body.messages[0].content).not.toContain('browser.run_script');
+  });
+
+  it('explains errors without sending secrets and reports model problems plainly', async () => {
+    reply = () => ({ content: '  The page did not show the Login button in time. Pick the element again.  ' });
+    const res = await api('POST', '/api/ai/explain-error', {
+      activity: 'browser.click',
+      message: "Couldn't find 'Login button' after 10 s",
+      params: { element: 'Login button', password: 'hunter2' },
+    });
+    expect(res.body.explanation).toBe('The page did not show the Login button in time. Pick the element again.');
+    expect(JSON.stringify(received.at(-1)!.body)).not.toContain('hunter2');
+
+    reply = () => ({ status: 500, content: '' });
+    const failed = await api('POST', '/api/ai/explain-error', { activity: 'browser.click', message: 'x' });
+    expect(failed.status).toBe(502);
+    expect((await api('POST', '/api/settings/ai/test')).body).toMatchObject({ ok: false });
+
+    reply = () => ({ content: 'not json at all' });
+    expect((await api('POST', '/api/ai/draft-flow', { description: 'Read invoices from Excel and log each one' })).status).toBe(502);
+  });
+
+  it('finds JSON in chatty answers', () => {
+    expect(extractJson('Sure! {"a": {"b": 1}} Hope that helps')).toBe('{"a": {"b": 1}}');
+    expect(extractJson('```json\n{"x": 2}\n```')).toBe('{"x": 2}');
   });
 });
 

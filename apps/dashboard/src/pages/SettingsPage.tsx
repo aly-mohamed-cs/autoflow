@@ -25,6 +25,7 @@ export function SettingsPage() {
         <Appearance />
         <Downloads />
         {can(me.role, 'admin') && <Directory />}
+        {can(me.role, 'admin') && <AiAssistant />}
       </div>
     </>
   );
@@ -146,6 +147,76 @@ function Directory() {
           }
         }}>Save directory settings</Button>
         {saved && <span className="text-[13px] text-muted">{saved}</span>}
+      </div>
+    </Card>
+  );
+}
+
+interface Ai {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  timeoutS: number;
+}
+
+function AiAssistant() {
+  const { data, reload } = useApi<{ ai: Ai }>('/api/settings/ai');
+  const [form, setForm] = useState<Ai | null>(null);
+  const [status, setStatus] = useState('');
+  useEffect(() => {
+    if (data) setForm(data.ai);
+  }, [data]);
+  if (!form) return null;
+  const set = (patch: Partial<Ai>) => {
+    setForm({ ...form, ...patch });
+    setStatus('');
+  };
+  const save = async () => {
+    await api('/api/settings/ai', { method: 'PUT', body: { ...form, timeoutS: Number(form.timeoutS) || 120 } });
+    reload();
+  };
+
+  return (
+    <Card title="AI assistant (local model)" actions={<Switch checked={form.enabled} onChange={(enabled) => set({ enabled })} label="Turn on the AI assistant" />}>
+      <p className="mb-4 max-w-2xl text-[13px] text-muted">
+        Lets builders describe an automation in plain words to get a first draft, and explains failed steps. It only talks to a model server
+        on your own network (Ollama, LM Studio or vLLM), so nothing is sent outside the company. Drafts are always reviewed by a person before they run.
+      </p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="Model server address" help="OpenAI-compatible. Ollama: http://<server>:11434/v1 · LM Studio: http://<server>:1234/v1" htmlFor="ai-url">
+          <Input id="ai-url" value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="http://gpu-server:11434/v1" />
+        </Field>
+        <Field label="Model" help="For example qwen2.5:7b-instruct on a CPU, or a larger model once there's a GPU." htmlFor="ai-model">
+          <Input id="ai-model" value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder="qwen2.5:7b-instruct" />
+        </Field>
+        <Field label="Access key (optional)" help="Only if the model server asks for one. Stored encrypted." htmlFor="ai-key">
+          <Input id="ai-key" type="password" autoComplete="off" value={form.apiKey} onChange={(e) => set({ apiKey: e.target.value })} placeholder="Not needed for Ollama" />
+        </Field>
+        <Field label="Wait for an answer (seconds)" help="Models without a GPU can be slow." htmlFor="ai-timeout">
+          <Input id="ai-timeout" type="number" min={10} max={600} value={form.timeoutS} onChange={(e) => set({ timeoutS: Number(e.target.value) })} />
+        </Field>
+      </div>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Button variant="primary" onClick={async () => {
+          try {
+            await save();
+            setStatus('Saved.');
+          } catch (e) {
+            setStatus((e as Error).message);
+          }
+        }}>Save AI settings</Button>
+        <Button disabled={!form.enabled} onClick={async () => {
+          setStatus('Saving and asking the model a test question…');
+          try {
+            await save();
+            const r = await api<{ ok: boolean; ms?: number; error?: string }>('/api/settings/ai/test', { method: 'POST', body: {} });
+            setStatus(r.ok ? `The model answered in ${((r.ms ?? 0) / 1000).toFixed(1)} s. The assistant is ready.` : `Failed: ${r.error}`);
+          } catch (e) {
+            setStatus((e as Error).message);
+          }
+        }}>Save and test</Button>
+        {status && <span className="text-[13px] text-muted" role="status">{status}</span>}
       </div>
     </Card>
   );
