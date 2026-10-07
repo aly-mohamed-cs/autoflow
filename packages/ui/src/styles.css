@@ -1,0 +1,158 @@
+/*
+ * Autoflow theme. Apps import this file, then add an @source line for their own
+ * components, e.g.  @import "@autoflow/ui/styles.css"; @source "../src";
+ */
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@source "./";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+
+  /* Semantic colors, mapped to the light/dark tokens below. */
+  --color-bg: var(--af-bg);
+  --color-surface: var(--af-surface);
+  --color-surface-2: var(--af-surface-2);
+  --color-border: var(--af-border);
+  --color-border-strong: var(--af-border-strong);
+  --color-fg: var(--af-fg);
+  --color-muted: var(--af-muted);
+  --color-subtle: var(--af-subtle);
+  --color-primary: var(--af-primary);
+  --color-primary-hover: var(--af-primary-hover);
+  --color-primary-soft: var(--af-primary-soft);
+  --color-on-primary: #ffffff;
+  --color-success: var(--af-success);
+  --color-success-soft: var(--af-success-soft);
+  --color-warning: var(--af-warning);
+  --color-warning-soft: var(--af-warning-soft);
+  --color-danger: var(--af-danger);
+  --color-danger-soft: var(--af-danger-soft);
+  --color-focus: var(--af-focus);
+
+  /* Step category accents (icon tiles in the step list). */
+  --color-cat-control: var(--af-cat-control);
+  --color-cat-browser: var(--af-cat-browser);
+  --color-cat-desktop: var(--af-cat-desktop);
+  --color-cat-excel: var(--af-cat-excel);
+  --color-cat-files: var(--af-cat-files);
+  --color-cat-data: var(--af-cat-data);
+  --color-cat-text: var(--af-cat-text);
+  --color-cat-pdf: var(--af-cat-pdf);
+  --color-cat-email: var(--af-cat-email);
+  --color-cat-web: var(--af-cat-web);
+  --color-cat-database: var(--af-cat-database);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
+  --shadow-pop: 0 10px 30px rgb(15 23 42 / 0.14), 0 2px 6px rgb(15 23 42 / 0.08);
+}
+
+:root {
+  --af-bg: #f5f6f8;
+  --af-surface: #ffffff;
+  --af-surface-2: #f9fafb;
+  --af-border: #e4e7ec;
+  --af-border-strong: #cdd2da;
+  --af-fg: #111827;
+  --af-muted: #4b5563;
+  --af-subtle: #8a93a3;
+  --af-primary: #4f46e5;
+  --af-primary-hover: #4338ca;
+  --af-primary-soft: #eef2ff;
+  --af-success: #15803d;
+  --af-success-soft: #ecfdf3;
+  --af-warning: #b45309;
+  --af-warning-soft: #fffaeb;
+  --af-danger: #c81e1e;
+  --af-danger-soft: #fef3f2;
+  --af-focus: #6366f1;
+
+  --af-cat-control: #7c3aed;
+  --af-cat-browser: #2563eb;
+  --af-cat-desktop: #475569;
+  --af-cat-excel: #16a34a;
+  --af-cat-files: #d97706;
+  --af-cat-data: #0d9488;
+  --af-cat-text: #db2777;
+  --af-cat-pdf: #dc2626;
+  --af-cat-email: #0284c7;
+  --af-cat-web: #ea580c;
+  --af-cat-database: #0891b2;
+
+  color-scheme: light;
+}
+
+.dark {
+  --af-bg: #0f1218;
+  --af-surface: #161a22;
+  --af-surface-2: #1c212b;
+  --af-border: #2a303c;
+  --af-border-strong: #3a4250;
+  --af-fg: #eef0f4;
+  --af-muted: #b4bccb;
+  --af-subtle: #7d8697;
+  --af-primary: #818cf8;
+  --af-primary-hover: #a5b4fc;
+  --af-primary-soft: #23264a;
+  --af-success: #4ade80;
+  --af-success-soft: #13261b;
+  --af-warning: #fbbf24;
+  --af-warning-soft: #2b2312;
+  --af-danger: #f87171;
+  --af-danger-soft: #2d1616;
+  --af-focus: #a5b4fc;
+
+  --af-cat-control: #a78bfa;
+  --af-cat-browser: #60a5fa;
+  --af-cat-desktop: #94a3b8;
+  --af-cat-excel: #4ade80;
+  --af-cat-files: #fbbf24;
+  --af-cat-data: #2dd4bf;
+  --af-cat-text: #f472b6;
+  --af-cat-pdf: #f87171;
+  --af-cat-email: #38bdf8;
+  --af-cat-web: #fb923c;
+  --af-cat-database: #22d3ee;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-sm text-fg antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--af-focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--af-primary) 25%, transparent);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--af-border-strong) transparent;
+  }
+}
+
+@keyframes af-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+@utility animate-fade-in {
+  animation: af-fade-in 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

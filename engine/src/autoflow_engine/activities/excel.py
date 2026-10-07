@@ -363,7 +363,7 @@ class CreateWorkbookParams(Params):
     "excel.create",
     title="Create Excel file",
     category=X,
-    icon="file-plus-2",
+    icon="file-plus",
     sentence="Create Excel file {file}",
     params=CreateWorkbookParams,
     outputs=[OutputDef("file", "File", "file", default_variable="excel_file")],

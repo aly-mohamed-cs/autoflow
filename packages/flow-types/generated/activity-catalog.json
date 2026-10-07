@@ -140,7 +140,7 @@
       "id": "browser.navigate",
       "title": "Back / forward / reload",
       "category": "Browser",
-      "icon": "history",
+      "icon": "rotate-ccw",
       "sentence": "Browser {action}",
       "description": "",
       "params": {
@@ -1830,7 +1830,7 @@
       "id": "data.filter",
       "title": "Filter rows",
       "category": "Data",
-      "icon": "filter",
+      "icon": "funnel",
       "sentence": "Keep rows of {table} where {condition}",
       "description": "",
       "params": {
@@ -2898,7 +2898,7 @@
       "id": "excel.create",
       "title": "Create Excel file",
       "category": "Excel",
-      "icon": "file-plus-2",
+      "icon": "file-plus",
       "sentence": "Create Excel file {file}",
       "description": "",
       "params": {
@@ -3092,7 +3092,7 @@
       "id": "files.delete",
       "title": "Delete file or folder",
       "category": "Files",
-      "icon": "trash-2",
+      "icon": "trash",
       "sentence": "Delete {path}",
       "description": "",
       "params": {
@@ -3216,7 +3216,7 @@
       "id": "files.exists",
       "title": "Check if file exists",
       "category": "Files",
-      "icon": "file-question",
+      "icon": "file-question-mark",
       "sentence": "Check if {path} exists",
       "description": "",
       "params": {
@@ -3629,7 +3629,7 @@
       "id": "text.extract_between",
       "title": "Get text between",
       "category": "Text",
-      "icon": "text-select",
+      "icon": "text-cursor-input",
       "sentence": "Get text between {after} and {before}",
       "description": "Pick out a value that sits between two known pieces of text.",
       "params": {
@@ -3794,7 +3794,7 @@
       "id": "text.split",
       "title": "Split text into list",
       "category": "Text",
-      "icon": "split-square-horizontal",
+      "icon": "columns-2",
       "sentence": "Split {text} at {separator}",
       "description": "",
       "params": {

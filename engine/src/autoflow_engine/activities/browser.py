@@ -202,7 +202,7 @@ class NavigateParams(Params):
     "browser.navigate",
     title="Back / forward / reload",
     category=B,
-    icon="history",
+    icon="rotate-ccw",
     sentence="Browser {action}",
     params=NavigateParams,
 )

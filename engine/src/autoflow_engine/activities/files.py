@@ -132,7 +132,7 @@ class DeleteParams(Params):
     "files.delete",
     title="Delete file or folder",
     category=F,
-    icon="trash-2",
+    icon="trash",
     sentence="Delete {path}",
     params=DeleteParams,
 )
@@ -204,7 +204,7 @@ class ExistsParams(Params):
     "files.exists",
     title="Check if file exists",
     category=F,
-    icon="file-question",
+    icon="file-question-mark",
     sentence="Check if {path} exists",
     params=ExistsParams,
     outputs=[OutputDef("exists", "Exists", "boolean", default_variable="file_exists")],

@@ -94,7 +94,7 @@ class FilterParams(Params):
     "data.filter",
     title="Filter rows",
     category=D,
-    icon="filter",
+    icon="funnel",
     sentence="Keep rows of {table} where {condition}",
     params=FilterParams,
     outputs=_TABLE_OUT,

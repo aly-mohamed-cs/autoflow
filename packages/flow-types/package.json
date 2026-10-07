@@ -1,0 +1,20 @@
+{
+  "name": "@autoflow/flow-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Flow document and activity catalog types shared by Studio, dashboard and server.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./activity-catalog.json": "./generated/activity-catalog.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.0"
+  }
+}
