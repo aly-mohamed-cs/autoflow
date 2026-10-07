@@ -53,6 +53,12 @@ const api: StudioApi = {
     connect: (url, username, password, trustFingerprint) => invoke(IPC.orchConnect, url, username, password, trustFingerprint),
     disconnect: () => invoke(IPC.orchDisconnect),
     publish: (flow, notes) => invoke(IPC.orchPublish, flow, notes),
+    flows: () => invoke(IPC.orchFlows),
+  },
+  quickLaunch: {
+    list: () => invoke(IPC.quickList),
+    save: (entries) => invoke(IPC.quickSave, entries),
+    run: (entry) => invoke(IPC.quickRun, entry),
   },
   app: {
     version: () => invoke(IPC.appVersion),

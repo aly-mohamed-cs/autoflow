@@ -44,6 +44,19 @@ export interface RunStartOptions {
 
 export type RunControlAction = 'pause' | 'resume' | 'step' | 'stop';
 
+export interface QuickLaunchEntry {
+  /** Electron accelerator, e.g. "CommandOrControl+Alt+1". */
+  accelerator: string;
+  flowId: string;
+  flowName: string;
+}
+
+export interface PublishedFlow {
+  id: string;
+  name: string;
+  latestVersion: number;
+}
+
 export interface OrchestratorInfo {
   url: string;
   username: string;
@@ -98,6 +111,12 @@ export interface StudioApi {
     connect(url: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo>;
     disconnect(): Promise<void>;
     publish(flow: Flow, notes: string): Promise<{ version: number; url: string }>;
+    flows(): Promise<PublishedFlow[]>;
+  };
+  quickLaunch: {
+    list(): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
+    save(entries: QuickLaunchEntry[]): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
+    run(entry: QuickLaunchEntry): Promise<void>;
   };
   app: {
     version(): Promise<string>;
@@ -137,6 +156,10 @@ export const IPC = {
   orchConnect: 'orch:connect',
   orchDisconnect: 'orch:disconnect',
   orchPublish: 'orch:publish',
+  orchFlows: 'orch:flows',
+  quickList: 'quick:list',
+  quickSave: 'quick:save',
+  quickRun: 'quick:run',
   appVersion: 'app:version',
   appOpenPath: 'app:open-path',
 } as const;

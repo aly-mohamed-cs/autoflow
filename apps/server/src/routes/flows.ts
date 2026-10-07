@@ -20,6 +20,8 @@ const RunBody = z.object({
   inputs: z.record(z.string(), z.unknown()).optional(),
   version: z.number().int().positive().optional(),
   pool: z.string().max(64).optional(),
+  /** Studio's quick-launch hotkeys mark their runs so history shows how they started. */
+  trigger: z.enum(['manual', 'hotkey']).optional(),
 });
 const PatchBody = z.object({ minutesSaved: z.number().min(0).max(100_000).optional(), archived: z.boolean().optional() });
 
@@ -155,7 +157,14 @@ export async function flowRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = RunBody.parse(request.body ?? {});
     const user = request.user!;
-    const job = jobs.create({ flowId: id, version: body.version, trigger: 'manual', triggeredBy: user.displayName, inputs: body.inputs, pool: body.pool });
+    const job = jobs.create({
+      flowId: id,
+      version: body.version,
+      trigger: body.trigger ?? 'manual',
+      triggeredBy: body.trigger === 'hotkey' ? `${user.displayName} (hotkey)` : user.displayName,
+      inputs: body.inputs,
+      pool: body.pool,
+    });
     audit.record({ id: user.id, name: user.username }, 'job.started', job.id, { flowId: id });
     return { job: present(job as JobRow) };
   });

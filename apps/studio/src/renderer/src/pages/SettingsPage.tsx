@@ -1,6 +1,7 @@
 import { Badge, Button, Field, Icon, Segmented } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { OrchestratorSettings } from '../components/OrchestratorSettings';
+import { QuickLaunchSettings } from '../components/QuickLaunchSettings';
 import { useApp, type Theme } from '../store/app';
 
 export function SettingsPage() {
@@ -8,6 +9,7 @@ export function SettingsPage() {
   const setTheme = useApp((s) => s.setTheme);
   const engine = useApp((s) => s.engine);
   const index = useApp((s) => s.index);
+  const orchestrator = useApp((s) => s.orchestrator);
   const [version, setVersion] = useState('');
   useEffect(() => {
     void window.autoflow.app.version().then(setVersion);
@@ -62,6 +64,13 @@ export function SettingsPage() {
           <h2 className="font-semibold">Orchestrator</h2>
           <OrchestratorSettings />
         </section>
+
+        {orchestrator && (
+          <section className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-card">
+            <h2 className="font-semibold">Quick launch (keyboard shortcuts)</h2>
+            <QuickLaunchSettings />
+          </section>
+        )}
 
         <p className="text-xs text-subtle">Autoflow Studio {version}</p>
       </div>

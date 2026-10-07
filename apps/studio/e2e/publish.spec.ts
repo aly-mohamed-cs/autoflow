@@ -69,6 +69,18 @@ test('connect to the Orchestrator and publish an automation', async () => {
     await win.getByLabel('What changed?').fill('First version');
     await win.getByRole('dialog').getByRole('button', { name: 'Publish' }).click();
     await expect(win.getByText('Published version 1')).toBeVisible();
+    await win.getByRole('button', { name: 'Done' }).click();
+
+    // Quick launch: assign Ctrl+Alt+1 to the automation and start it like the shortcut would.
+    await win.getByRole('button', { name: 'Settings' }).click();
+    await win.getByRole('button', { name: 'Add shortcut' }).click();
+    await win.getByText('Choose an automation').click();
+    await win.getByRole('option', { name: 'Publish me' }).click();
+    await expect(win.getByRole('button', { name: 'Shortcut', exact: true })).toHaveText('Ctrl+Alt+1');
+    await expect
+      .poll(() => app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Ctrl+Alt+1')))
+      .toBe(true);
+    await win.getByRole('button', { name: 'Run now', exact: true }).click();
     await app.close();
 
     const login = await fetch(`${base}/api/auth/login`, {
@@ -78,6 +90,10 @@ test('connect to the Orchestrator and publish an automation', async () => {
     }).then((r) => r.json() as Promise<{ token: string }>);
     const flows = await fetch(`${base}/api/flows`, { headers: { Authorization: `Bearer ${login.token}` } }).then((r) => r.json() as Promise<{ flows: { name: string; latestVersion: number }[] }>);
     expect(flows.flows).toEqual([expect.objectContaining({ name: 'Publish me', latestVersion: 1 })]);
+    const jobs = await fetch(`${base}/api/jobs`, { headers: { Authorization: `Bearer ${login.token}` } }).then(
+      (r) => r.json() as Promise<{ jobs: { trigger: string; triggeredBy: string }[] }>,
+    );
+    expect(jobs.jobs).toEqual([expect.objectContaining({ trigger: 'hotkey', triggeredBy: 'Bea Builder (hotkey)' })]);
   } finally {
     server.kill();
     await new Promise((r) => server.once('exit', r));

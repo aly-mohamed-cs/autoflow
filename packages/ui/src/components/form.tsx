@@ -99,9 +99,11 @@ export function Select({
   className?: string;
   disabled?: boolean;
 }) {
+  // '' is a real option only if one is listed; otherwise Radix shows the placeholder for ''.
+  const hasEmptyOption = options.some((o) => o.value === '');
   return (
     <RadixSelect.Root
-      value={value === '' ? EMPTY : value}
+      value={value === '' || value === undefined ? (hasEmptyOption ? EMPTY : '') : value}
       onValueChange={(v) => onChange(v === EMPTY ? '' : v)}
       disabled={disabled}
     >

@@ -3,9 +3,10 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell 
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { FILE_PROTOCOL, IPC, type EngineStatus, type RunStartOptions } from '../shared/api';
+import { FILE_PROTOCOL, IPC, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
+import { QuickLaunch } from './quicklaunch';
 import { FlowStore, newFlowId, Vault } from './storage';
 
 // Tests point Studio at a throwaway folder so they never touch real automations.
@@ -16,6 +17,18 @@ const flows = new FlowStore(userData);
 const vault = new Vault(userData, safeStorage);
 const orchestrator = new Orchestrator(userData, safeStorage);
 let mainWindow: BrowserWindow | null = null;
+let quitting = false;
+const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'build', 'icon.png');
+const quickLaunch = new QuickLaunch(userData, orchestrator, () => showWindow(), iconPath);
+
+function showWindow(): void {
+  if (!mainWindow) createWindow();
+  else {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
 
 const broadcast = (channel: string, payload: unknown) => {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
@@ -52,6 +65,16 @@ function createWindow(): void {
     },
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+  // With quick-launch hotkeys set up, closing the window keeps Studio in the tray so they keep working.
+  mainWindow.on('close', (event) => {
+    if (!quitting && quickLaunch.active) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
   // Links open in the user's browser, never inside Studio.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -200,6 +223,14 @@ function registerIpc(): void {
     return { version: result.version, url: `${info?.url}/#/automations/${encodeURIComponent(flow.id)}` };
   });
 
+  handle(IPC.orchFlows, async () => {
+    const res = await orchestrator.request<{ flows: PublishedFlow[] }>('GET', '/api/flows');
+    return res.flows.map((f) => ({ id: f.id, name: f.name, latestVersion: f.latestVersion }));
+  });
+  handle(IPC.quickList, () => quickLaunch.list());
+  handle(IPC.quickSave, (entries: QuickLaunchEntry[]) => quickLaunch.save(entries));
+  handle(IPC.quickRun, (entry: QuickLaunchEntry) => quickLaunch.run(entry));
+
   handle(IPC.appVersion, () => app.getVersion());
   handle(IPC.appOpenPath, async (path: string) => {
     const error = await shell.openPath(path);
@@ -223,16 +254,18 @@ const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow?.isMinimized()) mainWindow.restore();
-    mainWindow?.focus();
+  app.on('second-instance', () => showWindow());
+  app.on('before-quit', () => {
+    quitting = true;
   });
+  app.on('will-quit', () => quickLaunch.dispose());
   app.whenReady().then(() => {
     app.setAppUserModelId('com.autoflow.studio');
     registerFileProtocol();
     registerIpc();
     engine.start();
     createWindow();
+    void quickLaunch.load();
   });
   app.on('window-all-closed', () => {
     engine.stop();

@@ -12,6 +12,8 @@ files:
 extraResources:
   - from: ../../build/python-studio
     to: engine/python
+  - from: build/icon.png
+    to: icon.png
 asar: true
 npmRebuild: false
 win:
