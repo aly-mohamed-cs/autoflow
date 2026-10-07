@@ -2534,6 +2534,545 @@
       "requires": null
     },
     {
+      "id": "desktop.launch",
+      "title": "Open application",
+      "category": "Desktop",
+      "icon": "app-window",
+      "sentence": "Open {program}",
+      "description": "Start a Windows program and wait until its window appears.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "program": {
+            "title": "Program",
+            "type": "string",
+            "x-file-types": [
+              "exe",
+              "lnk",
+              "bat",
+              "cmd"
+            ],
+            "x-ui": "file"
+          },
+          "arguments": {
+            "default": "",
+            "title": "Arguments",
+            "type": "string",
+            "x-advanced": true
+          },
+          "window": {
+            "default": "",
+            "title": "Wait for a window titled",
+            "type": "string",
+            "x-placeholder": "(part of the title, e.g. Invoices)"
+          },
+          "timeout": {
+            "default": 60,
+            "maximum": 600,
+            "minimum": 1,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-advanced": true
+          },
+          "close_at_end": {
+            "default": true,
+            "title": "Close it when the automation finishes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "title": "LaunchParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.activate_window",
+      "title": "Switch to window",
+      "category": "Desktop",
+      "icon": "app-window-mac",
+      "sentence": "Switch to window {window}",
+      "description": "Bring an application window to the front (and wait for it to appear).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "window": {
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "window"
+        ],
+        "title": "WindowParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.close_window",
+      "title": "Close window",
+      "category": "Desktop",
+      "icon": "x",
+      "sentence": "Close window {window}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "window": {
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "window"
+        ],
+        "title": "WindowParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.click",
+      "title": "Click in application",
+      "category": "Desktop",
+      "icon": "mouse-pointer-click",
+      "sentence": "Click {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "click": {
+            "default": "single",
+            "enum": [
+              "single",
+              "double",
+              "right"
+            ],
+            "title": "Click type",
+            "type": "string"
+          }
+        },
+        "title": "ClickParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.type",
+      "title": "Type into application",
+      "category": "Desktop",
+      "icon": "keyboard",
+      "sentence": "Type {text} into {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "text": {
+            "title": "Text to type",
+            "type": "string"
+          },
+          "clear_first": {
+            "default": true,
+            "title": "Clear the field first",
+            "type": "boolean"
+          },
+          "press_enter": {
+            "default": false,
+            "title": "Press Enter afterwards",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TypeParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.select",
+      "title": "Choose from list in application",
+      "category": "Desktop",
+      "icon": "list-checks",
+      "sentence": "Choose {option} in {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "option": {
+            "title": "Option",
+            "type": "string"
+          }
+        },
+        "required": [
+          "option"
+        ],
+        "title": "SelectParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.check",
+      "title": "Tick / untick in application",
+      "category": "Desktop",
+      "icon": "square-check",
+      "sentence": "Set {element} ticked: {checked}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "checked": {
+            "default": true,
+            "title": "Ticked",
+            "type": "boolean"
+          }
+        },
+        "title": "CheckParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.get_text",
+      "title": "Get text from application",
+      "category": "Desktop",
+      "icon": "text-cursor",
+      "sentence": "Get text of {element}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "app_text"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.send_keys",
+      "title": "Press keys in application",
+      "category": "Desktop",
+      "icon": "keyboard",
+      "sentence": "Press {keys}",
+      "description": "Send keyboard shortcuts to the window in front, e.g. Control+S.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "title": "Keys",
+            "type": "string",
+            "x-placeholder": "Control+S, Enter, Tab",
+            "x-ui": "keys"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "KeysParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.wait_for",
+      "title": "Wait for element in application",
+      "category": "Desktop",
+      "icon": "hourglass",
+      "sentence": "Wait until {element} {state}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "state": {
+            "default": "appears",
+            "enum": [
+              "appears",
+              "disappears",
+              "is enabled"
+            ],
+            "title": "Wait until it",
+            "type": "string"
+          }
+        },
+        "title": "WaitParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.read_table",
+      "title": "Read table from application",
+      "category": "Desktop",
+      "icon": "table",
+      "sentence": "Read table {element}",
+      "description": "Copy the rows of a grid or list in an application into a table variable.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "table",
+          "title": "Table",
+          "type": "table",
+          "description": "",
+          "default_variable": "app_table"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.screenshot",
+      "title": "Take screenshot of screen",
+      "category": "Desktop",
+      "icon": "camera",
+      "sentence": "Save screenshot to {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "png"
+            ],
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ScreenshotParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Screenshot",
+          "type": "file",
+          "description": "",
+          "default_variable": "screen_file"
+        }
+      ],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
       "id": "email.send",
       "title": "Send email",
       "category": "Email",

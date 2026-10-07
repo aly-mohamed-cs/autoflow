@@ -40,3 +40,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# .NET build output (testbed desktop app)
+bin/
+obj/
