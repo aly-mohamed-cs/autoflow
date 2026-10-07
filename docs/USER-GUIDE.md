@@ -1,0 +1,117 @@
+# Autoflow user guide
+
+Autoflow lets you hand repetitive computer work to a robot: typing rows from Excel into a
+website or program, downloading and combining reports, reading invoices, sending emails.
+You build an **automation** once in **Autoflow Studio**, test it on your own PC, then
+**publish** it so a robot runs it — whenever you want, on a schedule, or when other systems ask.
+
+No programming is needed. If you can describe the task step by step, you can automate it.
+
+---
+
+## 1. Your first automation in 10 minutes
+
+1. Open **Autoflow Studio** and click **New automation**. Give it a clear name, such as
+   “Enter vendor invoices into the portal”.
+2. Pick a **template** that looks like your task, or start from scratch.
+3. Add steps from the **library on the left** — drag them into the list, or click to add.
+   Each step reads like a sentence: *Type **Invoice No** into **Invoice number box***.
+4. Click a step to fill in its settings on the right. Red settings still need a value.
+5. Press **Test run**. Watch each step turn green, see the log at the bottom, and check the
+   **Variables** tab to see what the automation read.
+6. When it works, press **Publish**. It now appears in the dashboard, ready for robots.
+
+> **Tip — let Autoflow watch you.** Press **Record**, enter the website address, and do the
+> task once in the browser that opens. Each click and entry becomes a step. Passwords are never
+> recorded; you choose a saved credential instead.
+
+---
+
+## 2. The ideas you need
+
+| Idea | What it means |
+|---|---|
+| **Step** | One action: open a website, click a button, read an Excel sheet, send an email. |
+| **Element** | Something on a screen a step works with — a button, a box, a table. You **pick it on screen** instead of describing it. |
+| **Variable** | A named value the automation remembers, e.g. the table read from Excel. Blue chips like **row › Invoice No** are variables. |
+| **Start value** | A variable filled in when the automation starts, such as *which Excel file to process*. |
+| **Credential** | A saved username and password. Robots get it only while they run an automation that needs it, and it never appears in logs. |
+
+### Using values from earlier steps
+
+In any text box, click **{ }** (or type **{**) and choose a variable. For a column of the row
+you are processing, choose e.g. **row › Customer**. You never need to type special syntax.
+
+Need a calculation? Choose **Write a formula…** — it works like Excel:
+`ROUND(row["Total"] * 1.14, 2)`, `IF(amount > 1000, "High", "Normal")`, `FORMATDATE(TODAY(), "DD/MM/YYYY")`.
+The preview shows the result using values from your last test run.
+
+---
+
+## 3. Common tasks
+
+### Process every row of an Excel sheet
+1. **Read Excel sheet** → saves a table (e.g. `rows`).
+2. **For each** → *For each row in rows*. Put the steps for one row inside.
+3. To write a result back: **Update Excel row** with *Row number* = the loop's position
+   counter (**row_number**).
+
+### Work in a website
+* **Open browser** with the address, then **Type text**, **Click**, **Choose from dropdown**…
+* For each step, press **Pick on screen** and click the element in the browser that opens.
+  Need to sign in first? Hold **Ctrl** while clicking to use the page normally.
+* Pages often take a moment: use **Wait for element** instead of a fixed wait.
+* **Extract table from page** copies a table into Autoflow; **Download file** saves exports.
+
+### Work in a Windows program (ERP, accounting…)
+* **Open application** starts it and waits for its window.
+* **Pick on screen**: switch to the program, point at the box or button, press **Ctrl**.
+  A red outline shows what will be picked.
+* After saving something, **Wait for element in application** → *text contains* (e.g. “Saved”)
+  before reading the result.
+
+### Read invoices and other PDFs
+* **Get fields from PDF**: for each field, enter the label printed before it
+  (e.g. `Invoice No:`) and what kind of value it is (text, number, date…).
+* **Extract table from PDF** reads item lines. Scanned PDFs are read automatically with
+  text recognition (OCR).
+
+### Email
+* **Send email** through the company mail server, with attachments such as a report.
+* **Read emails** gets messages from a mailbox as a table; **Save email attachments**
+  stores e.g. PDF invoices for the next steps.
+
+### When something can go wrong
+* Every step has **If this step fails**: try again a few times, or continue anyway.
+* Put risky steps inside **Try / If it fails** to run other steps when they fail
+  (e.g. move the file to a “failed” folder and continue with the next one).
+
+---
+
+## 4. Running automations without you
+
+Open the **dashboard** (address from your administrator) and choose the automation:
+
+| You want it to run… | Do this |
+|---|---|
+| Now | **Run now**, fill in the start values |
+| On a schedule | **Schedules → Add a schedule**, e.g. *Every weekday at 08:00* |
+| When another system asks | **Webhooks → Create webhook**; give the address to IT |
+| For many separate items | Create a **Queue**, add items (paste rows from Excel); each item gets its own run |
+| With a keyboard shortcut | In Studio: **Settings → Quick launch**, e.g. *Ctrl+Alt+1* |
+
+Every run is kept in **Runs** with each step, the log and screenshots — open a failed run to
+see exactly where and why it stopped.
+
+---
+
+## 5. Good habits
+
+* **Test with real data** before publishing; robots do exactly what you publish.
+* **Name things clearly** — automations, elements and variables. Colleagues will thank you.
+* **Prefer waiting for something** over fixed waits — it is faster and more reliable.
+* **Keep secrets in credentials**, never in steps or Excel files.
+* Fill in **Minutes saved per run** (dashboard → automation → Settings) to see the time you
+  save on the overview page.
+
+Questions? Your Autoflow administrator can see the audit log and run history to help.

@@ -51,6 +51,11 @@ Activities live in `engine/src/autoflow_engine/activities/`. Register a function
 step automatically. `tests/test_catalog_and_validation.py` checks every activity is
 complete.
 
+## For people using Autoflow
+
+See the [user guide](docs/USER-GUIDE.md): your first automation, recording, picking elements,
+Excel/web/desktop/PDF/email tasks, schedules, queues and keyboard shortcuts.
+
 ## Deployment
 
 | Guide | For |
