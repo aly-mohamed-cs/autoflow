@@ -1,0 +1,42 @@
+@import "@autoflow/ui/styles.css";
+@source "./";
+
+/* Step list connector line between steps */
+.af-step-list > li + li::before {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: -8px;
+  height: 8px;
+  width: 2px;
+  background: var(--af-border-strong);
+}
+
+/* Value chips inside editable text fields */
+.af-token-input [data-expr] {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 1px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: baseline;
+  white-space: nowrap;
+  background: var(--af-primary-soft);
+  color: var(--af-primary);
+  border: 1px solid color-mix(in srgb, var(--af-primary) 25%, transparent);
+  cursor: default;
+  user-select: all;
+}
+.af-token-input [data-expr][data-formula="true"] {
+  background: var(--af-warning-soft);
+  color: var(--af-warning);
+  border-color: color-mix(in srgb, var(--af-warning) 25%, transparent);
+}
+.af-token-input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--af-subtle);
+  pointer-events: none;
+}
