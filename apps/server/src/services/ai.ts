@@ -153,7 +153,7 @@ export class AiService {
     } catch (err) {
       if (err instanceof HttpError) throw err;
       if ((err as Error).name === 'AbortError') throw new HttpError(504, 'The AI model took too long to answer.');
-      throw new HttpError(502, `Could not reach the AI model server: ${(err as Error).message}`);
+      throw new HttpError(502, unreachable(url, err));
     } finally {
       clearTimeout(timer);
     }
@@ -337,6 +337,18 @@ function fitPrompt(context: { screen: unknown } & Record<string, unknown>, maxCh
     text = JSON.stringify(context);
   }
   return text.slice(0, maxChars);
+}
+
+/** fetch() only says "fetch failed"; turn the network cause into something an admin can act on. */
+function unreachable(url: string, err: unknown): string {
+  const host = new URL(url).host;
+  const code = String((err as { cause?: { code?: unknown } }).cause?.code ?? '');
+  if (code === 'ECONNREFUSED') {
+    return `Nothing is answering at ${host}. Make sure the AI model server is running there (Ollama: start "Ollama" from the Start menu).`;
+  }
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return `Can't find the AI model server "${new URL(url).hostname}". Check the address under Settings → AI assistant.`;
+  if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return `The AI model server at ${host} did not respond. Check the network and its firewall.`;
+  return `Could not reach the AI model server at ${host}: ${(err as Error).message}`;
 }
 
 /** Models sometimes wrap JSON in ```json fences or add a sentence; take the JSON object. */

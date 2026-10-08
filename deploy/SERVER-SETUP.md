@@ -85,6 +85,11 @@ the internet. It is off until you set it up.
    To reach it from the Orchestrator over the network, set the environment variable
    `OLLAMA_HOST=0.0.0.0` on that machine, restart Ollama and allow port 11434 in its firewall
    (only from the Orchestrator server). LM Studio or vLLM work too.
+
+   Ollama runs while someone is signed in to that machine (it starts from the Startup folder).
+   On a dedicated model server, set it to sign in automatically like a robot PC, so the
+   assistant is back after a restart. If an NVIDIA GPU makes Ollama crash with a "CUDA error",
+   set the environment variable `OLLAMA_LLM_LIBRARY=cuda_v12` and restart Ollama.
 2. Dashboard → **Settings → AI assistant (local model)**: turn it on, enter the address
    (`http://<model-server>:11434/v1`) and the model name, then **Save and test**.
 3. Builders now see **Describe it** in Studio. Robots ask the model to fix failed steps; each

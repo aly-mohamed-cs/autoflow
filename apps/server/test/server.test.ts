@@ -486,6 +486,19 @@ describe('AI assistant (local model)', () => {
     expect(res.body).toEqual({ fixable: true, explanation: 'Use the right sheet.', params: { sheet: 'Invoices 2026' } });
   });
 
+  it('says plainly when the model server is not running', async () => {
+    const shown = (await api('GET', '/api/settings/ai')).body.ai;
+    const closed = createServer();
+    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+    const port = (closed.address() as { port: number }).port;
+    await new Promise((resolve) => closed.close(resolve)); // a port where nothing listens
+    await api('PUT', '/api/settings/ai', { ...shown, baseUrl: `http://localhost:${port}/v1` });
+    const res = await api('POST', '/api/ai/explain-error', { activity: 'browser.click', message: 'x' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toContain(`Nothing is answering at localhost:${port}`);
+    await api('PUT', '/api/settings/ai', { ...shown, baseUrl: modelUrl });
+  });
+
   it('finds JSON in chatty answers', () => {
     expect(extractJson('Sure! {"a": {"b": 1}} Hope that helps')).toBe('{"a": {"b": 1}}');
     expect(extractJson('```json\n{"x": 2}\n```')).toBe('{"x": 2}');
