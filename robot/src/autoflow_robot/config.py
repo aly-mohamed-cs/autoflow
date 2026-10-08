@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def home() -> Path:

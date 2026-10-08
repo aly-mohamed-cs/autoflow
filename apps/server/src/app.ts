@@ -25,7 +25,7 @@ import { Repairs } from './services/repairs.js';
 import { RobotReleases } from './services/robotReleases.js';
 import { Queues, Scheduler } from './services/triggers.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 export interface Services {
   config: Config;
