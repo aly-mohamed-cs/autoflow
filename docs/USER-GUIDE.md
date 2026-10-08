@@ -14,8 +14,12 @@ No programming is needed. If you can describe the task step by step, you can aut
 1. Open **Autoflow Studio** and click **New automation**. Give it a clear name, such as
    “Enter vendor invoices into the portal”.
 2. Pick a **template** that looks like your task, or start from scratch.
-3. Add steps from the **library on the left** — drag them into the list, or click to add.
-   Each step reads like a sentence: *Type **Invoice No** into **Invoice number box***.
+3. Add steps from the **library on the left** — click to add, or drag them onto an arrow in the
+   flowchart. Each **＋** on an arrow adds a step at that point. The flow reads left to right
+   from **Start** to **End**: an *If* splits into **Yes** / **No** paths that join again, and a
+   loop is a box around the steps it repeats. Each step reads like a sentence:
+   *Type **Invoice No** into **Invoice number box***. Scroll to move around, Ctrl+scroll to zoom.
+   Prefer a plain list (handy for long recordings)? Switch **Flow / List** at the top right.
 4. Click a step to fill in its settings on the right. Red settings still need a value.
 5. Press **Test run**. Watch each step turn green, see the log at the bottom, and check the
    **Variables** tab to see what the automation read.

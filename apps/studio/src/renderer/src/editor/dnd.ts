@@ -4,7 +4,11 @@ import { pointerWithin } from '@dnd-kit/core';
 import { create } from 'zustand';
 
 export type DragItem = { kind: 'new'; activity: string } | { kind: 'step'; stepId: string };
-export type DropData = { kind: 'step'; stepId: string } | { kind: 'end'; listKey: string };
+export type DropData =
+  | { kind: 'step'; stepId: string }
+  | { kind: 'end'; listKey: string }
+  /** A connector or empty lane in the Flow view: an exact place in a list. */
+  | { kind: 'slot'; listKey: string; index: number };
 
 export interface DropTarget {
   listKey: string;

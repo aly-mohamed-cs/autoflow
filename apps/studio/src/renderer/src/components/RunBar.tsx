@@ -38,27 +38,68 @@ export function RunBar() {
     void window.autoflow.run.control(action);
   };
 
-  const status = phase === 'paused' ? 'Paused' : phase === 'stopping' ? 'Stopping…' : 'Test run in progress';
+  const status =
+    phase === 'paused' ? 'Paused' : phase === 'stopping' ? 'Stopping…' : 'Test run in progress';
   return (
-    <div className="flex h-screen items-center gap-3 px-3 text-white select-none" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${phase === 'paused' ? 'bg-amber-400' : 'animate-pulse bg-red-500'}`} aria-hidden />
+    <div
+      className="flex h-screen items-center gap-3 px-3 text-white select-none"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
+      <span
+        className={`h-2.5 w-2.5 shrink-0 rounded-full ${phase === 'paused' ? 'bg-amber-400' : 'animate-pulse bg-red-500'}`}
+        aria-hidden
+      />
       <div className="min-w-0 flex-1 leading-tight">
         <p className="text-[13px] font-semibold">{status}</p>
-        <p className="truncate text-[11px] text-white/70">{step || 'Ctrl+Shift+F11 pause · Ctrl+Shift+F12 stop'}</p>
+        <p className="truncate text-[11px] text-white/70">
+          {step || 'Ctrl+Shift+F11 pause · Ctrl+Shift+F12 stop'}
+        </p>
       </div>
       <div className="flex gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {phase === 'paused' ? (
-          <BarButton onClick={() => act('resume')} icon="play" label="Continue" title="Continue (Ctrl+Shift+F11)" />
+          <BarButton
+            onClick={() => act('resume')}
+            icon="play"
+            label="Continue"
+            title="Continue (Ctrl+Shift+F11)"
+          />
         ) : (
-          <BarButton onClick={() => act('pause')} icon="pause" label="Pause" title="Pause (Ctrl+Shift+F11)" disabled={phase === 'stopping'} />
+          <BarButton
+            onClick={() => act('pause')}
+            icon="pause"
+            label="Pause"
+            title="Pause (Ctrl+Shift+F11)"
+            disabled={phase === 'stopping'}
+          />
         )}
-        <BarButton onClick={() => act('stop')} icon="square" label="Stop" title="Stop (Ctrl+Shift+F12)" danger disabled={phase === 'stopping'} />
+        <BarButton
+          onClick={() => act('stop')}
+          icon="square"
+          label="Stop"
+          title="Stop (Ctrl+Shift+F12)"
+          danger
+          disabled={phase === 'stopping'}
+        />
       </div>
     </div>
   );
 }
 
-function BarButton({ onClick, icon, label, title, danger, disabled }: { onClick: () => void; icon: string; label: string; title: string; danger?: boolean; disabled?: boolean }) {
+function BarButton({
+  onClick,
+  icon,
+  label,
+  title,
+  danger,
+  disabled,
+}: {
+  onClick: () => void;
+  icon: string;
+  label: string;
+  title: string;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"

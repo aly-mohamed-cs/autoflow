@@ -1,18 +1,60 @@
 import type { ActivityDef, Step } from '@autoflow/flow-types';
-import { Badge, Button, categoryColor, cn, EmptyState, Icon, IconTile, Menu, Spinner, Tooltip } from '@autoflow/ui';
+import { Badge, Button, categoryColor, cn, EmptyState, Icon, IconTile, Menu, Segmented, Tooltip } from '@autoflow/ui';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { memo, useState } from 'react';
-import { createStep, exprLabel, sentence, type SentencePart } from '../lib/catalog';
-import { duplicateStep, insertStep, listKey, locate, moveStep, removeStep, ROOT, updateStep, type ListRef } from '../lib/flowOps';
+import { listKey, ROOT, type ListRef } from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
-import { useRun, type StepRunStatus } from '../store/run';
+import { useRun } from '../store/run';
 import { AddStepMenu } from './AddStepMenu';
 import { useDnd } from './dnd';
-import { Thumbnail } from './fields/ElementInput';
-import { useElements, useFlowVariables, useStepIssues } from './hooks';
+import { FlowCanvas } from './FlowCanvas';
+import { useStepIssues } from './hooks';
+import { RunStatusIcon, STATUS_STYLES, StepSentence, useAddStep, useStepActions } from './stepParts';
 
+export { useAddStep } from './stepParts';
+
+type View = 'flow' | 'list';
+const VIEW_KEY = 'autoflow.editorView';
+
+function savedView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'flow';
+  } catch {
+    return 'flow';
+  }
+}
+
+/** The steps of the open flow: a flowchart (default) or a compact list. */
 export function Canvas() {
+  const [view, setView] = useState<View>(savedView);
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="absolute top-3 right-3 z-20">
+        <Segmented
+          size="sm"
+          value={view}
+          onChange={(v) => {
+            setView(v as View);
+            try {
+              localStorage.setItem(VIEW_KEY, v);
+            } catch {
+              /* private window: the choice just isn't remembered */
+            }
+          }}
+          options={[
+            { value: 'flow', label: 'Flow' },
+            { value: 'list', label: 'List' },
+          ]}
+          aria-label="How to show the steps"
+        />
+      </div>
+      {view === 'flow' ? <FlowCanvas /> : <ListCanvas />}
+    </div>
+  );
+}
+
+function ListCanvas() {
   const steps = useEditor((s) => s.flow?.steps ?? []);
   const select = useEditor((s) => s.select);
   return (
@@ -22,7 +64,7 @@ export function Canvas() {
         if (e.target === e.currentTarget) select(null);
       }}
     >
-      <div className="mx-auto max-w-3xl px-6 pt-6 pb-40" onClick={(e) => e.target === e.currentTarget && select(null)}>
+      <div className="mx-auto max-w-3xl px-6 pt-14 pb-40" onClick={(e) => e.target === e.currentTarget && select(null)}>
         {steps.length === 0 ? <EmptyCanvas /> : <StepList steps={steps} listRef={ROOT} />}
       </div>
     </div>
@@ -58,19 +100,6 @@ function EmptyCanvas() {
       </EmptyState>
     </EndZone>
   );
-}
-
-/** Insert a new step from the catalog and select it. */
-export function useAddStep() {
-  const index = useApp((s) => s.index);
-  const change = useEditor((s) => s.change);
-  const select = useEditor((s) => s.select);
-  const variables = useFlowVariables();
-  return (def: ActivityDef, ref: ListRef, position: number) => {
-    const step = createStep(def, index, new Set(variables.map((v) => v.name)));
-    change((f) => insertStep(f, ref, position, step));
-    select(step.id);
-  };
 }
 
 function StepList({ steps, listRef }: { steps: Step[]; listRef: ListRef }) {
@@ -113,14 +142,6 @@ const StepItem = memo(function StepItem({ step, listRef, index }: { step: Step; 
   );
 });
 
-const STATUS_STYLES: Record<StepRunStatus, string> = {
-  running: 'border-primary ring-2 ring-primary/25',
-  ok: '',
-  failed: 'border-danger ring-2 ring-danger/20',
-  continued: 'border-warning',
-  cancelled: '',
-};
-
 function StepRow({
   step,
   def,
@@ -136,17 +157,13 @@ function StepRow({
   collapsed: boolean;
   onToggle: () => void;
 }) {
-  const selected = useEditor((s) => s.selectedId === step.id);
   const select = useEditor((s) => s.select);
-  const change = useEditor((s) => s.change);
-  const flowId = useEditor((s) => s.flow?.id ?? '');
   const runStatus = useRun((s) => s.stepStatus[step.id]);
   const paused = useRun((s) => s.pausedStepId === step.id);
-  const breakpoint = useRun((s) => (s.breakpoints[flowId] ?? []).includes(step.id));
-  const toggleBreakpoint = useRun((s) => s.toggleBreakpoint);
   const issues = useStepIssues(step.id);
   const target = useDnd((s) => s.target);
   const add = useAddStep();
+  const { items, breakpoint, toggleBreak, selected } = useStepActions(step);
   const [insertOpen, setInsertOpen] = useState(false);
 
   const drag = useDraggable({ id: `step:${step.id}`, data: { kind: 'step', stepId: step.id } });
@@ -156,46 +173,6 @@ function StepRow({
   const warnings = issues.length - errors;
   const isComment = step.activity === 'control.comment';
   const indicator = target?.stepId === step.id ? target.side : undefined;
-
-  const actions = [
-    { label: 'Duplicate', icon: <Icon name="copy" size={14} />, shortcut: 'Ctrl+D', onSelect: () => duplicate() },
-    { label: 'Move up', icon: <Icon name="arrow-up" size={14} />, shortcut: 'Alt+↑', onSelect: () => nudge(-1) },
-    { label: 'Move down', icon: <Icon name="arrow-down" size={14} />, shortcut: 'Alt+↓', onSelect: () => nudge(1) },
-    {
-      label: step.disabled ? 'Turn on' : 'Skip this step',
-      icon: <Icon name={step.disabled ? 'eye' : 'eye-off'} size={14} />,
-      onSelect: () => change((f) => updateStep(f, step.id, (s) => ({ ...s, disabled: !step.disabled }))),
-    },
-    {
-      label: breakpoint ? 'Remove pause point' : 'Pause here when testing',
-      icon: <Icon name="circle-pause" size={14} />,
-      shortcut: 'F9',
-      onSelect: () => void window.autoflow.run.setBreakpoints(toggleBreakpoint(flowId, step.id)),
-    },
-    'separator' as const,
-    { label: 'Delete', icon: <Icon name="trash" size={14} />, shortcut: 'Del', danger: true, onSelect: () => remove() },
-  ];
-
-  function duplicate() {
-    let newId: string | null = null;
-    change((f) => {
-      const r = duplicateStep(f, step.id);
-      newId = r.newId;
-      return r.flow;
-    });
-    if (newId) select(newId);
-  }
-  function nudge(delta: number) {
-    change((f) => {
-      const where = locate(f, step.id);
-      if (!where) return f;
-      return moveStep(f, step.id, where.ref, where.index + (delta > 0 ? 2 : -1));
-    });
-  }
-  function remove() {
-    change((f) => removeStep(f, step.id));
-    if (selected) select(null);
-  }
 
   return (
     <div className="relative" ref={drop.setNodeRef}>
@@ -235,7 +212,7 @@ function StepRow({
               aria-label={breakpoint ? 'Remove pause point' : 'Add pause point'}
               onClick={(e) => {
                 e.stopPropagation();
-                void window.autoflow.run.setBreakpoints(toggleBreakpoint(flowId, step.id));
+                toggleBreak();
               }}
               className={cn(
                 'h-3 w-3 rounded-full border-2 transition-opacity',
@@ -286,7 +263,7 @@ function StepRow({
                   <Icon name="ellipsis" size={15} />
                 </Button>
               }
-              items={actions}
+              items={items}
             />
           </span>
         </div>
@@ -322,94 +299,6 @@ function DropLine({ className }: { className?: string }) {
     <div className={cn('pointer-events-none absolute right-0 left-0 z-20 h-[3px] rounded-full bg-primary', className)}>
       <span className="absolute -top-[3px] -left-1 h-[9px] w-[9px] rounded-full border-2 border-primary bg-surface" />
     </div>
-  );
-}
-
-function RunStatusIcon({ status, paused }: { status?: StepRunStatus; paused: boolean }) {
-  if (paused) return <Tooltip content="Paused before this step"><Icon name="circle-pause" size={16} className="text-warning" /></Tooltip>;
-  switch (status) {
-    case 'running':
-      return <Spinner className="text-primary" />;
-    case 'ok':
-      return <Icon name="circle-check" size={16} className="text-success" aria-label="Done" />;
-    case 'failed':
-      return <Icon name="circle-x" size={16} className="text-danger" aria-label="Failed" />;
-    case 'continued':
-      return <Tooltip content="Failed, but the automation continued"><Icon name="circle-alert" size={16} className="text-warning" /></Tooltip>;
-    default:
-      return null;
-  }
-}
-
-/** The step as a sentence: "Type [row › Name] into [Name box]". */
-function StepSentence({ step, def }: { step: Step; def: ActivityDef }) {
-  const index = useApp((s) => s.index);
-  const elements = useElements();
-  if (step.label) {
-    return (
-      <p className="leading-6">
-        <span className="font-medium">{step.label}</span>
-        <span className="ml-2 text-xs text-subtle">{def.title}</span>
-      </p>
-    );
-  }
-  const parts = sentence(step, def, { index, elements });
-  return (
-    <p className="leading-6 text-fg">
-      {parts.map((p, i) => (p.kind === 'text' ? <span key={i}>{p.text}</span> : <ValueChip key={i} part={p} />))}
-    </p>
-  );
-}
-
-function ValueChip({ part }: { part: Extract<SentencePart, { kind: 'value' }> }) {
-  if (part.empty && part.fallback && !part.required) {
-    return <span className="mx-0.5 text-muted">{part.fallback}</span>;
-  }
-  if (part.empty) {
-    return (
-      <span
-        className={cn(
-          'mx-0.5 rounded border border-dashed px-1.5 text-[13px] italic',
-          part.required ? 'border-danger/50 text-danger' : 'border-border-strong text-subtle',
-        )}
-      >
-        {part.title.toLowerCase()}
-      </span>
-    );
-  }
-  if (part.element) {
-    return (
-      <span className="mx-0.5 inline-flex items-center gap-1 rounded bg-surface-2 px-1.5 align-middle text-[13px] font-medium">
-        {part.element.screenshot ? <Thumbnail element={part.element} size={14} /> : <Icon name="mouse-pointer-2" size={12} className="text-subtle" />}
-        {part.element.name}
-      </span>
-    );
-  }
-  return (
-    <span className="mx-0.5 font-medium">
-      {part.segments.map((seg, i) =>
-        seg.kind === 'text' ? (
-          <span key={i}>{seg.text}</span>
-        ) : (
-          <VarChip key={i} expr={seg.expr} />
-        ),
-      )}
-    </span>
-  );
-}
-
-function VarChip({ expr }: { expr: string }) {
-  const { label, formula } = exprLabel(expr);
-  return (
-    <span
-      title={formula ? `Formula: ${expr}` : undefined}
-      className={cn(
-        'mx-0.5 inline-block max-w-56 truncate rounded-full px-2 align-middle text-xs leading-5 font-medium',
-        formula ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary',
-      )}
-    >
-      {formula ? `ƒ ${label}` : label}
-    </span>
   );
 }
 

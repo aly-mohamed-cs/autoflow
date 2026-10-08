@@ -505,6 +505,8 @@ function EditorDnd({ children }: { children: React.ReactNode }) {
     } else if (data?.kind === 'end') {
       const ref = parseListKey(data.listKey);
       target = { listKey: data.listKey, index: getList(flow, ref)?.length ?? 0 };
+    } else if (data?.kind === 'slot') {
+      target = { listKey: data.listKey, index: data.index };
     }
     if (target && item.kind === 'step') {
       // A step can't be dropped inside itself.
