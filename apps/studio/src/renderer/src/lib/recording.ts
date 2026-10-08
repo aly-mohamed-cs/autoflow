@@ -3,7 +3,7 @@ import type { Element, Flow, Step } from '@autoflow/flow-types';
 import { newStepId } from './flowOps';
 
 export interface RecordedAction {
-  action: 'click' | 'type' | 'select' | 'check' | 'upload' | 'goto' | 'switch_tab';
+  action: 'click' | 'type' | 'select' | 'check' | 'upload' | 'goto' | 'switch_tab' | 'keys' | 'activate' | 'launch';
   element?: Element;
   value?: string | null;
   password?: boolean;
@@ -11,6 +11,13 @@ export interface RecordedAction {
   option?: string;
   checked?: boolean;
   url?: string;
+  /** Desktop recording: single / double / right click, keys like "Control+S", window title, program path. */
+  click?: 'single' | 'double' | 'right';
+  keys?: string;
+  window?: string;
+  program?: string;
+  /** Live updates: this replaces the previous action (a click that became a double-click...). */
+  replace_last?: boolean;
 }
 
 const selectorKey = (e: Element) => {
@@ -48,23 +55,34 @@ export function stepsFromRecording(
   if (options.addOpenBrowser && options.startUrl) step('browser.open', { url: options.startUrl });
 
   for (const a of actions) {
+    // Elements say where they came from: web pages (browser steps) or Windows programs (desktop steps).
+    const kind = a.element?.kind === 'desktop' ? 'desktop' : 'browser';
     switch (a.action) {
       case 'click':
-        step('browser.click', { element: elementId(a.element) });
+        step(`${kind}.click`, { element: elementId(a.element), ...(a.click && a.click !== 'single' ? { click: a.click } : {}) });
         break;
       case 'type':
         if (a.password) {
           // Never store a password in a flow: leave it empty and ask for a credential.
-          step('browser.type', { element: elementId(a.element), text: '', press_enter: !!a.press_enter }, `Type the password into ${a.element?.name ?? 'the field'} (choose a credential)`);
+          step(`${kind}.type`, { element: elementId(a.element), text: '', press_enter: !!a.press_enter }, `Type the password into ${a.element?.name ?? 'the field'} (choose a credential)`);
         } else {
-          step('browser.type', { element: elementId(a.element), text: a.value ?? '', ...(a.press_enter ? { press_enter: true } : {}) });
+          step(`${kind}.type`, { element: elementId(a.element), text: a.value ?? '', ...(a.press_enter ? { press_enter: true } : {}) });
         }
         break;
       case 'select':
-        step('browser.select', { element: elementId(a.element), option: a.option ?? '' });
+        step(`${kind}.select`, { element: elementId(a.element), option: a.option ?? '' });
         break;
       case 'check':
-        step('browser.check', { element: elementId(a.element), checked: a.checked ?? true });
+        step(`${kind}.check`, { element: elementId(a.element), checked: a.checked ?? true });
+        break;
+      case 'keys':
+        if (a.keys) step('desktop.send_keys', { keys: a.keys });
+        break;
+      case 'activate':
+        if (a.window) step('desktop.activate_window', { window: a.window });
+        break;
+      case 'launch':
+        if (a.program) step('desktop.launch', { program: a.program, window: a.window ?? '' });
         break;
       case 'upload':
         step('browser.upload', { element: elementId(a.element), file: '' });

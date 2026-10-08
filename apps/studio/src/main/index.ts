@@ -258,6 +258,8 @@ function registerIpc(): void {
   });
 
   handle(IPC.appVersion, () => app.getVersion());
+  handle(IPC.appMinimize, () => mainWindow?.minimize());
+  handle(IPC.appRestore, () => showWindow());
   handle(IPC.appOpenPath, async (path: string) => {
     const error = await shell.openPath(path);
     if (error) throw new Error(error);

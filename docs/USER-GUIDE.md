@@ -21,9 +21,17 @@ No programming is needed. If you can describe the task step by step, you can aut
    **Variables** tab to see what the automation read.
 6. When it works, press **Publish**. It now appears in the dashboard, ready for robots.
 
-> **Tip — let Autoflow watch you.** Press **Record**, enter the website address, and do the
-> task once in the browser that opens. Each click and entry becomes a step. Passwords are never
-> recorded; you choose a saved credential instead.
+> **Tip — let Autoflow watch you.** Press **Record** and choose:
+> * **Anything on this PC** — Studio steps aside; do the task in any program (Excel, your ERP,
+>   File Explorer, a browser…). A red bar at the top of the screen shows it's recording; click
+>   **Stop recording** there when you're done. Clicks, what you type into boxes, choices in lists,
+>   ticks, keyboard shortcuts (like Ctrl+S) and switching between programs become steps. Programs
+>   you open during the recording get an "Open application" step.
+> * **A website** — enter the address and do the task in the browser that opens (best for web
+>   portals).
+>
+> Passwords are never recorded; you choose a saved credential instead. Programs started "as
+> administrator" can't be recorded.
 
 ---
 

@@ -24,6 +24,7 @@ from pydantic import ValidationError
 
 from .. import __version__, catalog
 from ..design.desktop_picker import DesktopPicker
+from ..design.desktop_recorder import DesktopRecorder
 from ..design.session import DesignSession
 from ..errors import AutoflowError, RunCancelled
 from ..flow import Flow
@@ -55,6 +56,7 @@ class EngineServer:
         self._run_id: str | None = None
         self._design: DesignSession | None = None
         self._desktop_picker: DesktopPicker | None = None
+        self._desktop_recorder: DesktopRecorder | None = None
         self._host_seq = 0
         self._host_waiting: dict[str, tuple[threading.Event, dict[str, Any]]] = {}
         # Methods that answer later (the user is clicking in the design browser).
@@ -63,6 +65,9 @@ class EngineServer:
             "recorder.start": lambda p, respond: self.design.record_start(p.get("url"), respond),
             "recorder.stop": lambda _p, respond: self.design.record_stop(respond),
             "picker.desktop": lambda _p, respond: self.desktop_picker.pick(respond),
+            # Recording anything on the PC (any program), not just the design browser.
+            "recorder.desktop_start": lambda _p, respond: self.desktop_recorder.start(respond),
+            "recorder.desktop_stop": lambda _p, respond: self.desktop_recorder.stop(respond),
         }
         self._methods: dict[str, Callable[[dict[str, Any]], Any]] = {
             "ping": lambda _p: {"engine_version": __version__},
@@ -97,6 +102,12 @@ class EngineServer:
             self._desktop_picker = DesktopPicker(self.notify)
         return self._desktop_picker
 
+    @property
+    def desktop_recorder(self) -> DesktopRecorder:
+        if self._desktop_recorder is None:
+            self._desktop_recorder = DesktopRecorder(self.notify)
+        return self._desktop_recorder
+
     def _cancel_pickers(self) -> None:
         if self._design is not None:
             self._design.cancel()
@@ -113,6 +124,8 @@ class EngineServer:
             self._handle(line)
         if self._control:
             self._control.cancel()
+        if self._desktop_recorder is not None:
+            self._desktop_recorder.cancel()
         self._close_design()
 
     def _send(self, message: dict[str, Any]) -> None:

@@ -1,5 +1,5 @@
 import type { Element, Flow } from '@autoflow/flow-types';
-import { Button, Dialog, Field, Icon, Input, Spinner } from '@autoflow/ui';
+import { Button, cn, Dialog, Field, Icon, Input, Spinner } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { insertStep, locate, ROOT } from '../lib/flowOps';
 import { firstBrowserUrl, hasBrowserOpen, stepsFromRecording, type RecordedAction } from '../lib/recording';
@@ -7,8 +7,12 @@ import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { create } from 'zustand';
 
+/** "pc": anything in any Windows program (desktop recorder); "web": the recording browser. */
+type RecordMode = 'pc' | 'web';
+
 interface RecorderState {
   phase: 'idle' | 'asking' | 'starting' | 'recording' | 'stopping';
+  mode: RecordMode;
   startUrl: string;
   actions: RecordedAction[];
   set(patch: Partial<RecorderState>): void;
@@ -16,13 +20,17 @@ interface RecorderState {
 
 export const useRecorder = create<RecorderState>((set) => ({
   phase: 'idle',
+  mode: 'pc',
   startUrl: '',
   actions: [],
   set: (patch) => set(patch),
 }));
 
 const ACTION_TEXT: Record<RecordedAction['action'], (a: RecordedAction) => string> = {
-  click: (a) => `Click ${a.element?.name ?? ''}`,
+  click: (a) => `${a.click === 'double' ? 'Double-click' : a.click === 'right' ? 'Right-click' : 'Click'} ${a.element?.name ?? ''}`,
+  keys: (a) => `Press ${a.keys}`,
+  activate: (a) => `Switch to “${a.window}”`,
+  launch: (a) => `Open ${a.program?.split(/[\\/]/).pop() ?? 'the program'}`,
   type: (a) => (a.password ? `Type password into ${a.element?.name}` : `Type “${a.value ?? ''}” into ${a.element?.name}`),
   select: (a) => `Choose “${a.option}” in ${a.element?.name}`,
   check: (a) => `${a.checked ? 'Tick' : 'Untick'} ${a.element?.name}`,
@@ -51,7 +59,7 @@ export function RecordButton() {
 
 /** Start dialog + floating "Recording…" bar. Mounted once in the editor. */
 export function Recorder() {
-  const { phase, startUrl, actions, set } = useRecorder();
+  const { phase, mode, startUrl, actions, set } = useRecorder();
   const toast = useApp((s) => s.toast);
   const [url, setUrl] = useState('');
 
@@ -60,9 +68,10 @@ export function Recorder() {
   }, [phase, startUrl]);
 
   useEffect(() => {
-    const offAction = window.autoflow.engine.onNotification('recorder.action', (a) =>
-      useRecorder.setState((s) => ({ actions: [...s.actions, a as RecordedAction] })),
-    );
+    const offAction = window.autoflow.engine.onNotification('recorder.action', (raw) => {
+      const a = raw as RecordedAction;
+      useRecorder.setState((s) => ({ actions: a.replace_last ? [...s.actions.slice(0, -1), a] : [...s.actions, a] }));
+    });
     const offStopped = window.autoflow.engine.onNotification('recorder.stopped', () => {
       if (useRecorder.getState().phase === 'recording') void finish(true);
     });
@@ -75,8 +84,14 @@ export function Recorder() {
   const start = async () => {
     set({ phase: 'starting', actions: [], startUrl: url.trim() });
     try {
-      await window.autoflow.engine.call('recorder.start', { url: url.trim() || undefined }, 120_000);
-      set({ phase: 'recording' });
+      if (mode === 'pc') {
+        await window.autoflow.engine.call('recorder.desktop_start', {}, 60_000);
+        set({ phase: 'recording' });
+        await window.autoflow.app.minimize(); // out of the way; the red bar at the top stops the recording
+      } else {
+        await window.autoflow.engine.call('recorder.start', { url: url.trim() || undefined }, 120_000);
+        set({ phase: 'recording' });
+      }
     } catch (e) {
       set({ phase: 'idle' });
       toast(errorMessage(e), 'error');
@@ -86,12 +101,15 @@ export function Recorder() {
   const finish = async (keep: boolean) => {
     set({ phase: 'stopping' });
     let recorded: RecordedAction[] = useRecorder.getState().actions;
+    const pc = useRecorder.getState().mode === 'pc';
     try {
-      const result = await window.autoflow.engine.call<{ actions: RecordedAction[] }>('recorder.stop', {}, 60_000);
+      const method = pc ? 'recorder.desktop_stop' : 'recorder.stop';
+      const result = await window.autoflow.engine.call<{ actions: RecordedAction[] }>(method, {}, 60_000);
       recorded = result.actions;
     } catch {
       /* keep what was streamed so far */
     }
+    if (pc) void window.autoflow.app.restore();
     set({ phase: 'idle', actions: [] });
     if (!keep || recorded.length === 0) {
       if (keep) toast('Nothing was recorded.', 'info');
@@ -102,7 +120,7 @@ export function Recorder() {
     const { steps, elements } = stepsFromRecording(recorded, {
       startUrl: useRecorder.getState().startUrl,
       existingElements: flow.elements as Element[] | undefined,
-      addOpenBrowser: !hasBrowserOpen(flow),
+      addOpenBrowser: !pc && !hasBrowserOpen(flow),
     });
     const where = selectedId ? locate(flow, selectedId) : null;
     change((f) => {
@@ -122,7 +140,7 @@ export function Recorder() {
         open={phase === 'asking' || phase === 'starting'}
         onOpenChange={(o) => !o && phase === 'asking' && set({ phase: 'idle' })}
         title="Record a task"
-        description="A browser window opens. Do the task once, as you normally would — Autoflow turns each click and entry into a step."
+        description="Do the task once, as you normally would — Autoflow turns each click and entry into a step."
         footer={
           <>
             <Button onClick={() => set({ phase: 'idle' })} disabled={phase === 'starting'}>Cancel</Button>
@@ -138,12 +156,45 @@ export function Recorder() {
             void start();
           }}
         >
-          <Field label="Website to start on" htmlFor="rec-url" help="For example portal.yourcompany.com. You can also type it in the browser later.">
-            <Input id="rec-url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" />
-          </Field>
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="What to record">
+            {(
+              [
+                { value: 'pc', icon: 'monitor', title: 'Anything on this PC', text: 'Excel, your ERP, File Explorer, a browser… any program.' },
+                { value: 'web', icon: 'globe', title: 'A website', text: 'Opens a recording browser. Best for web portals.' },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={mode === o.value}
+                onClick={() => set({ mode: o.value })}
+                className={cn(
+                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left',
+                  mode === o.value ? 'border-primary bg-primary-soft' : 'border-border hover:border-border-strong',
+                )}
+              >
+                <span className="flex items-center gap-2 font-semibold">
+                  <Icon name={o.icon} size={16} className="text-primary" /> {o.title}
+                </span>
+                <span className="text-[13px] leading-snug text-muted">{o.text}</span>
+              </button>
+            ))}
+          </div>
+          {mode === 'web' ? (
+            <Field label="Website to start on" htmlFor="rec-url" className="mt-4" help="For example portal.yourcompany.com. You can also type it in the browser later.">
+              <Input id="rec-url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" />
+            </Field>
+          ) : (
+            <p className="mt-4 text-[13px] text-muted">
+              Studio steps aside while you work. A small red bar at the top of the screen shows the recording — click{' '}
+              <strong>Stop recording</strong> there when you're done.
+            </p>
+          )}
           <ul className="mt-4 space-y-1 text-[13px] text-muted">
             <li>• Passwords are never recorded — you'll choose a saved credential instead.</li>
             <li>• Typed values are kept as examples; afterwards you can swap them for Excel columns or variables.</li>
+            {mode === 'pc' && <li>• Programs started “as administrator” can't be recorded.</li>}
           </ul>
         </form>
       </Dialog>
@@ -157,7 +208,10 @@ export function Recorder() {
             </span>
             <div className="flex-1">
               <p className="font-semibold">Recording…</p>
-              <p className="text-xs text-muted">Do the task in the browser window. {actions.length} step{actions.length === 1 ? '' : 's'} so far.</p>
+              <p className="text-xs text-muted">
+                {mode === 'pc' ? 'Do the task in your programs.' : 'Do the task in the browser window.'} {actions.length} step
+                {actions.length === 1 ? '' : 's'} so far.
+              </p>
             </div>
             <Button variant="ghost" onClick={() => void finish(false)} disabled={phase === 'stopping'}>Discard</Button>
             <Button variant="primary" onClick={() => void finish(true)} loading={phase === 'stopping'} icon={<Icon name="square" size={13} />}>

@@ -35,6 +35,11 @@ def control_type_id(name: str) -> int:
 
 def process_name(pid: int) -> str:
     """Executable name of a process (e.g. 'DemoErp.exe'), without extra packages."""
+    return process_path(pid).rsplit("\\", 1)[-1]
+
+
+def process_path(pid: int) -> str:
+    """Full path of a process's program, or "" if this process may not look at it."""
     kernel32 = ctypes.windll.kernel32
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
@@ -43,7 +48,7 @@ def process_name(pid: int) -> str:
         size = ctypes.c_uint32(1024)
         buffer = ctypes.create_unicode_buffer(size.value)
         if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
-            return buffer.value.rsplit("\\", 1)[-1]
+            return buffer.value
         return ""
     finally:
         kernel32.CloseHandle(handle)
@@ -152,11 +157,9 @@ def friendly_type(control: Any) -> str:
     return (control.ControlTypeName or "Control").removesuffix("Control")
 
 
-def selectors_for(control: Any, window: Any) -> list[Selector]:
-    """Several verified ways to find this control again inside its window."""
-    ctype = friendly_type(control)
-    aid = control.AutomationId or ""
-    name = (control.Name or "").strip()
+def candidate_selectors(ctype: str, automation_id: str, name: str) -> list[Selector]:
+    """Ways to find a control from what it says about itself (best first), not yet checked."""
+    aid, name = automation_id or "", (name or "").strip()
     candidates: list[Selector] = []
     if aid and not aid.isdigit():
         candidates.append(Selector(strategy="uia", value=f"{ctype} #{aid}", options={"automation_id": aid, "control_type": ctype}))
@@ -164,6 +167,13 @@ def selectors_for(control: Any, window: Any) -> list[Selector]:
         candidates.append(Selector(strategy="uia", value=f'{ctype} "{name}"', options={"name": name, "control_type": ctype}))
     if aid:
         candidates.append(Selector(strategy="uia", value=f"#{aid}", options={"automation_id": aid}))
+    return candidates
+
+
+def selectors_for(control: Any, window: Any) -> list[Selector]:
+    """Several verified ways to find this control again inside its window."""
+    ctype = friendly_type(control)
+    candidates = candidate_selectors(ctype, control.AutomationId or "", control.Name or "")
     # Position among controls of the same type and class (last resort).
     index = _index_among(control, window, ctype)
     if index:

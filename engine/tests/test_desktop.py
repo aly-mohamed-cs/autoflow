@@ -206,3 +206,126 @@ def test_ai_repair_repicks_a_desktop_control(tmp_path, demo_erp):
     assert screen["kind"] == "desktop" and screen["process"] == "DemoErp.exe"
     assert "SECRET-TYPED" not in str(screen)  # what was typed into boxes is not sent
     assert [e["step_id"] for e in events if e["event"] == "step_repaired"] == ["fixme"]
+
+
+def _steps_from_recording(actions: list[dict]) -> tuple[list[dict], list[dict]]:
+    """What Studio does with recorded actions (lib/recording.ts), for replaying them here."""
+    steps, elements = [], {}
+
+    def el(action: dict) -> str:
+        element = action["element"]
+        key = repr(element["selectors"][0])
+        elements.setdefault(key, element)
+        return elements[key]["id"]
+
+    for a in actions:
+        kind = a["action"]
+        if kind == "launch":
+            steps.append(step("desktop.launch", {"program": a["program"], "window": a["window"]}))
+        elif kind == "activate":
+            steps.append(step("desktop.activate_window", {"window": a["window"]}))
+        elif kind == "click":
+            steps.append(step("desktop.click", {"element": el(a), "click": a.get("click", "single")}))
+        elif kind == "type":
+            steps.append(step("desktop.type", {"element": el(a), "text": a.get("value") or "",
+                                               "press_enter": bool(a.get("press_enter"))}))
+        elif kind == "select":
+            steps.append(step("desktop.select", {"element": el(a), "option": a["option"]}))
+        elif kind == "check":
+            steps.append(step("desktop.check", {"element": el(a), "checked": a["checked"]}))
+        elif kind == "keys":
+            steps.append(step("desktop.send_keys", {"keys": a["keys"]}))
+    return steps, list(elements.values())
+
+
+def test_recorder_captures_work_in_any_program_and_replays_it(tmp_path, demo_erp):
+    """Record a person filling in the demo ERP with the real mouse and keyboard, then replay it."""
+    import os
+    import threading
+    import time
+
+    import uiautomation as auto
+
+    from autoflow_engine.design.desktop_recorder import DesktopRecorder
+    from autoflow_engine.flow import Flow
+    from autoflow_engine.runtime.context import RunOptions
+    from autoflow_engine.runtime.interpreter import FlowRunner
+
+    app = subprocess.Popen([str(demo_erp)])
+    try:
+        window = auto.WindowControl(searchDepth=1, SubName="Demo ERP")
+        assert window.Exists(15)
+        notes: list[tuple[str, dict]] = []
+        recorder = DesktopRecorder(lambda method, params: notes.append((method, params)), ignore_pids={os.getpid()})
+        started = threading.Event()
+        recorder.start(lambda result=None, error=None: started.set())
+        assert started.wait(15)
+
+        window.SetActive()
+        time.sleep(0.5)
+        for box, text in (("txtCustomer", "Initech"), ("txtInvoice", "INV-9"), ("txtAmount", "42.5")):
+            window.EditControl(AutomationId=box).Click(simulateMove=False)
+            time.sleep(0.3)
+            auto.SendKeys(text, waitTime=0.05)
+            time.sleep(0.3)
+        window.ComboBoxControl(AutomationId="cboCurrency").Select("EUR", simulateMove=False)
+        time.sleep(0.5)
+        window.CheckBoxControl(AutomationId="chkUrgent").Click(simulateMove=False)
+        time.sleep(0.5)
+        window.ButtonControl(AutomationId="btnSave").Click(simulateMove=False)
+        time.sleep(1.5)
+
+        stopped: dict = {}
+        done = threading.Event()
+        recorder.stop(lambda result=None, error=None: (stopped.update(result or {}), done.set()))
+        assert done.wait(30)
+    finally:
+        app.kill()
+
+    actions = stopped["actions"]
+    summary = [(a["action"], a.get("value") or a.get("option") or a.get("checked") or a.get("window") or a.get("click"))
+               for a in actions]
+    assert summary[0] == ("activate", "Demo ERP - Invoices"), summary
+    assert [s for s in summary if s[0] != "activate"] == [
+        ("type", "Initech"), ("type", "INV-9"), ("type", "42.5"), ("select", "EUR"), ("check", True), ("click", "single"),
+    ], summary
+    by_action = {a["action"]: a for a in actions}
+    assert by_action["click"]["element"]["name"].lower().startswith("save")
+    assert any(m == "recorder.action" for m, _ in notes)
+
+    # Replay what was recorded on a fresh copy of the program.
+    steps, elements = _steps_from_recording(actions)
+    steps = [
+        step("desktop.launch", {"program": str(demo_erp), "window": "Demo ERP"}),
+        *[s for s in steps if s["activity"] != "desktop.activate_window"],
+        step("desktop.wait_for", {"element": next(e["id"] for e in elements if "txtCustomer" in repr(e)),
+                                  "state": "appears"}),
+        step("desktop.close_window", {"window": "Demo ERP"}),
+    ]
+    status = {"id": "status", "name": "Status", "kind": "desktop", "context": WINDOW,
+              "selectors": [{"strategy": "uia", "value": "Text #lblStatus",
+                             "options": {"automation_id": "lblStatus", "control_type": "Text"}}]}
+    steps.insert(-2, step("desktop.wait_for", {"element": "status", "state": "text contains", "text": "INV-9", "timeout": 10}))
+    flow = Flow.model_validate({"id": "rec", "name": "rec", "elements": [*elements, status], "steps": steps,
+                                "settings": {"default_timeout": 10}})
+    result = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run"), lambda e: None).run()
+    assert result.status == "succeeded", result.error
+
+
+def test_stopping_from_the_recording_bar_tells_studio():
+    import os
+    import threading
+
+    from autoflow_engine.design.desktop_recorder import DesktopRecorder
+
+    notes: list[tuple[str, dict]] = []
+    recorder = DesktopRecorder(lambda method, params: notes.append((method, params)), ignore_pids={os.getpid()})
+    started = threading.Event()
+    recorder.start(lambda result=None, error=None: started.set())
+    assert started.wait(15)
+    recorder._stop_from_bar()  # what the bar's "Stop recording" button does
+    recorder._thread.join(10)
+    assert ("recorder.stopped", {"count": 0}) in notes
+    collected = threading.Event()
+    recorder.stop(lambda result=None, error=None: collected.set())  # Studio then collects the steps
+    assert collected.wait(10)

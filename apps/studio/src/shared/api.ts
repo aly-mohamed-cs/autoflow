@@ -148,6 +148,9 @@ export interface StudioApi {
   app: {
     version(): Promise<string>;
     openPath(path: string): Promise<void>;
+    /** Get Studio out of the way while recording work in other programs, and bring it back. */
+    minimize(): Promise<void>;
+    restore(): Promise<void>;
     /** URL the renderer can use to show a run screenshot. */
     fileUrl(path: string): string;
   };
@@ -195,6 +198,8 @@ export const IPC = {
   updateChanged: 'update:changed',
   appVersion: 'app:version',
   appOpenPath: 'app:open-path',
+  appMinimize: 'app:minimize',
+  appRestore: 'app:restore',
 } as const;
 
 /** Custom protocol that serves run screenshots (only from the runs folder). */

@@ -39,6 +39,36 @@ describe('stepsFromRecording', () => {
     expect(pw.params).toMatchObject({ text: '', press_enter: true });
   });
 
+  it('turns work in Windows programs into desktop steps', () => {
+    const box = (id: string, name: string, aid: string): Element => ({
+      id,
+      name,
+      kind: 'desktop',
+      context: { window: 'Demo ERP - Invoices', process: 'DemoErp.exe' },
+      selectors: [{ strategy: 'uia', value: `Edit #${aid}`, options: { automation_id: aid, control_type: 'Edit' } }],
+    });
+    const { steps } = stepsFromRecording(
+      [
+        { action: 'launch', program: 'C:\\Apps\\DemoErp.exe', window: 'Demo ERP - Invoices' },
+        { action: 'type', value: 'Initech', element: box('a', 'Customer box', 'txtCustomer') },
+        { action: 'select', option: 'EUR', element: box('b', 'Currency list', 'cboCurrency') },
+        { action: 'click', click: 'double', element: box('c', 'Invoice row', 'row1') },
+        { action: 'keys', keys: 'Control+S' },
+        { action: 'activate', window: 'Untitled - Notepad' },
+      ],
+      { addOpenBrowser: true, startUrl: 'https://not-used' },
+    );
+    expect(steps.map((s) => [s.activity, s.params])).toEqual([
+      ['browser.open', { url: 'https://not-used' }],
+      ['desktop.launch', { program: 'C:\\Apps\\DemoErp.exe', window: 'Demo ERP - Invoices' }],
+      ['desktop.type', { element: 'a', text: 'Initech' }],
+      ['desktop.select', { element: 'b', option: 'EUR' }],
+      ['desktop.click', { element: 'c', click: 'double' }],
+      ['desktop.send_keys', { keys: 'Control+S' }],
+      ['desktop.activate_window', { window: 'Untitled - Notepad' }],
+    ]);
+  });
+
   it('reuses elements already in the flow and keeps names unique', () => {
     const existing = [el('x', 'Submit button', '#go'), el('y', 'Username box', '#other')];
     const { steps, elements } = stepsFromRecording(actions.slice(0, 1).concat(actions[4]!), {

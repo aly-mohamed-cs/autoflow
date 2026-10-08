@@ -73,6 +73,8 @@ const api: StudioApi = {
   app: {
     version: () => invoke(IPC.appVersion),
     openPath: (path) => invoke(IPC.appOpenPath, path),
+    minimize: () => invoke(IPC.appMinimize),
+    restore: () => invoke(IPC.appRestore),
     fileUrl: (path) => `${FILE_PROTOCOL}://run/?path=${encodeURIComponent(path)}`,
   },
 };
