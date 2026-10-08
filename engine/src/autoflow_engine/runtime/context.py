@@ -106,6 +106,9 @@ class RunOptions:
     breakpoints: set[str] = field(default_factory=set)
     step_mode: bool = False
     headless: bool = False
+    # AI self-repair (see runtime/repair.py): asked for new settings when a step fails.
+    repair: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
+    repair_attempts: int = 3
 
 
 class RunContext:
@@ -182,6 +185,10 @@ class RunContext:
         if self.current_step_id and "step_id" not in payload:
             payload["step_id"] = self.current_step_id
         self._emit(self._mask_payload(payload))
+
+    def masked(self, value: Any) -> Any:
+        """A copy of a JSON-like value with every known secret replaced by the mask."""
+        return self._mask_payload(value)
 
     def _mask_payload(self, value: Any) -> Any:
         if not self._secrets:

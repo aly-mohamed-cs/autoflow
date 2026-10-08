@@ -71,6 +71,29 @@ certificate fingerprint. **Note the fingerprint** — robots and Studio ask you 
    normal Windows username and password.
 3. **Credentials**: add the logins robots need (same names as used in Studio).
 
+## Optional: the AI assistant (local model)
+
+Autoflow can use an AI model for *Describe it* drafts, error explanations and fixing failed
+steps. It only talks to an **OpenAI-compatible model server on your network**; nothing goes to
+the internet. It is off until you set it up.
+
+1. On a machine with enough memory (ideally with an NVIDIA GPU; a CPU works but answers take a
+   minute or more), install [Ollama for Windows](https://ollama.com/download) and download a model:
+   ```powershell
+   ollama pull qwen2.5:7b-instruct      # CPU-friendly; with a GPU try qwen2.5:14b-instruct or larger
+   ```
+   To reach it from the Orchestrator over the network, set the environment variable
+   `OLLAMA_HOST=0.0.0.0` on that machine, restart Ollama and allow port 11434 in its firewall
+   (only from the Orchestrator server). LM Studio or vLLM work too.
+2. Dashboard → **Settings → AI assistant (local model)**: turn it on, enter the address
+   (`http://<model-server>:11434/v1`) and the model name, then **Save and test**.
+3. Builders now see **Describe it** in Studio. Robots ask the model to fix failed steps; each
+   working fix waits on the automation's page until a builder keeps or dismisses it. Repair can
+   be turned off per automation (automation → **Settings**).
+
+Every AI request is recorded in the audit log. Passwords and values typed into fields are never
+sent to the model.
+
 ## 4. Updating
 
 When a new version is pushed to GitHub:

@@ -2,9 +2,10 @@ import { findStep, type Flow } from '@autoflow/flow-types';
 import { Button, Dialog, Icon } from '@autoflow/ui';
 import { useMemo, useState } from 'react';
 import { useMe } from '../App';
+import { AiFixes } from '../components/AiFixes';
 import { Card, ErrorBox, Loading, PageHeader, StatusBadge } from '../components/common';
 import { StepTree, type StepRun } from '../components/StepTree';
-import { api, can, useApi, type Job } from '../lib/api';
+import { api, can, useApi, type AiFix, type Job } from '../lib/api';
 import { dateTime, duration, TRIGGER_LABELS } from '../lib/format';
 import { useLive } from '../lib/live';
 import { href } from '../lib/router';
@@ -28,6 +29,7 @@ interface Detail {
   events: RunEvent[];
   artifacts: { id: string; stepId: string | null; kind: string; name: string }[];
   definition: Flow;
+  fix: AiFix | null;
 }
 
 export function RunPage({ id }: { id: string }) {
@@ -40,6 +42,8 @@ export function RunPage({ id }: { id: string }) {
       setData((d) => (d ? { ...d, events: [...d.events, e.event as unknown as RunEvent] } : d));
     } else if (e.type === 'job.updated' && e.job.id === id) {
       reload(); // status, outputs and screenshots
+    } else if (e.type === 'repair.updated' && data?.job.flowId === e.flowId) {
+      reload();
     }
   });
 
@@ -74,6 +78,13 @@ export function RunPage({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
+          {data.fix && <AiFixes fixes={[data.fix]} flow={data.definition} onDecided={reload} showRunLink={false} />}
+          {data.fix && data.fix.status !== 'pending' && (
+            <p className="flex items-center gap-2 text-[13px] text-muted">
+              <Icon name="sparkles" size={15} className="text-primary" />
+              The AI assistant fixed a step in this run. {data.fix.status === 'approved' ? `${data.fix.decidedBy} kept the fix as version ${data.fix.version}.` : `${data.fix.decidedBy} dismissed the fix.`}
+            </p>
+          )}
           {job.error && (
             <div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-4">
               <p className="flex items-center gap-2 font-semibold text-danger">

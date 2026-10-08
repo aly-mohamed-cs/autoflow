@@ -55,6 +55,11 @@ export function AutomationsPage() {
                     <Icon name="calendar-clock" size={12} /> {f.activeSchedules} schedule{f.activeSchedules > 1 ? 's' : ''}
                   </span>
                 )}
+                {!!f.pendingFixes && (
+                  <span className="flex items-center gap-1 text-primary">
+                    <Icon name="sparkles" size={12} /> AI fix to review
+                  </span>
+                )}
                 <span className="flex-1" />
                 {f.lastJob ? (
                   <span className="flex items-center gap-1.5">

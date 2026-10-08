@@ -48,6 +48,72 @@ Rules:
 Available steps:
 `;
 
+const REPAIR_RULES = `You repair failed steps in Autoflow, a no-code RPA tool. A step failed while an automation ran.
+Using the error and what is on the screen right now, propose new settings for THIS step only. Reply with JSON only:
+{"fixable": true|false, "explanation": "1-2 plain sentences a non-technical person understands",
+ "params": {"<setting>": <new value>}, "selectors": [<selector>], "element_name": "short name of the element"}
+Rules:
+- "params" holds only the settings you change, using the setting names given. Keep {{variable}} references where values come from data.
+- When an element can't be found or matches several things, give 1-3 "selectors" (best first) that match exactly ONE item in the screen list.
+  Web: {"strategy":"role","value":"button","options":{"name":"Save","exact":true}}, {"strategy":"label","value":"Customer"},
+  {"strategy":"placeholder","value":"..."}, {"strategy":"text","value":"...","options":{"exact":true}}, {"strategy":"testid","value":"..."}, {"strategy":"css","value":"#id"}.
+  Desktop: {"strategy":"uia","value":"Edit #txtName","options":{"automation_id":"txtName","control_type":"Edit"}} or with "name" instead of "automation_id".
+- For a missing file, sheet or column, pick the closest real one from the screen information.
+- If changing this step cannot fix it (wrong page, missing data, app not open, server down), reply {"fixable": false, "explanation": "..."}.
+- Earlier attempts that did not work are listed under "attempts"; do not repeat them.
+- Never invent passwords or change credentials.`;
+
+const WEB_STRATEGIES = new Set(['role', 'text', 'label', 'placeholder', 'testid', 'css', 'xpath']);
+const SELECTOR_OPTIONS = new Set(['name', 'exact', 'automation_id', 'control_type', 'class_name', 'index']);
+const PROTECTED_UI = new Set(['credential', 'password']);
+// The assistant may change how a step *finds* things, never what it does with the data: which
+// element, how long to wait, which sheet or column, and which file to *read*. Never web addresses,
+// typed values, output files or credentials (robots use a fix before anyone reviews it, and page
+// text could try to steer the model). Keep in sync with engine/src/autoflow_engine/runtime/repair.py.
+const REPAIRABLE_CATEGORIES = new Set(['Browser', 'Desktop', 'Excel', 'Files', 'Data', 'Text', 'PDF']);
+const LOCATOR_PARAMS = new Set(['element', 'selector', 'timeout', 'sheet', 'range', 'column', 'columns', 'has_header', 'encoding']);
+const READ_ONLY = new Set([
+  'browser.get_text', 'browser.extract_table', 'browser.wait_for', 'browser.element_exists', 'browser.page_info',
+  'desktop.get_text', 'desktop.wait_for', 'desktop.read_table',
+  'excel.read', 'excel.read_cell', 'excel.list_sheets',
+  'files.list', 'files.exists', 'files.wait_for_file', 'files.info', 'files.read_text', 'files.read_csv',
+  'pdf.read_text', 'pdf.extract_tables', 'pdf.extract_fields', 'pdf.page_count', 'pdf.read_image',
+]);
+const READ_PATH_UI = new Set(['file', 'folder']);
+
+/** Settings of a step type the AI assistant may change when repairing it (empty: never repaired). */
+export function changeableParams(activity: string): Set<string> {
+  const def = ACTIVITIES.get(activity);
+  if (!def || def.advanced || def.blocks.length || !REPAIRABLE_CATEGORIES.has(def.category)) return new Set();
+  return new Set(
+    Object.entries(def.params.properties ?? {})
+      .filter(([name, p]) => {
+        const ui = String(p['x-ui']);
+        return !PROTECTED_UI.has(ui) && (LOCATOR_PARAMS.has(name) || (READ_ONLY.has(def.id) && READ_PATH_UI.has(ui)));
+      })
+      .map(([name]) => name),
+  );
+}
+
+export interface RepairRequest {
+  activity: string;
+  step: { id: string; label?: string | null; params: Record<string, unknown> };
+  element?: Record<string, unknown> | null;
+  error: { message: string; hint?: string | null };
+  screen?: unknown;
+  variables?: unknown[];
+  attempts?: unknown[];
+  flow_name?: string;
+}
+
+export interface RepairReply {
+  fixable: boolean;
+  explanation: string;
+  params?: Record<string, unknown>;
+  selectors?: { strategy: string; value: string; options?: Record<string, unknown> }[];
+  element_name?: string;
+}
+
 export class AiService {
   constructor(
     private readonly settings: Settings,
@@ -132,6 +198,42 @@ export class AiService {
     };
   }
 
+  /** New settings for a failed step (AI self-repair). The engine checks them again before trying. */
+  async repairStep(request: RepairRequest): Promise<RepairReply> {
+    const def = ACTIVITIES.get(request.activity);
+    const changeable = changeableParams(request.activity);
+    if (!def || !changeable.size) return { fixable: false, explanation: 'This kind of step is not repaired automatically.' };
+    // Only the settings it may change are offered, so the model doesn't propose the others.
+    const settings = Object.fromEntries(
+      Object.entries(def.params.properties ?? {})
+        .filter(([name]) => changeable.has(name))
+        .map(([name, p]) => [name, { title: p.title, type: p.type ?? (p.anyOf ? 'any' : undefined), choices: p.enum, help: p.description }]),
+    );
+    const context = {
+      step: { type: def.id, title: def.title, description: def.description, settings },
+      current_settings: request.step.params,
+      element: request.element ?? null,
+      error: request.error,
+      attempts: request.attempts ?? [],
+      variables: request.variables ?? [],
+      screen: request.screen ?? null,
+    };
+    const answer = await this.chat(
+      [
+        { role: 'system', content: REPAIR_RULES },
+        { role: 'user', content: fitPrompt(context, 24_000) },
+      ],
+      true,
+    );
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(extractJson(answer)) as Record<string, unknown>;
+    } catch {
+      return { fixable: false, explanation: 'The AI model did not return a usable fix.' };
+    }
+    return sanitizeRepair(raw, def.id, request.element ? String(request.element.kind ?? 'web') : def.category === 'Desktop' ? 'desktop' : 'web');
+  }
+
   /** Explain a failed step in plain language and suggest a fix. */
   async explainError(input: { activity: string; message: string; hint?: string | null; params?: Record<string, unknown> }): Promise<string> {
     const def = ACTIVITIES.get(input.activity);
@@ -188,6 +290,53 @@ export function sanitizeSteps(value: unknown, dropped: string[], depth = 0): Ste
     out.push(step);
   }
   return out;
+}
+
+/** Keep only changes the step can take: known, non-credential settings and well-formed selectors. */
+export function sanitizeRepair(raw: Record<string, unknown>, activity: string, kind: string): RepairReply {
+  const def = ACTIVITIES.get(activity);
+  const explanation = String(raw.explanation ?? '').trim().slice(0, 500);
+  if (!def || raw.fixable === false) return { fixable: false, explanation: explanation || 'No fix found.' };
+  const props = def.params.properties ?? {};
+  const changeable = changeableParams(activity);
+  const params = Object.fromEntries(
+    Object.entries(raw.params && typeof raw.params === 'object' ? (raw.params as Record<string, unknown>) : {}).filter(
+      ([k, v]) => changeable.has(k) && k !== 'element' && JSON.stringify(v ?? null).length <= 2000,
+    ),
+  );
+  const allowed = kind === 'desktop' ? new Set(['uia']) : WEB_STRATEGIES;
+  const selectors = ('element' in props && Array.isArray(raw.selectors) ? raw.selectors : [])
+    .slice(0, 5)
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object' && allowed.has(String((s as { strategy?: unknown }).strategy)))
+    .map((s) => ({
+      strategy: String(s.strategy),
+      value: String(s.value ?? '').slice(0, 300),
+      options: Object.fromEntries(
+        Object.entries(s.options && typeof s.options === 'object' ? (s.options as Record<string, unknown>) : {}).filter(
+          ([k, v]) => SELECTOR_OPTIONS.has(k) && ['string', 'number', 'boolean'].includes(typeof v) && String(v).length <= 300,
+        ),
+      ),
+    }))
+    .filter((s) => s.value.trim() || Object.keys(s.options).length);
+  if (!Object.keys(params).length && !selectors.length) return { fixable: false, explanation: explanation || 'No usable change was suggested.' };
+  const reply: RepairReply = { fixable: true, explanation: explanation || 'Adjusted the settings of this step.' };
+  if (Object.keys(params).length) reply.params = params;
+  if (selectors.length) reply.selectors = selectors;
+  if (typeof raw.element_name === 'string' && raw.element_name.trim()) reply.element_name = raw.element_name.trim().slice(0, 80);
+  return reply;
+}
+
+/** JSON for the prompt, shortening the screen lists until it fits the model's context. */
+function fitPrompt(context: { screen: unknown } & Record<string, unknown>, maxChars: number): string {
+  let text = JSON.stringify(context);
+  for (const keep of [100, 60, 30, 10]) {
+    if (text.length <= maxChars) break;
+    const screen = context.screen as Record<string, unknown> | null;
+    if (!screen) break;
+    for (const key of ['elements', 'controls']) if (Array.isArray(screen[key])) screen[key] = (screen[key] as unknown[]).slice(0, keep);
+    text = JSON.stringify(context);
+  }
+  return text.slice(0, maxChars);
 }
 
 /** Models sometimes wrap JSON in ```json fences or add a sentence; take the JSON object. */

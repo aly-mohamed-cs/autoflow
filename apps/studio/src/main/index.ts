@@ -43,6 +43,11 @@ const engine = new EngineProcess(
     else broadcast(IPC.engineNotification, { method, params });
   },
   (status: EngineStatus) => broadcast(IPC.engineStatusChanged, status),
+  // The engine asks for an AI fix when a step fails during a test run with repair on.
+  async (method, params) => {
+    if (method !== 'host.repair') throw new Error(`Unknown request ${method}`);
+    return orchestrator.request('POST', '/api/ai/repair-step', params, 620_000);
+  },
 );
 
 protocol.registerSchemesAsPrivileged([
@@ -154,6 +159,7 @@ function registerIpc(): void {
       step_mode: options.stepMode ?? false,
       headless: options.headless ?? false,
       credentials: await vault.resolve(names),
+      repair: !!options.repair,
     });
   });
   handle(IPC.runControl, (action: string) => engine.call(`run.${action}`));

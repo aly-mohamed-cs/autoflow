@@ -1,8 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/sessions.js';
-import { AiService, DEFAULT_AI, type AiSettings } from '../services/ai.js';
+import { DEFAULT_AI, type AiSettings, type RepairRequest } from '../services/ai.js';
 import { HttpError } from '../services/core.js';
+
+/** What the engine sends when a step fails (see engine/runtime/repair.py). */
+export const RepairBody = z.object({
+  flow_name: z.string().max(300).optional(),
+  activity: z.string().max(100),
+  step: z.object({ id: z.string().max(100), label: z.string().max(300).nullable().optional(), params: z.record(z.string(), z.unknown()) }),
+  element: z.record(z.string(), z.unknown()).nullable().optional(),
+  error: z.object({ message: z.string().max(4000), hint: z.string().max(2000).nullable().optional() }),
+  screen: z.unknown().optional(),
+  variables: z.array(z.unknown()).max(200).optional(),
+  attempts: z.array(z.unknown()).max(10).optional(),
+});
 
 const SettingsBody = z.object({
   enabled: z.boolean(),
@@ -14,8 +26,7 @@ const SettingsBody = z.object({
 });
 
 export async function aiRoutes(app: FastifyInstance) {
-  const { settings, vault, audit } = app.svc;
-  const ai = new AiService(settings, (sealed) => vault.decrypt(sealed));
+  const { settings, vault, audit, ai } = app.svc;
   const actor = (r: { user?: { id: string; username: string } }) => ({ id: r.user!.id, name: r.user!.username });
 
   app.get('/api/ai/status', { preHandler: requireRole('viewer') }, async () => {
@@ -35,6 +46,14 @@ export async function aiRoutes(app: FastifyInstance) {
       .object({ activity: z.string().max(100), message: z.string().max(2000), hint: z.string().max(1000).nullable().optional(), params: z.record(z.string(), z.unknown()).optional() })
       .parse(request.body);
     return { explanation: await ai.explainError(body) };
+  });
+
+  /** Studio test runs: new settings for a step that failed (shown to the builder to keep or discard). */
+  app.post('/api/ai/repair-step', { preHandler: requireRole('builder'), bodyLimit: 2 * 1024 * 1024, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
+    const body = RepairBody.parse(request.body) as RepairRequest;
+    const reply = await ai.repairStep(body);
+    audit.record(actor(request), 'ai.repair', undefined, { activity: body.activity, fixable: reply.fixable, where: 'studio' });
+    return reply;
   });
 
   app.get('/api/settings/ai', { preHandler: requireRole('admin') }, async () => {

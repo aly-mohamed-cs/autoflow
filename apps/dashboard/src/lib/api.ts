@@ -1,4 +1,5 @@
 // Thin client for the Orchestrator API (same origin; session cookie).
+import type { Element } from '@autoflow/flow-types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export class ApiError extends Error {
@@ -122,6 +123,24 @@ export interface FlowSummary {
   archived: boolean;
   lastJob?: { id: string; status: JobStatus; queuedAt: string; finishedAt: string | null } | null;
   activeSchedules?: number;
+  /** Robots may ask the AI assistant to fix failed steps of this automation. */
+  aiRepair: boolean;
+  /** AI fixes from robot runs waiting for a builder. */
+  pendingFixes?: number;
+}
+
+/** A fix the AI assistant made during a robot run; a builder approves it as a new version. */
+export interface AiFix {
+  id: string;
+  flowId: string;
+  baseVersion: number;
+  jobId: string;
+  patches: { step_id: string; params: Record<string, unknown>; element: Element | null; new_element: boolean; explanation: string }[];
+  status: 'pending' | 'approved' | 'dismissed';
+  createdAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  version: number | null;
 }
 
 export interface InputVar {

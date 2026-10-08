@@ -5,7 +5,8 @@ export type LiveEvent =
   | { type: 'job.updated'; job: Record<string, unknown> & { id: string; flowId: string; status: string } }
   | { type: 'job.event'; jobId: string; event: Record<string, unknown> }
   | { type: 'robot.updated'; robot: { id: string; online: boolean; jobId: string | null } }
-  | { type: 'queue.updated'; queueId: string };
+  | { type: 'queue.updated'; queueId: string }
+  | { type: 'repair.updated'; flowId: string };
 
 type Listener = (event: LiveEvent) => void;
 const listeners = new Set<Listener>();

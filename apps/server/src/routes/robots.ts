@@ -7,6 +7,8 @@ import { requireRole } from '../auth/sessions.js';
 import { json, now } from '../db.js';
 import { hashToken, newId, newToken } from '../security.js';
 import { HttpError, notFound } from '../services/core.js';
+import type { RepairRequest } from '../services/ai.js';
+import { RepairBody } from './ai.js';
 import { credentialNames } from './flows.js';
 
 const EnrollBody = z.object({
@@ -30,7 +32,7 @@ interface RobotRow {
 }
 
 export async function robotRoutes(app: FastifyInstance) {
-  const { db, gateway, jobs, vault, audit, config } = app.svc;
+  const { db, gateway, jobs, vault, audit, config, ai } = app.svc;
 
   // Allow raw uploads (screenshots, output files) from robots.
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) => done(null, payload));
@@ -154,6 +156,22 @@ export async function robotRoutes(app: FastifyInstance) {
     }
     audit.record({ name: `robot:${robot.name}` }, 'credentials.read', id, { names: Object.keys(out) });
     return { credentials: out };
+  });
+
+  /** AI self-repair during a robot run. The fix only changes this run; builders approve keeping it. */
+  app.post('/api/robot/jobs/:id/repair', { bodyLimit: 2 * 1024 * 1024 }, async (request) => {
+    const robot = robotFor(request);
+    const { id } = request.params as { id: string };
+    const job = jobs.get(id);
+    if (!job || job.robot_id !== robot.id || job.status !== 'running') throw new HttpError(403, 'Not your job.');
+    if (!gateway.repairAllowed(job)) return { fixable: false, explanation: 'AI repair is turned off for this automation.' };
+    // Bounded per run so a broken automation can't keep the model server busy.
+    const calls = db.run('UPDATE jobs SET repair_calls = repair_calls + 1 WHERE id = ? AND repair_calls < 10', id).changes;
+    if (!calls) return { fixable: false, explanation: 'The AI assistant already tried several fixes in this run.' };
+    const body = RepairBody.parse(request.body) as RepairRequest;
+    const reply = await ai.repairStep(body);
+    audit.record({ name: `robot:${robot.name}` }, 'ai.repair', id, { activity: body.activity, step: body.step.id, fixable: reply.fixable });
+    return reply;
   });
 
   app.post('/api/robot/jobs/:id/artifacts', { bodyLimit: 30 * 1024 * 1024 }, async (request) => {

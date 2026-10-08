@@ -1,6 +1,6 @@
 // Immutable edits of the step tree. Only the path to the changed step is copied,
 // so unchanged step objects keep their identity and React can skip re-rendering them.
-import type { Flow, Step } from '@autoflow/flow-types';
+import type { Flow, RepairPatch, Step } from '@autoflow/flow-types';
 
 /** A step list: the flow's top level, or one block ("then", "body"...) of a step. */
 export interface ListRef {
@@ -167,4 +167,21 @@ export function setParam(flow: Flow, id: string, name: string, value: unknown): 
     else params[name] = value;
     return { ...step, params };
   });
+}
+
+/** Keep an AI fix from a test run: the step's changed settings and the element's new selectors. */
+export function applyRepairPatch(flow: Flow, patch: RepairPatch): Flow {
+  let next = updateStep(flow, patch.step_id, (step) => ({ ...step, params: { ...step.params, ...patch.params } }));
+  const element = patch.element;
+  if (element) {
+    const elements = next.elements ?? [];
+    const exists = elements.some((e) => e.id === element.id);
+    next = {
+      ...next,
+      elements: exists
+        ? elements.map((e) => (e.id === element.id ? { ...e, selectors: element.selectors, context: element.context } : e))
+        : [...elements, element],
+    };
+  }
+  return next;
 }

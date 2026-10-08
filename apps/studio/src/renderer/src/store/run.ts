@@ -1,4 +1,4 @@
-import type { RunError, RunEvent, RunStatus } from '@autoflow/flow-types';
+import type { RepairPatch, RunError, RunEvent, RunStatus } from '@autoflow/flow-types';
 import { create } from 'zustand';
 
 export type StepRunStatus = 'running' | 'ok' | 'failed' | 'continued' | 'cancelled';
@@ -12,6 +12,14 @@ export interface LogEntry {
   stepId?: string;
   hint?: string | null;
   screenshot?: string;
+}
+
+/** A fix the AI assistant made during a test run; the builder keeps or discards it. */
+export interface AiFix {
+  stepId: string;
+  explanation: string;
+  patch: RepairPatch;
+  decision?: 'kept' | 'discarded';
 }
 
 interface RunState {
@@ -29,12 +37,16 @@ interface RunState {
   screenshots: { stepId?: string; path: string; reason: string }[];
   result: { status: RunStatus; durationMs: number; error: RunError | null; outputs: Record<string, unknown> } | null;
   breakpoints: Record<string, string[]>; // per flow id
+  /** The step the AI assistant is working on right now. */
+  repairing: { stepId: string; attempt: number; of: number } | null;
+  fixes: AiFix[];
 
   begin(flowId: string): void;
   started(runId: string): void;
   failedToStart(message: string): void;
   handle(event: RunEvent): void;
   toggleBreakpoint(flowId: string, stepId: string): string[];
+  decideFix(stepId: string, decision: 'kept' | 'discarded'): void;
   reset(): void;
 }
 
@@ -55,6 +67,8 @@ export const useRun = create<RunState>((set, get) => ({
   screenshots: [],
   result: null,
   breakpoints: {},
+  repairing: null,
+  fixes: [],
 
   begin: (flowId) =>
     set({
@@ -69,6 +83,8 @@ export const useRun = create<RunState>((set, get) => ({
       log: [],
       screenshots: [],
       result: null,
+      repairing: null,
+      fixes: [],
       // keep `values` from the previous run until new ones arrive (columns stay known)
     }),
 
@@ -104,6 +120,7 @@ export const useRun = create<RunState>((set, get) => ({
         const status: StepRunStatus = event.continued ? 'continued' : event.status;
         const stepErrors = event.error ? { ...state.stepErrors, [event.step_id]: event.error } : state.stepErrors;
         set({
+          repairing: null,
           stepStatus: { ...state.stepStatus, [event.step_id]: status },
           stepErrors,
           log: event.error
@@ -134,6 +151,21 @@ export const useRun = create<RunState>((set, get) => ({
           }),
         });
         break;
+      case 'repair_started':
+        set({ repairing: { stepId: event.step_id, attempt: event.attempt, of: event.of } });
+        break;
+      case 'repair_failed':
+        set({ repairing: null });
+        break;
+      case 'step_repaired': {
+        const { [event.step_id]: _fixed, ...stepErrors } = state.stepErrors;
+        set({
+          repairing: null,
+          stepErrors,
+          fixes: [...state.fixes.filter((f) => f.stepId !== event.step_id), { stepId: event.step_id, explanation: event.explanation, patch: event.patch }],
+        });
+        break;
+      }
       case 'paused':
         set({ phase: 'paused', pausedStepId: event.step_id, currentStepId: event.step_id });
         break;
@@ -168,7 +200,10 @@ export const useRun = create<RunState>((set, get) => ({
     return list;
   },
 
-  reset: () => set({ phase: 'idle', stepStatus: {}, stepErrors: {}, currentStepId: null, pausedStepId: null, result: null }),
+  decideFix: (stepId, decision) =>
+    set({ fixes: get().fixes.map((f) => (f.stepId === stepId ? { ...f, decision } : f)) }),
+
+  reset: () => set({ phase: 'idle', stepStatus: {}, stepErrors: {}, currentStepId: null, pausedStepId: null, result: null, repairing: null, fixes: [] }),
 }));
 
 export function formatDuration(ms: number): string {

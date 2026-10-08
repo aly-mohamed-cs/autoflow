@@ -17,6 +17,7 @@ import { StepLibrary } from '../editor/StepLibrary';
 import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { formatDuration, isActive, useRun } from '../store/run';
+import { aiEnabled, aiRepairWanted } from '../lib/ai';
 
 export function EditorPage({ flowId }: { flowId: string }) {
   const flow = useEditor((s) => s.flow);
@@ -219,6 +220,7 @@ export async function startRun(stepMode: boolean): Promise<void> {
       stepMode,
       breakpoints: run.breakpoints[flow.id] ?? [],
       credentials: flowCredentialNames(flow),
+      repair: aiRepairWanted() && (await aiEnabled()),
     });
     useRun.getState().started(result.run_id);
   } catch (e) {

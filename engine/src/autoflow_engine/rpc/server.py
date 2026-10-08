@@ -3,7 +3,8 @@
 Studio starts ``autoflow-engine rpc`` as a child process. Requests come in on
 stdin; responses and ``run.event`` notifications go out on stdout. Anything
 printed by activities is redirected to stderr so it can never corrupt the
-protocol stream.
+protocol stream. The engine can also ask Studio something during a run (ids
+"h1", "h2"...), e.g. ``host.repair`` for an AI fix; Studio answers on stdin.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -23,7 +25,7 @@ from pydantic import ValidationError
 from .. import __version__, catalog
 from ..design.desktop_picker import DesktopPicker
 from ..design.session import DesignSession
-from ..errors import AutoflowError
+from ..errors import AutoflowError, RunCancelled
 from ..flow import Flow
 from ..runtime.context import RunControl, RunOptions
 from ..runtime.expressions import evaluate
@@ -53,6 +55,8 @@ class EngineServer:
         self._run_id: str | None = None
         self._design: DesignSession | None = None
         self._desktop_picker: DesktopPicker | None = None
+        self._host_seq = 0
+        self._host_waiting: dict[str, tuple[threading.Event, dict[str, Any]]] = {}
         # Methods that answer later (the user is clicking in the design browser).
         self._deferred: dict[str, Callable[[dict[str, Any], Callable[..., None]], None]] = {
             "picker.web": lambda p, respond: self.design.pick(p.get("url"), respond),
@@ -129,6 +133,11 @@ class EngineServer:
         req_id = request.get("id")
         method = request.get("method")
         params = request.get("params") or {}
+        if method is None and isinstance(req_id, str) and req_id in self._host_waiting:
+            done, slot = self._host_waiting[req_id]
+            slot.update(request)  # Studio's answer to a host.* request
+            done.set()
+            return
         try:
             if not isinstance(method, str) or not isinstance(params, dict):
                 raise RpcError(INVALID_REQUEST, "Invalid request")
@@ -168,6 +177,26 @@ class EngineServer:
                 self._reply_error(req_id, INTERNAL_ERROR, str(error))
 
         return respond
+
+    def request_host(self, method: str, params: dict[str, Any], control: RunControl, timeout: float) -> Any:
+        """Ask Studio something and wait for the answer (stops waiting if the run is cancelled)."""
+        self._host_seq += 1
+        req_id = f"h{self._host_seq}"
+        done, slot = threading.Event(), {}
+        self._host_waiting[req_id] = (done, slot)
+        try:
+            self._send({"jsonrpc": "2.0", "id": req_id, "method": method, "params": to_jsonable(params)})
+            deadline = time.monotonic() + timeout
+            while not done.wait(0.25):
+                if control.cancelled:
+                    raise RunCancelled()
+                if time.monotonic() > deadline:
+                    raise AutoflowError("Studio did not answer in time.")
+        finally:
+            self._host_waiting.pop(req_id, None)
+        if "error" in slot:
+            raise AutoflowError(str((slot["error"] or {}).get("message") or "Studio could not answer."))
+        return slot.get("result")
 
     def _reply_error(self, req_id: Any, code: int, message: str, data: Any = None) -> None:
         if req_id is None:
@@ -212,6 +241,9 @@ class EngineServer:
             headless=bool(params.get("headless")),
         )
         self._control = RunControl(options.breakpoints, options.step_mode)
+        if params.get("repair"):
+            control = self._control
+            options.repair = lambda request: self.request_host("host.repair", request, control, timeout=660)
         runner = FlowRunner(flow, options, emit=lambda e: self.notify("run.event", e), control=self._control)
         self._run_id = runner.run_id
 

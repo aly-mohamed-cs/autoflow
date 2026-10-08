@@ -167,3 +167,42 @@ def test_desktop_picker_captures_a_control(tmp_path, demo_erp):
         assert result.status == "succeeded", result.error
     finally:
         app.kill()
+
+
+def test_ai_repair_repicks_a_desktop_control(tmp_path, demo_erp):
+    """A control whose id changed is found again from the window's controls (AI self-repair)."""
+    from autoflow_engine.flow import Flow
+    from autoflow_engine.runtime.context import RunOptions
+    from autoflow_engine.runtime.interpreter import FlowRunner
+
+    requests: list[dict] = []
+
+    def assistant(req):
+        requests.append(req)
+        edit = next(c for c in req["screen"]["controls"] if c.get("automation_id") == "txtCustomer")
+        return {"explanation": "The customer box has a new id.",
+                "selectors": [{"strategy": "uia", "value": "Edit #txtCustomer",
+                               "options": {"automation_id": edit["automation_id"], "control_type": "Edit"}}]}
+
+    stale = {"id": "customer", "name": "Customer box", "kind": "desktop", "context": WINDOW,
+             "selectors": [{"strategy": "uia", "value": "Edit #txtClient",
+                            "options": {"automation_id": "txtClient", "control_type": "Edit"}}]}
+    steps = [
+        step("desktop.launch", {"program": str(demo_erp), "window": "Demo ERP"}),
+        step("desktop.type", {"element": "invoice", "text": "SECRET-TYPED"}),
+        step("desktop.type", {"element": "customer", "text": "Initech"}, id="fixme"),
+        step("desktop.get_text", {"element": "customer"}, outputs={"text": "typed"}),
+        step("desktop.close_window", {"window": "Demo ERP"}),
+    ]
+    elements = [stale, *(e for e in ELEMENTS if e["id"] != "customer")]
+    flow = Flow.model_validate({"id": "d", "name": "d", "elements": elements, "steps": steps,
+                                "settings": {"default_timeout": 3}})
+    events: list[dict] = []
+    runner = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run", repair=assistant), events.append)
+    result = runner.run()
+    assert result.status == "succeeded", result.error
+    assert runner.ctx.variables["typed"] == "Initech"  # later steps use the repaired element too
+    screen = requests[0]["screen"]
+    assert screen["kind"] == "desktop" and screen["process"] == "DemoErp.exe"
+    assert "SECRET-TYPED" not in str(screen)  # what was typed into boxes is not sent
+    assert [e["step_id"] for e in events if e["event"] == "step_repaired"] == ["fixme"]

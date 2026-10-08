@@ -5,7 +5,7 @@ import type { WebSocket } from 'ws';
 import type { Db } from '../db.js';
 import { json, now } from '../db.js';
 import type { Bus } from './core.js';
-import type { Jobs } from './jobs.js';
+import type { JobRow, Jobs } from './jobs.js';
 
 interface Connection {
   robotId: string;
@@ -30,6 +30,8 @@ export class Gateway {
   private readonly connections = new Map<string, Connection>();
   private readonly lostJobs = new Map<string, NodeJS.Timeout>();
   private timer: NodeJS.Timeout | null = null;
+  /** Whether a job's robot may ask the AI assistant to fix failed steps (set by createServices). */
+  repairAllowed: (job: JobRow) => boolean = () => false;
 
   constructor(
     private readonly db: Db,
@@ -200,6 +202,7 @@ export class Gateway {
             version: job.version,
             inputs: json(job.inputs, {}),
             timeout_s: job.timeout_s,
+            repair: this.repairAllowed(job),
           },
         });
         this.jobs.publish(job);

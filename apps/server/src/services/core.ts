@@ -7,7 +7,8 @@ export type LiveEvent =
   | { type: 'job.updated'; job: Record<string, unknown> }
   | { type: 'job.event'; jobId: string; event: Record<string, unknown> }
   | { type: 'robot.updated'; robot: Record<string, unknown> }
-  | { type: 'queue.updated'; queueId: string };
+  | { type: 'queue.updated'; queueId: string }
+  | { type: 'repair.updated'; flowId: string };
 
 /** In-process pub/sub feeding the dashboard's live view (Server-Sent Events). */
 export class Bus extends EventEmitter {

@@ -19,7 +19,9 @@ import { triggerRoutes } from './routes/triggers.js';
 import type { Vault } from './security.js';
 import { Audit, Bus, HttpError, Settings } from './services/core.js';
 import { Gateway } from './services/gateway.js';
+import { AiService } from './services/ai.js';
 import { Jobs } from './services/jobs.js';
+import { Repairs } from './services/repairs.js';
 import { Queues, Scheduler } from './services/triggers.js';
 
 export const VERSION = '0.1.0';
@@ -35,6 +37,8 @@ export interface Services {
   gateway: Gateway;
   scheduler: Scheduler;
   queues: Queues;
+  ai: AiService;
+  repairs: Repairs;
 }
 
 declare module 'fastify' {
@@ -47,17 +51,29 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
   const bus = new Bus();
   bus.setMaxListeners(500);
   const jobs = new Jobs(db, bus);
+  const settings = new Settings(db);
+  const ai = new AiService(settings, (sealed) => vault.decrypt(sealed));
+  const repairs = new Repairs(db, bus);
+  const gateway = new Gateway(db, jobs, bus);
+  // Robots may ask the AI to fix failed steps when it is on and the automation allows it.
+  gateway.repairAllowed = (job) =>
+    ai.config().enabled && !!db.get<{ ai_repair: number }>('SELECT ai_repair FROM flows WHERE id = ?', job.flow_id)?.ai_repair;
+  jobs.onEvent.push((job, event) => {
+    if (event.event === 'step_repaired' && job) repairs.record(job, event, jobs.definition(job));
+  });
   return {
     config,
     db,
     vault,
     bus,
-    settings: new Settings(db),
+    settings,
     audit: new Audit(db),
     jobs,
-    gateway: new Gateway(db, jobs, bus),
+    gateway,
     scheduler: new Scheduler(db, jobs),
     queues: new Queues(db, jobs, bus),
+    ai,
+    repairs,
   };
 }
 

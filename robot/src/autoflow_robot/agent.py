@@ -38,7 +38,8 @@ class Agent:
             verify=self._ssl if self._ssl else True,
             timeout=30,
         )
-        self.runner = JobRunner(home() / "runs", self.send_threadsafe, self.upload, self.fetch_credentials)
+        self.runner = JobRunner(home() / "runs", self.send_threadsafe, self.upload, self.fetch_credentials,
+                                repair=self.request_repair)
 
     # -- called from the runner thread ---------------------------------------------------
     def send_threadsafe(self, message: dict[str, Any]) -> None:
@@ -65,6 +66,12 @@ class Agent:
         r = self.http.get(f"/api/robot/jobs/{job_id}/credentials")
         r.raise_for_status()
         return r.json().get("credentials", {})
+
+    def request_repair(self, job_id: str, failure: dict[str, Any]) -> dict[str, Any]:
+        # A model without a GPU can take minutes; the Orchestrator stops waiting after 10.
+        r = self.http.post(f"/api/robot/jobs/{job_id}/repair", json=failure, timeout=660)
+        r.raise_for_status()
+        return r.json()
 
     # -- connection loop ----------------------------------------------------------------
     def _queue(self, message: dict[str, Any]) -> None:

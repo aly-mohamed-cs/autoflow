@@ -8,6 +8,7 @@ import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
 import { extractJson } from '../src/services/ai.js';
+import { applyPatches } from '../src/services/repairs.js';
 import type { Config } from '../src/config.js';
 import { Db } from '../src/db.js';
 import { Vault } from '../src/security.js';
@@ -334,6 +335,153 @@ describe('AI assistant (local model)', () => {
 
     reply = () => ({ content: 'not json at all' });
     expect((await api('POST', '/api/ai/draft-flow', { description: 'Read invoices from Excel and log each one' })).status).toBe(502);
+  });
+
+  it('lets robots fix failed steps and files working fixes for a builder to approve', async () => {
+    const flow = {
+      id: 'flow_fixable',
+      name: 'Fixable',
+      steps: [
+        { id: 'open', activity: 'browser.open', params: { url: 'http://portal.local' } },
+        { id: 'click', activity: 'browser.click', params: { element: 'btn' } },
+      ],
+      elements: [
+        { id: 'btn', name: 'Log on button', kind: 'web', screenshot: 'data:image/png;base64,AAAA', selectors: [{ strategy: 'role', value: 'button', options: { name: 'Log on' } }] },
+      ],
+    };
+    await api('POST', `/api/flows/${flow.id}/versions`, { flow });
+    const { key } = (await api('POST', '/api/robots/enrollment-keys', { pool: 'ai', hours: 1 })).body;
+    const token = (await app.inject({ method: 'POST', url: '/api/robot/enroll', payload: { key, name: 'AI robot' } })).json().token;
+    const asRobot = { authorization: `Bearer ${token}` };
+    const messages: any[] = [];
+    const ws = new WebSocket(`ws://${base}/api/robot/connect`, { headers: asRobot });
+    ws.on('message', (m) => messages.push(JSON.parse(m.toString())));
+    await new Promise((resolve) => ws.on('open', resolve));
+    ws.send(JSON.stringify({ type: 'hello', version: '0.1.0', capabilities: ['browser'] }));
+    await waitFor(() => messages.some((m) => m.type === 'welcome'));
+
+    const jobId = (await api('POST', `/api/flows/${flow.id}/run`, { pool: 'ai' })).body.job.id;
+    await waitFor(() => messages.some((m) => m.type === 'job.assign'));
+    expect(messages.find((m) => m.type === 'job.assign').job).toMatchObject({ id: jobId, repair: true });
+
+    reply = () => ({
+      content: JSON.stringify({
+        fixable: true,
+        explanation: 'The button is now called "Sign in".',
+        params: { timeout: 5, element: 'other', bogus: 1 },
+        selectors: [
+          { strategy: 'role', value: 'button', options: { name: 'Sign in', exact: true, onclick: 'evil()' } },
+          { strategy: 'uia', value: 'Button', options: {} },
+        ],
+      }),
+    });
+    const request = {
+      flow_name: 'Fixable',
+      activity: 'browser.click',
+      step: { id: 'click', label: null, params: { element: 'btn' } },
+      element: { id: 'btn', name: 'Log on button', kind: 'web', selectors: flow.elements[0]!.selectors, context: {} },
+      error: { message: "Couldn't find 'Log on button' after 30 seconds.", hint: null },
+      screen: { kind: 'web', url: 'http://portal.local', title: 'Portal', elements: [{ tag: 'button', type: 'submit', text: 'Sign in' }] },
+      variables: [],
+      attempts: [],
+    };
+    const fix = await app.inject({ method: 'POST', url: `/api/robot/jobs/${jobId}/repair`, headers: asRobot, payload: request });
+    expect(fix.json()).toEqual({
+      fixable: true,
+      explanation: 'The button is now called "Sign in".',
+      params: { timeout: 5 },
+      selectors: [{ strategy: 'role', value: 'button', options: { name: 'Sign in', exact: true } }],
+    });
+    expect(received.at(-1)!.body.messages[1].content).toContain("Couldn't find 'Log on button'");
+    const outsider = await app.inject({ method: 'POST', url: `/api/robot/jobs/${jobId}/repair`, headers: { authorization: `Bearer ${adminToken}` }, payload: request });
+    expect(outsider.statusCode).toBe(401);
+
+    // The engine reports that the fix worked; the run finishes.
+    const patched = { ...request.element, selectors: [fix.json().selectors[0], ...request.element.selectors] };
+    ws.send(JSON.stringify({ type: 'job.event', job_id: jobId, event: { event: 'repair_started', step_id: 'click', attempt: 1, ts: 1 } }));
+    ws.send(
+      JSON.stringify({
+        type: 'job.event',
+        job_id: jobId,
+        event: {
+          event: 'step_repaired',
+          step_id: 'click',
+          attempt: 1,
+          ts: 2,
+          explanation: 'The button is now called "Sign in".',
+          patch: { step_id: 'click', params: { timeout: 5 }, element: patched, new_element: false },
+        },
+      }),
+    );
+    // A robot can't slip other changes into the suggestion: web addresses and other elements are dropped.
+    ws.send(
+      JSON.stringify({
+        type: 'job.event',
+        job_id: jobId,
+        event: {
+          event: 'step_repaired',
+          step_id: 'open',
+          ts: 3,
+          explanation: 'Use another site.',
+          patch: { step_id: 'open', params: { url: 'http://evil.example' }, element: null, new_element: false },
+        },
+      }),
+    );
+    ws.send(JSON.stringify({ type: 'job.finished', job_id: jobId, status: 'succeeded', duration_ms: 10 }));
+    await waitFor(async () => (await api('GET', `/api/flows/${flow.id}`)).body.fixes.length === 1);
+
+    const runDetail = (await api('GET', `/api/jobs/${jobId}`)).body;
+    expect(runDetail.events.map((e: any) => e.event)).toEqual(['repair_started', 'step_repaired', 'step_repaired']);
+    expect(runDetail.fix.patches.map((p: any) => p.step_id)).toEqual(['click']);
+    expect(runDetail.fix).toMatchObject({ status: 'pending', baseVersion: 1, patches: [{ step_id: 'click', explanation: 'The button is now called "Sign in".' }] });
+    expect((await api('GET', '/api/flows')).body.flows.find((f: any) => f.id === flow.id).pendingFixes).toBe(1);
+
+    const approved = await api('POST', `/api/fixes/${runDetail.fix.id}/approve`, {});
+    expect(approved.body).toEqual({ version: 2, flowId: flow.id });
+    const v2 = (await api('GET', `/api/flows/${flow.id}/versions/2`)).body.definition;
+    expect(v2.steps[1].params).toEqual({ element: 'btn', timeout: 5 });
+    expect(v2.elements[0].selectors.map((s: any) => s.options.name)).toEqual(['Sign in', 'Log on']);
+    expect(v2.elements[0].screenshot).toBe('data:image/png;base64,AAAA');
+    expect((await api('GET', `/api/flows/${flow.id}`)).body.versions[0].notes).toContain('The button is now called "Sign in".');
+    expect((await api('POST', `/api/fixes/${runDetail.fix.id}/approve`, {})).status).toBe(409);
+
+    // Builders can turn repair off per automation.
+    await api('PATCH', `/api/flows/${flow.id}`, { aiRepair: false });
+    const second = (await api('POST', `/api/flows/${flow.id}/run`, { pool: 'ai' })).body.job.id;
+    await waitFor(() => messages.filter((m) => m.type === 'job.assign').length === 2);
+    expect(messages.filter((m) => m.type === 'job.assign')[1].job.repair).toBe(false);
+    const off = await app.inject({ method: 'POST', url: `/api/robot/jobs/${second}/repair`, headers: asRobot, payload: request });
+    expect(off.json()).toMatchObject({ fixable: false });
+    ws.send(JSON.stringify({ type: 'job.finished', job_id: second, status: 'failed', duration_ms: 10 }));
+    await waitFor(async () => (await api('GET', `/api/jobs/${second}`)).body.job.status === 'failed');
+    ws.close();
+  });
+
+  it('only applies fixes that still fit the automation', () => {
+    const flow = { id: 'f', name: 'f', steps: [{ id: 'a', activity: 'control.log', params: { message: 'x' } }] } as any;
+    expect(() => applyPatches(flow, [{ step_id: 'gone', params: {}, element: null, new_element: false, explanation: '' }])).toThrow(/changed after this run/);
+    const added = applyPatches(flow, [
+      {
+        step_id: 'a',
+        params: { element: 'el_ai_a' },
+        element: { id: 'el_ai_a', name: 'Save', kind: 'web', selectors: [{ strategy: 'text', value: 'Save' }] } as any,
+        new_element: true,
+        explanation: '',
+      },
+    ]);
+    expect(added.elements).toHaveLength(1);
+    expect(flow.elements).toBeUndefined(); // the original is untouched
+  });
+
+  it('suggests repairs for Studio test runs without touching credentials', async () => {
+    reply = () => ({ content: '{"fixable": true, "explanation": "Use the right sheet.", "params": {"sheet": "Invoices 2026", "password": "x"}}' });
+    const res = await api('POST', '/api/ai/repair-step', {
+      activity: 'excel.read',
+      step: { id: 's1', params: { file: 'C:/data/inv.xlsx', sheet: 'Invoices' } },
+      error: { message: "There is no sheet named 'Invoices'." },
+      screen: { kind: 'files', paths: { file: { workbook: 'C:/data/inv.xlsx', sheets: [{ name: 'Invoices 2026', first_row: ['Number'] }] } } },
+    });
+    expect(res.body).toEqual({ fixable: true, explanation: 'Use the right sheet.', params: { sheet: 'Invoices 2026' } });
   });
 
   it('finds JSON in chatty answers', () => {

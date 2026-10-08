@@ -1,10 +1,11 @@
-import type { Flow } from '@autoflow/flow-types';
+import type { Flow, RepairPatch, Selector } from '@autoflow/flow-types';
 import { Badge, Button, cn, Dialog, EmptyState, Icon, Tabs } from '@autoflow/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { findStep } from '../lib/flowOps';
+import type { CatalogIndex } from '../lib/catalog';
+import { applyRepairPatch, findStep } from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
-import { formatDuration, useRun, type LogEntry } from '../store/run';
+import { formatDuration, useRun, type AiFix, type LogEntry } from '../store/run';
 import { formatPreview } from './fields/VariablePicker';
 
 export function RunPanel({ height, onResize }: { height: number; onResize: (h: number) => void }) {
@@ -123,6 +124,7 @@ function RunLog() {
 
   return (
     <div className="font-[450]">
+      <AiFixes stepName={stepName} />
       {phase === 'starting' && <p className="px-4 py-2 text-[13px] text-muted">Starting… {startedAt && ''}</p>}
       <ul className="divide-y divide-border/60">
         {log.map((entry) => {
@@ -156,6 +158,105 @@ function RunLog() {
       </Dialog>
     </div>
   );
+}
+
+/** The AI assistant at work, and the fixes it made for the builder to keep or discard. */
+function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
+  const repairing = useRun((s) => s.repairing);
+  const fixes = useRun((s) => s.fixes);
+  const decideFix = useRun((s) => s.decideFix);
+  const runFlowId = useRun((s) => s.flowId);
+  const flow = useEditor((s) => s.flow);
+  const change = useEditor((s) => s.change);
+  const select = useEditor((s) => s.select);
+  const index = useApp((s) => s.index);
+  const toast = useApp((s) => s.toast);
+  const open = fixes.filter((f) => !f.decision);
+  if (!repairing && open.length === 0) return null;
+
+  const keep = (fix: AiFix) => {
+    if (!flow || flow.id !== runFlowId || !findStep(flow, fix.stepId)) {
+      toast('This step is no longer in the automation, so the fix was not applied.', 'error');
+      decideFix(fix.stepId, 'discarded');
+      return;
+    }
+    change((f) => applyRepairPatch(f, fix.patch));
+    decideFix(fix.stepId, 'kept');
+    toast('Fix kept. Run the test again to check the whole automation.', 'success');
+  };
+
+  return (
+    <div className="space-y-2 border-b border-border bg-surface-2 px-4 py-3">
+      {repairing && (
+        <p className="flex items-center gap-2 text-[13px] text-muted" role="status">
+          <Icon name="loader-circle" size={15} className="animate-spin text-primary" />
+          The AI assistant is looking at “{stepName(repairing.stepId) ?? 'a step'}” (attempt {repairing.attempt} of {repairing.of})…
+        </p>
+      )}
+      {open.map((fix) => (
+        <div key={fix.stepId} className="rounded-md border border-primary/30 bg-surface p-3 text-[13px]" role="group" aria-label="AI fix">
+          <p className="flex items-center gap-2 font-semibold">
+            <Icon name="sparkles" size={15} className="text-primary" />
+            The AI assistant fixed
+            <button type="button" className="text-primary hover:underline" onClick={() => select(fix.stepId)}>
+              {stepName(fix.stepId) ?? 'a step'}
+            </button>
+            and it worked
+          </p>
+          <p className="mt-1">{fix.explanation}</p>
+          <ul className="mt-1 list-disc pl-5 text-muted">
+            {describePatch(fix.patch, flow, index).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" variant="primary" icon={<Icon name="check" size={14} />} onClick={() => keep(fix)}>
+              Keep fix
+            </Button>
+            <Button size="sm" onClick={() => decideFix(fix.stepId, 'discarded')}>
+              Discard
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Plain-language list of what an AI fix changes. */
+export function describePatch(patch: RepairPatch, flow: Flow | null, index: CatalogIndex): string[] {
+  const step = flow ? findStep(flow, patch.step_id) : undefined;
+  const def = step ? index.get(step.activity) : undefined;
+  const titles = new Map((def ? index.fields(def) : []).map((f) => [f.name, f.title]));
+  const lines: string[] = [];
+  for (const [name, value] of Object.entries(patch.params)) {
+    if (name === 'element' && patch.new_element) continue;
+    lines.push(`${titles.get(name) ?? name}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+  }
+  if (patch.element) {
+    const how = describeSelector(patch.element.selectors[0]);
+    lines.push(patch.new_element ? `Picked the element “${patch.element.name}” (${how})` : `New way to find “${patch.element.name}”: ${how}`);
+  }
+  return lines;
+}
+
+function describeSelector(s: Selector | undefined): string {
+  if (!s) return 'unknown';
+  const name = typeof s.options?.name === 'string' ? s.options.name : '';
+  switch (s.strategy) {
+    case 'role':
+      return name ? `${s.value} “${name}”` : s.value;
+    case 'label':
+      return `labelled “${s.value}”`;
+    case 'placeholder':
+      return `placeholder “${s.value}”`;
+    case 'text':
+      return `text “${s.value}”`;
+    case 'testid':
+      return `test id “${s.value}”`;
+    default:
+      return s.value;
+  }
 }
 
 function VariablesView() {

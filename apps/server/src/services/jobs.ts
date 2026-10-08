@@ -28,6 +28,7 @@ export interface JobRow {
   outputs: string | null;
   error: string | null;
   cancel_requested: number;
+  repair_calls: number;
 }
 
 export interface CreateJob {
@@ -51,13 +52,26 @@ export interface FinishJob {
 }
 
 /** Engine events worth keeping for run history (variables are only kept as the final outputs). */
-const KEPT_EVENTS = new Set(['run_started', 'step_started', 'step_finished', 'log', 'screenshot', 'run_finished']);
+const KEPT_EVENTS = new Set([
+  'run_started',
+  'step_started',
+  'step_finished',
+  'log',
+  'screenshot',
+  'run_finished',
+  'repair_started',
+  'repair_trying',
+  'repair_failed',
+  'step_repaired',
+]);
 
 export class Jobs {
   /** Called after any job finishes (queues, alerts...). */
   onFinished: ((job: JobRow) => void)[] = [];
   /** Called when a job is queued (dispatcher). */
   onQueued: (() => void)[] = [];
+  /** Called for every kept engine event (AI fixes become suggestions). */
+  onEvent: ((job: JobRow, event: Record<string, unknown>) => void)[] = [];
 
   constructor(
     private readonly db: Db,
@@ -139,6 +153,14 @@ export class Jobs {
       JSON.stringify(event),
     );
     this.bus.publish({ type: 'job.event', jobId, event });
+    const job = this.onEvent.length ? this.get(jobId) : undefined;
+    for (const fn of this.onEvent) {
+      try {
+        fn(job!, event);
+      } catch (err) {
+        console.error('job event hook failed', err);
+      }
+    }
   }
 
   events(jobId: string): Record<string, unknown>[] {

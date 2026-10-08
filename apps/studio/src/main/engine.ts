@@ -48,6 +48,10 @@ export class EngineProcess {
     private readonly python: string | null,
     private readonly onNotification: (method: string, params: unknown) => void,
     private readonly onStatus: (status: EngineStatus) => void,
+    /** Questions the engine asks Studio during a run (e.g. host.repair). */
+    private readonly onRequest: (method: string, params: unknown) => Promise<unknown> = async (m) => {
+      throw new Error(`Unknown request ${m}`);
+    },
   ) {}
 
   start(): void {
@@ -124,11 +128,15 @@ export class EngineProcess {
   }
 
   private handleLine(line: string): void {
-    let message: { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code: number; message: string; data?: unknown } };
+    let message: { id?: number | string; method?: string; params?: unknown; result?: unknown; error?: { code: number; message: string; data?: unknown } };
     try {
       message = JSON.parse(line);
     } catch {
       console.warn('[engine] non-JSON output:', line);
+      return;
+    }
+    if (message.method && typeof message.id === 'string') {
+      this.answer(message.id, message.method, message.params);
       return;
     }
     if (message.method) {
@@ -150,6 +158,14 @@ export class EngineProcess {
     } else {
       pending.resolve(message.result);
     }
+  }
+
+  private answer(id: string, method: string, params: unknown): void {
+    const reply = (body: Record<string, unknown>) => this.child?.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, ...body }) + '\n');
+    this.onRequest(method, params).then(
+      (result) => reply({ result: result ?? null }),
+      (err: Error) => reply({ error: { code: 1, message: err.message } }),
+    );
   }
 
   private setStatus(status: EngineStatus): void {

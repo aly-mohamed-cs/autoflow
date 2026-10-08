@@ -134,3 +134,46 @@ def selector_from_text(text: str) -> Selector:
         role, _, name = text[5:].partition(":")
         return Selector(strategy="role", value=role.strip(), options={"name": name.strip()} if name else {})
     return Selector(strategy="css", value=text)
+
+
+_SNAPSHOT_JS = r"""
+(limit) => {
+  const out = [];
+  const seen = new Set();
+  const query = 'a,button,input,select,textarea,label,h1,h2,h3,th,[role],[contenteditable="true"],[data-testid],[aria-label]';
+  for (const el of document.querySelectorAll(query)) {
+    if (out.length >= limit) break;
+    if (seen.has(el)) continue;
+    seen.add(el);
+    const box = el.getBoundingClientRect();
+    if (!box.width || !box.height) continue;
+    const style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    const item = { tag: el.tagName.toLowerCase() };
+    for (const a of ['role', 'type', 'id', 'name', 'placeholder', 'aria-label', 'data-testid', 'title']) {
+      const v = el.getAttribute(a);
+      if (v) item[a] = v.slice(0, 80);
+    }
+    if (el.labels && el.labels.length) item.label = el.labels[0].innerText.trim().slice(0, 80);
+    // Visible text only: never what was typed into fields (it may be personal or a password).
+    if (!['input', 'textarea', 'select'].includes(item.tag)) {
+      const text = (el.innerText || '').trim().replace(/\s+/g, ' ');
+      if (text) item.text = text.slice(0, 80);
+    } else if (item.tag === 'select') {
+      item.options = Array.from(el.options).slice(0, 15).map((o) => o.text.trim().slice(0, 40));
+    }
+    out.push(item);
+  }
+  return out;
+}
+"""
+
+
+def snapshot(page: Any, limit: int = 150) -> dict[str, Any]:
+    """What is on the page now, for the AI assistant: address, title and visible elements."""
+    return {
+        "kind": "web",
+        "url": page.url,
+        "title": page.title(),
+        "elements": page.evaluate(_SNAPSHOT_JS, limit),
+    }

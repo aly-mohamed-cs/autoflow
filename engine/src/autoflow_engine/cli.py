@@ -73,6 +73,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     control = RunControl()
     if args.cancel_file:
         _watch_cancel_file(Path(args.cancel_file), control)
+    if args.repair_stdin:
+        options.repair = _StdinRepair(control)
 
     def emit(event: dict) -> None:
         if args.quiet and event["event"] not in ("run_finished", "log"):
@@ -81,6 +83,42 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     result = FlowRunner(flow, options, emit, control=control).run()
     return 0 if result.status == "succeeded" else 1
+
+
+class _StdinRepair:
+    """Repair provider for robots: a ``repair_request`` line goes out on stdout and the robot
+    answers with ``{"id": ..., "reply": {...}}`` on stdin after asking the Orchestrator
+    (or ``{"cancel": true}`` when the run is stopped meanwhile).
+
+    stdin is read only while waiting for an answer, never by a background thread: on Windows
+    a pending read on a pipe blocks loading DLLs (numpy, OCR...) in every other thread.
+    """
+
+    def __init__(self, control: RunControl):
+        self._control = control
+        self._next = 0
+
+    def __call__(self, request: dict) -> dict | None:
+        from .errors import RunCancelled
+
+        self._next += 1
+        request_id = self._next
+        print(json.dumps({"event": "repair_request", "id": request_id, "request": request},
+                         default=str, ensure_ascii=False), flush=True)
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                raise AutoflowError("The robot stopped answering repair requests.")
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if message.get("cancel") or self._control.cancelled:
+                raise RunCancelled()
+            if message.get("id") == request_id:
+                if message.get("error"):
+                    raise AutoflowError(str(message["error"]))
+                return message.get("reply")
 
 
 def _watch_cancel_file(path: Path, control: RunControl) -> None:
@@ -119,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quiet", action="store_true", help="only print logs and the final result")
     p.add_argument("--credentials-stdin", action="store_true", help="read credentials JSON from the first stdin line")
     p.add_argument("--cancel-file", help="stop the run when this file appears")
+    p.add_argument("--repair-stdin", action="store_true",
+                   help="AI self-repair: print repair_request events and read replies from stdin")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("rpc", help="JSON-RPC server on stdio (used by Studio)")

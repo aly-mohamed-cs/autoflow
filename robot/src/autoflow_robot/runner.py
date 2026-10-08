@@ -19,6 +19,7 @@ log = logging.getLogger("autoflow.robot.runner")
 SendFn = Callable[[dict[str, Any]], None]
 UploadFn = Callable[[str, Path, str | None], str | None]  # (job_id, file, step_id) -> artifact id
 CredentialsFn = Callable[[str], dict[str, Any]]
+RepairFn = Callable[[str, dict[str, Any]], dict[str, Any]]  # (job_id, failure) -> AI fix from the Orchestrator
 
 KEEP_RUNS = 20
 CANCEL_GRACE_S = 30
@@ -28,17 +29,19 @@ class JobRunner:
     """One job at a time. The engine runs in a child process so a crash can't take the robot down."""
 
     def __init__(self, runs_dir: Path, send: SendFn, upload: UploadFn, credentials: CredentialsFn,
-                 python: str | None = None):
+                 python: str | None = None, repair: RepairFn | None = None):
         self.runs_dir = runs_dir
         self.send = send
         self.upload = upload
         self.credentials = credentials
+        self.repair = repair
         self.python = python or sys.executable
         self.job_id: str | None = None
         self._process: subprocess.Popen | None = None
         self._cancel_file: Path | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._stdin_lock = threading.Lock()
 
     @property
     def busy(self) -> bool:
@@ -59,7 +62,19 @@ class JobRunner:
         log.info("cancel requested for %s", job_id)
         if self._cancel_file:
             self._cancel_file.touch()
+        proc = self._process
+        if proc is not None:
+            self._write_engine(proc, {"cancel": True})  # in case it is waiting for an AI fix
         threading.Timer(CANCEL_GRACE_S, self._kill).start()
+
+    def _write_engine(self, process: subprocess.Popen, message: dict[str, Any]) -> None:
+        with self._stdin_lock:
+            try:
+                if process.poll() is None and process.stdin and not process.stdin.closed:
+                    process.stdin.write(json.dumps(message) + "\n")
+                    process.stdin.flush()
+            except (OSError, ValueError):
+                pass  # the engine already stopped
 
     def _kill(self) -> None:
         proc = self._process
@@ -84,16 +99,20 @@ class JobRunner:
             secrets = self.credentials(job_id)
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1"}
             flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+            repair = bool(job.get("repair")) and self.repair is not None
             self._process = subprocess.Popen(
                 [self.python, "-m", "autoflow_engine", "run", str(work / "flow.json"),
                  "--inputs", "@" + str(work / "inputs.json"), "--work-dir", str(work / "files"),
-                 "--credentials-stdin", "--cancel-file", str(self._cancel_file)],
+                 "--credentials-stdin", "--cancel-file", str(self._cancel_file),
+                 *(["--repair-stdin"] if repair else [])],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=work, env=env, creationflags=flags, text=True, encoding="utf-8", errors="replace",
             )
             assert self._process.stdin and self._process.stdout and self._process.stderr
             self._process.stdin.write(json.dumps(secrets) + "\n")
-            self._process.stdin.close()
+            self._process.stdin.flush()
+            if not repair:
+                self._process.stdin.close()  # with AI repair, answers to repair requests go here
             del secrets
             threading.Thread(target=_drain, args=(self._process.stderr, stderr_tail), daemon=True).start()
             timer = threading.Timer(max(int(job.get("timeout_s") or 3600), 10), lambda: self.cancel(job_id))
@@ -102,6 +121,11 @@ class JobRunner:
             for line in self._process.stdout:
                 event = _parse(line)
                 if event is None:
+                    continue
+                if event.get("event") == "repair_request":
+                    # Asked off the reading loop so engine output keeps flowing while the model thinks.
+                    threading.Thread(target=self._answer_repair, args=(job_id, event, self._process),
+                                     daemon=True).start()
                     continue
                 if event.get("event") == "screenshot":
                     path = Path(event.pop("path", ""))
@@ -112,6 +136,9 @@ class JobRunner:
                 self.send({"type": "job.event", "job_id": job_id, "event": event})
             self._process.wait()
             timer.cancel()
+            with self._stdin_lock:
+                if not self._process.stdin.closed:
+                    self._process.stdin.close()
         except Exception as exc:
             log.exception("job %s failed to run", job_id)
             stderr_tail.append(f"{type(exc).__name__}: {exc}")
@@ -131,6 +158,16 @@ class JobRunner:
             with self._lock:
                 self.job_id = None
             _prune(self.runs_dir)
+
+
+    def _answer_repair(self, job_id: str, event: dict[str, Any], process: subprocess.Popen) -> None:
+        answer: dict[str, Any] = {"id": event.get("id")}
+        try:
+            answer["reply"] = self.repair(job_id, event.get("request") or {}) if self.repair else None
+        except Exception as exc:
+            log.warning("AI repair request failed: %s", exc)
+            answer["error"] = f"Could not reach the AI assistant: {exc}"
+        self._write_engine(process, answer)
 
 
 def _parse(line: str) -> dict[str, Any] | None:

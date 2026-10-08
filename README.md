@@ -11,6 +11,11 @@ dedicated Windows machines.
 | **Autoflow Robot** | Runs published flows unattended | Robot PCs (Windows service) |
 | **Engine** | Python runtime shared by Studio and Robot | Bundled inside both |
 
+Optional **AI assistant** (off by default, local models only — Ollama / LM Studio / vLLM on the
+company network): draft automations from a description, explain errors, and fix failed steps
+during runs (retried in place; a person approves keeping each fix). See
+[deploy/SERVER-SETUP.md](deploy/SERVER-SETUP.md#optional-the-ai-assistant-local-model).
+
 ## Repository layout
 
 ```

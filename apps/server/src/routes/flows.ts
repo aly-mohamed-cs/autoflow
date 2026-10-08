@@ -5,6 +5,7 @@ import { requireRole } from '../auth/sessions.js';
 import { json, now } from '../db.js';
 import { badRequest, notFound } from '../services/core.js';
 import { present, type JobRow } from '../services/jobs.js';
+import { publishVersion } from '../services/versions.js';
 
 const FlowDoc = z
   .object({
@@ -23,7 +24,12 @@ const RunBody = z.object({
   /** Studio's quick-launch hotkeys mark their runs so history shows how they started. */
   trigger: z.enum(['manual', 'hotkey']).optional(),
 });
-const PatchBody = z.object({ minutesSaved: z.number().min(0).max(100_000).optional(), archived: z.boolean().optional() });
+const PatchBody = z.object({
+  minutesSaved: z.number().min(0).max(100_000).optional(),
+  archived: z.boolean().optional(),
+  /** Let robots ask the AI assistant to fix failed steps of this automation. */
+  aiRepair: z.boolean().optional(),
+});
 
 interface FlowRow {
   id: string;
@@ -35,6 +41,7 @@ interface FlowRow {
   created_at: string;
   updated_at: string;
   archived: number;
+  ai_repair: number;
 }
 
 /** Names of saved credentials a flow uses (robots may only fetch these). */
@@ -58,19 +65,21 @@ export function inputVariables(flow: Flow) {
 }
 
 export async function flowRoutes(app: FastifyInstance) {
-  const { db, jobs, audit } = app.svc;
+  const { db, jobs, audit, repairs } = app.svc;
+  const actor = (r: { user?: { id: string; username: string } }) => ({ id: r.user!.id, name: r.user!.username });
 
   app.get('/api/flows', { preHandler: requireRole('viewer') }, async (request) => {
     const { archived } = request.query as { archived?: string };
-    const rows = db.all<FlowRow & { last_job: string | null; schedules: number }>(
+    const rows = db.all<FlowRow & { last_job: string | null; schedules: number; pending_fixes: number }>(
       `SELECT f.*,
          (SELECT json_object('id', j.id, 'status', j.status, 'queuedAt', j.queued_at, 'finishedAt', j.finished_at)
             FROM jobs j WHERE j.flow_id = f.id ORDER BY j.queued_at DESC LIMIT 1) AS last_job,
-         (SELECT COUNT(*) FROM schedules s WHERE s.flow_id = f.id AND s.enabled = 1) AS schedules
+         (SELECT COUNT(*) FROM schedules s WHERE s.flow_id = f.id AND s.enabled = 1) AS schedules,
+         (SELECT COUNT(*) FROM repair_suggestions x WHERE x.flow_id = f.id AND x.status = 'pending') AS pending_fixes
        FROM flows f WHERE f.archived = ? ORDER BY f.name COLLATE NOCASE`,
       archived === 'true' ? 1 : 0,
     );
-    return { flows: rows.map((r) => ({ ...presentFlow(r), lastJob: json(r.last_job, null), activeSchedules: r.schedules })) };
+    return { flows: rows.map((r) => ({ ...presentFlow(r), lastJob: json(r.last_job, null), activeSchedules: r.schedules, pendingFixes: r.pending_fixes })) };
   });
 
   app.get('/api/flows/:id', { preHandler: requireRole('viewer') }, async (request) => {
@@ -95,6 +104,7 @@ export async function flowRoutes(app: FastifyInstance) {
       inputs: definition ? inputVariables(definition) : [],
       credentials: definition ? credentialNames(definition) : [],
       stats: { runs30d: stats?.runs ?? 0, succeeded30d: stats?.succeeded ?? 0, avgDurationMs: stats?.avg_ms ?? null },
+      fixes: repairs.list(id),
     };
   });
 
@@ -111,34 +121,7 @@ export async function flowRoutes(app: FastifyInstance) {
     const body = PublishBody.parse(request.body);
     if (body.flow.id !== id) throw badRequest('The automation id does not match the address.');
     const user = request.user!;
-    const version = db.tx(() => {
-      const existing = db.get<FlowRow>('SELECT * FROM flows WHERE id = ?', id);
-      const next = (existing?.latest_version ?? 0) + 1;
-      if (existing) {
-        db.run('UPDATE flows SET name = ?, description = ?, latest_version = ?, updated_at = ?, archived = 0 WHERE id = ?', body.flow.name, body.flow.description ?? '', next, now(), id);
-      } else {
-        db.run(
-          'INSERT INTO flows (id, name, description, latest_version, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          id,
-          body.flow.name,
-          body.flow.description ?? '',
-          next,
-          user.displayName,
-          now(),
-          now(),
-        );
-      }
-      db.run(
-        'INSERT INTO flow_versions (flow_id, version, definition, notes, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?)',
-        id,
-        next,
-        JSON.stringify(body.flow),
-        body.notes ?? '',
-        user.displayName,
-        now(),
-      );
-      return next;
-    });
+    const version = publishVersion(db, body.flow as unknown as Flow, body.notes ?? '', user.displayName);
     audit.record({ id: user.id, name: user.username }, 'flow.published', id, { version, name: body.flow.name });
     return { version };
   });
@@ -149,7 +132,23 @@ export async function flowRoutes(app: FastifyInstance) {
     if (!db.get('SELECT 1 FROM flows WHERE id = ?', id)) throw notFound('The automation');
     if (body.minutesSaved !== undefined) db.run('UPDATE flows SET minutes_saved = ? WHERE id = ?', body.minutesSaved, id);
     if (body.archived !== undefined) db.run('UPDATE flows SET archived = ? WHERE id = ?', body.archived ? 1 : 0, id);
+    if (body.aiRepair !== undefined) db.run('UPDATE flows SET ai_repair = ? WHERE id = ?', body.aiRepair ? 1 : 0, id);
     audit.record({ id: request.user!.id, name: request.user!.username }, 'flow.updated', id, body);
+    return { ok: true };
+  });
+
+  /** A builder keeps an AI fix from a robot run: it becomes the next version. */
+  app.post('/api/fixes/:id/approve', { preHandler: requireRole('builder') }, async (request) => {
+    const { id } = request.params as { id: string };
+    const result = repairs.approve(id, request.user!.displayName);
+    audit.record(actor(request), 'flow.fix_approved', result.flowId, { fix: id, version: result.version });
+    return result;
+  });
+
+  app.post('/api/fixes/:id/dismiss', { preHandler: requireRole('builder') }, async (request) => {
+    const { id } = request.params as { id: string };
+    const result = repairs.dismiss(id, request.user!.displayName);
+    audit.record(actor(request), 'flow.fix_dismissed', result.flowId, { fix: id });
     return { ok: true };
   });
 
@@ -181,5 +180,6 @@ function presentFlow(r: FlowRow) {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     archived: !!r.archived,
+    aiRepair: !!r.ai_repair,
   };
 }

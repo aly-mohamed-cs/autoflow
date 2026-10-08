@@ -1,6 +1,7 @@
 import type { Flow } from '@autoflow/flow-types';
 import { describe, expect, it } from 'vitest';
 import {
+  applyRepairPatch,
   duplicateStep,
   findStep,
   flatIds,
@@ -71,5 +72,32 @@ describe('flowOps', () => {
   it('round-trips list keys', () => {
     expect(parseListKey(listKey(ROOT))).toEqual(ROOT);
     expect(parseListKey(listKey({ parentId: 's1', block: 'then' }))).toEqual({ parentId: 's1', block: 'then' });
+  });
+
+  it('keeps an AI fix: changed settings and new ways to find the element', () => {
+    const base: Flow = {
+      id: 'f',
+      name: 'f',
+      elements: [{ id: 'btn', name: 'Log on', kind: 'web', screenshot: 'data:x', selectors: [{ strategy: 'text', value: 'Log on' }] }],
+      steps: [{ id: 'a', activity: 'browser.click', params: { element: 'btn' } }],
+    };
+    const fixed = applyRepairPatch(base, {
+      step_id: 'a',
+      params: { timeout: 5 },
+      element: { id: 'btn', name: 'Log on', kind: 'web', context: {}, selectors: [{ strategy: 'text', value: 'Sign in' }, { strategy: 'text', value: 'Log on' }] },
+      new_element: false,
+    });
+    expect(findStep(fixed, 'a')!.params).toEqual({ element: 'btn', timeout: 5 });
+    expect(fixed.elements![0]!.selectors.map((s) => s.value)).toEqual(['Sign in', 'Log on']);
+    expect(fixed.elements![0]!.screenshot).toBe('data:x');
+    expect(base.elements![0]!.selectors).toHaveLength(1);
+
+    const added = applyRepairPatch(base, {
+      step_id: 'a',
+      params: { element: 'el_ai_a' },
+      element: { id: 'el_ai_a', name: 'Save', kind: 'web', selectors: [{ strategy: 'text', value: 'Save' }] },
+      new_element: true,
+    });
+    expect(added.elements!.map((e) => e.id)).toEqual(['btn', 'el_ai_a']);
   });
 });

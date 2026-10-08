@@ -105,7 +105,38 @@ see exactly where and why it stopped.
 
 ---
 
-## 5. Good habits
+## 5. The AI assistant (if your company turned it on)
+
+Your administrator can connect Autoflow to an AI model that runs **on the company's own
+network** — nothing is sent to the internet. When it is on you get:
+
+* **Describe it** (Studio → Automations): write what the automation should do in plain words,
+  e.g. *“Open the invoices Excel file, type each row into the vendor portal and save the
+  reference number back”*. The assistant drafts the steps. Fill in what it can't know (web
+  addresses, pick the screen elements), then test it as usual.
+* **Explain this error**: on a failed step (Studio) or a failed run (dashboard), the assistant
+  explains in plain words what probably went wrong and what to change.
+* **Fixing failed steps by itself**: when a step fails — a button was renamed, a file or sheet
+  has a different name — the assistant looks at what is on the screen, adjusts **only that
+  step** and tries it again (up to 3 times). The run continues from that step, so nothing that
+  was already done is done twice.
+  * In a **test run** you see a card *“The AI assistant fixed … and it worked”* with what it
+    changed. Choose **Keep fix** to update your automation, or **Discard**.
+  * On **robots**, the fix is used for that run only. The automation shows *“AI fix to review”*
+    in the dashboard; a builder chooses **Keep fix (publish a new version)** or **Dismiss**.
+    Automations never change without a person approving it.
+  * Turn it off per automation in the dashboard (**Settings → Let the AI assistant fix failed
+    steps on robots**) or for your test runs in Studio (**Settings → AI assistant**).
+
+What it may change is deliberately limited to **how a step finds things**: which element on
+the screen, how long to wait, which sheet or column, and which file to *read*. It never changes
+web addresses, the values that are typed or written, where results are saved, or credentials,
+and it never touches steps that use a password. It never sees passwords or what was typed into
+fields.
+
+---
+
+## 6. Good habits
 
 * **Test with real data** before publishing; robots do exactly what you publish.
 * **Name things clearly** — automations, elements and variables. Colleagues will thank you.

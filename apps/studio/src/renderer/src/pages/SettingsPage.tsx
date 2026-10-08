@@ -1,7 +1,8 @@
-import { Badge, Button, Field, Icon, Segmented } from '@autoflow/ui';
+import { Badge, Button, Field, Icon, Segmented, Switch } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { OrchestratorSettings } from '../components/OrchestratorSettings';
 import { QuickLaunchSettings } from '../components/QuickLaunchSettings';
+import { aiRepairWanted, setAiRepairWanted, useAiEnabled } from '../lib/ai';
 import { useApp, type Theme } from '../store/app';
 
 export function SettingsPage() {
@@ -72,8 +73,37 @@ export function SettingsPage() {
           </section>
         )}
 
+        <AiSettings />
+
         <p className="text-xs text-subtle">Autoflow Studio {version}</p>
       </div>
     </div>
+  );
+}
+
+/** Shown once an administrator turned on the company's AI assistant. */
+function AiSettings() {
+  const enabled = useAiEnabled();
+  const [repair, setRepair] = useState(aiRepairWanted);
+  if (!enabled) return null;
+  return (
+    <section className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-card">
+      <h2 className="flex items-center gap-2 font-semibold">
+        <Icon name="sparkles" size={16} className="text-primary" /> AI assistant
+      </h2>
+      <Field
+        label="Let the AI fix failed steps during test runs"
+        inline
+        help="When a step fails, the assistant looks at the screen, adjusts that step and tries it again (up to 3 times). You decide whether to keep each fix."
+      >
+        <Switch
+          checked={repair}
+          onChange={(on) => {
+            setRepair(on);
+            setAiRepairWanted(on);
+          }}
+        />
+      </Field>
+    </section>
   );
 }

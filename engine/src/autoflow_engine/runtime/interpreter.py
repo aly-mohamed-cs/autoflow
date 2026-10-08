@@ -7,6 +7,8 @@ Error model
 * ``StepFailed`` bubbles up through parent blocks without triggering *their*
   retries, until a Try block catches it or the run ends as failed.
 * Loop/flow signals (break, continue, stop) are never treated as failures.
+* With AI self-repair on, a step that still fails after its retries gets up to
+  ``repair_attempts`` fixes from the AI assistant, each retried in place (see repair.py).
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from ..errors import (
 )
 from ..flow import Flow, Step, Variable
 from ..values import Table, to_jsonable, to_text
+from . import repair
 from .context import Emit, RunContext, RunControl, RunOptions, log
 from .expressions import to_date, to_number, truthy
 from .templates import resolve
@@ -84,6 +87,8 @@ class FlowRunner:
         self.run_id = run_id or uuid.uuid4().hex
         self.control = control or RunControl(options.breakpoints, options.step_mode)
         self.ctx = RunContext(flow, options, emit, self.control)
+        self._repair_calls = 0
+        self._repair_given_up: set[str] = set()
 
     # ------------------------------------------------------------------
     def run(self) -> RunResult:
@@ -207,6 +212,8 @@ class FlowRunner:
                     ctx.log(f"Attempt {attempt} of {attempts} failed: {err.message} Retrying in {delay:g}s.", "warning")
                     ctx.sleep(delay)
                     continue
+                if self._repair(step, adef, err):
+                    return {"status": "ok", "repaired": True}
                 if self.flow.settings.screenshot_on_error:
                     self._capture_screenshot("error")
                 if step.on_error.action == "continue":
@@ -215,6 +222,61 @@ class FlowRunner:
                             "error": {"message": err.message, "hint": err.hint}}
                 raise StepFailed(step.id, step.activity, err) from exc
         raise AssertionError("unreachable")
+
+    def _repair(self, step: Step, adef: ActivityDef | None, error: AutoflowError) -> bool:
+        """Ask the AI assistant for new settings and retry the step; True once it works."""
+        ctx = self.ctx
+        provider = ctx.options.repair
+        if provider is None or adef is None or not repair.can_repair(adef, step) or step.id in self._repair_given_up:
+            return False
+        tries = ctx.options.repair_attempts
+        history: list[dict[str, Any]] = []
+        for attempt in range(1, tries + 1):
+            if self._repair_calls >= repair.MAX_CALLS_PER_RUN:
+                ctx.log("The AI assistant already tried to fix several steps in this run; not asking again.", "warning")
+                break
+            self._repair_calls += 1
+            ctx.emit("repair_started", attempt=attempt, of=tries)
+            ctx.log(f"Asking the AI assistant how to fix this step (attempt {attempt} of {tries})...")
+            try:
+                request = repair.describe_failure(ctx, step, adef, error, history)
+                reply = provider(request)
+            except RunCancelled:
+                raise
+            except Exception as exc:
+                reason = friendly(exc).message
+                ctx.log(f"The AI assistant could not help: {reason}", "warning")
+                ctx.emit("repair_failed", attempt=attempt, reason=reason)
+                break
+            fix = repair.parse_fix(step, adef, reply)
+            if fix is None:
+                reason = str((reply or {}).get("explanation") or "It found no change that could fix this step.")
+                ctx.log(f"The AI assistant has no fix: {reason}", "warning")
+                ctx.emit("repair_failed", attempt=attempt, reason=reason)
+                break
+            trial = repair.try_fix(ctx, step, adef, fix, request.get("screen"))
+            ctx.emit("repair_trying", attempt=attempt, explanation=fix.explanation, patch=trial.patch)
+            ctx.log(f"AI fix: {fix.explanation} Trying the step again.", "warning")
+            try:
+                result = self._execute(trial.step, adef)
+                self._store_outputs(trial.step, adef, result)
+            except (StepFailed, FlowControl, RunCancelled):
+                trial.revert()
+                raise
+            except Exception as exc:
+                trial.revert()
+                if ctx.control.cancelled:
+                    raise RunCancelled() from exc
+                error = friendly(exc)
+                history.append({"explanation": fix.explanation, "changes": trial.patch, "error": error.message})
+                ctx.log(f"The fix did not work: {error.message}", "warning")
+                continue
+            trial.commit()
+            ctx.emit("step_repaired", attempt=attempt, explanation=fix.explanation, patch=trial.patch)
+            ctx.log("The AI fix worked. A person should review it before it is kept.", "warning")
+            return True
+        self._repair_given_up.add(step.id)
+        return False
 
     def _execute(self, step: Step, adef: ActivityDef) -> Any:
         variables = self.ctx.variables

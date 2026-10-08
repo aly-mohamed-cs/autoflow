@@ -193,4 +193,23 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX audit_ts ON audit(ts DESC);
   `,
+  /* 2: AI self-repair */ `
+  ALTER TABLE flows ADD COLUMN ai_repair INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE jobs ADD COLUMN repair_calls INTEGER NOT NULL DEFAULT 0;
+
+  -- Fixes the AI assistant made during robot runs, waiting for a builder to approve them.
+  CREATE TABLE repair_suggestions (
+    id            TEXT PRIMARY KEY,
+    flow_id       TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+    base_version  INTEGER NOT NULL,
+    job_id        TEXT NOT NULL UNIQUE,
+    patches       TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'dismissed')),
+    created_at    TEXT NOT NULL,
+    decided_by    TEXT,
+    decided_at    TEXT,
+    version       INTEGER
+  );
+  CREATE INDEX repair_suggestions_flow ON repair_suggestions(flow_id, status);
+  `,
 ];

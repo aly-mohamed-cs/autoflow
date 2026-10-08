@@ -208,3 +208,39 @@ def friendly_name(control: Any) -> str:
     if len(base) > 40:
         base = base[:39] + "…"
     return base if base.lower().endswith(noun) else f"{base} {noun}"
+
+
+def snapshot(context: dict[str, Any] | None, limit: int = 150) -> dict[str, Any]:
+    """The controls of an application window, for the AI assistant (names and ids, never typed values)."""
+    auto = uia()
+    if context and (context.get("window") or context.get("process")):
+        window = find_window(context, 2)
+    else:
+        window = top_window(auto.GetForegroundControl())
+    controls: list[dict[str, Any]] = []
+    for control, _depth in auto.WalkControl(window, includeTop=False, maxDepth=12):
+        if len(controls) >= limit:
+            break
+        item = {
+            "type": friendly_type(control),
+            "name": (control.Name or "").strip()[:80],
+            "automation_id": control.AutomationId or "",
+            "class_name": control.ClassName or "",
+        }
+        if item["type"] == "Edit" and item["name"] and item["name"] == (_value(control) or "").strip()[:80]:
+            item["name"] = ""  # some programs expose the typed text as the box's name
+        if item["name"] or item["automation_id"]:
+            controls.append({k: v for k, v in item.items() if v})
+    return {
+        "kind": "desktop",
+        "window": window.Name or "",
+        "process": process_name(window.ProcessId),
+        "controls": controls,
+    }
+
+
+def _value(control: Any) -> str | None:
+    try:
+        return specific(control).GetValuePattern().Value
+    except Exception:
+        return None

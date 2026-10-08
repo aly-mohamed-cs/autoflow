@@ -120,3 +120,39 @@ function pretty(text: string): string {
   );
   return out.length > 70 ? `${out.slice(0, 69)}…` : out;
 }
+
+/** What people see for a step: its label, or its sentence ("Click Sign in button"). */
+export function stepTitle(flow: Flow, stepId: string): string {
+  const elements = new Map((flow.elements ?? []).map((e) => [e.id, e.name]));
+  const find = (steps: Step[] = []): Step | undefined => {
+    for (const s of steps) {
+      if (s.id === stepId) return s;
+      for (const block of Object.values(s.blocks ?? {})) {
+        const found = find(block);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+  const step = find(flow.steps);
+  if (!step) return 'a step that no longer exists';
+  return step.label || sentenceText(step, DEFS.get(step.activity)?.sentence ?? step.activity, elements);
+}
+
+/** Setting titles of a step type, for describing changes in plain words. */
+export function settingTitle(activity: string | undefined, name: string): string {
+  const props = (activity ? DEFS.get(activity)?.params.properties : undefined) ?? {};
+  return String(props[name]?.title ?? name);
+}
+
+export function stepActivity(flow: Flow, stepId: string): string | undefined {
+  let found: string | undefined;
+  const visit = (steps: Step[] = []) => {
+    for (const s of steps) {
+      if (s.id === stepId) found = s.activity;
+      for (const block of Object.values(s.blocks ?? {})) visit(block);
+    }
+  };
+  visit(flow.steps);
+  return found;
+}

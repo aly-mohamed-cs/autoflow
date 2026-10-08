@@ -40,6 +40,8 @@ export interface RunStartOptions {
   headless?: boolean;
   /** Names of credentials the flow uses; the main process decrypts only these. */
   credentials?: string[];
+  /** Let the company AI assistant fix failed steps and retry them (the builder keeps or discards fixes). */
+  repair?: boolean;
 }
 
 export type RunControlAction = 'pause' | 'resume' | 'step' | 'stop';

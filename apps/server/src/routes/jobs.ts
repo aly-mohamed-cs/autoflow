@@ -53,6 +53,7 @@ export async function jobRoutes(app: FastifyInstance) {
       events: jobs.events(id),
       artifacts: artifacts.map((a) => ({ id: a.id, stepId: a.step_id, kind: a.kind, name: a.name, size: a.size, createdAt: a.created_at })),
       definition: jobs.definition(row),
+      fix: app.svc.repairs.forJob(id),
     };
   });
 

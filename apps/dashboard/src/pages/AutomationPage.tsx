@@ -2,9 +2,10 @@ import type { Flow } from '@autoflow/flow-types';
 import { Badge, Button, cn, Dialog, EmptyState, Field, Icon, Input, Select, Switch, Tabs } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { useMe } from '../App';
+import { AiFixes } from '../components/AiFixes';
 import { Card, ConfirmButton, ErrorBox, Loading, PageHeader, RunsTable } from '../components/common';
 import { StepTree } from '../components/StepTree';
-import { api, can, useApi, type FlowSummary, type InputVar, type Job, type Schedule } from '../lib/api';
+import { api, can, useApi, type AiFix, type FlowSummary, type InputVar, type Job, type Schedule } from '../lib/api';
 import { dateTime, duration, percent, relative } from '../lib/format';
 import { useLiveReload } from '../lib/live';
 import { go, href } from '../lib/router';
@@ -17,6 +18,7 @@ interface Detail {
   inputs: InputVar[];
   credentials: string[];
   stats: { runs30d: number; succeeded30d: number; avgDurationMs: number | null };
+  fixes: AiFix[];
 }
 
 export function AutomationPage({ id }: { id: string }) {
@@ -26,6 +28,7 @@ export function AutomationPage({ id }: { id: string }) {
   const [tab, setTab] = useState('runs');
   const [running, setRunning] = useState(false);
   useLiveReload(runs.reload, (e) => e.type === 'job.updated' && e.job.flowId === id);
+  useLiveReload(detail.reload, (e) => e.type === 'repair.updated' && e.flowId === id);
 
   if (detail.error) return <ErrorBox error={detail.error} onRetry={detail.reload} />;
   if (!detail.data) return <Loading />;
@@ -52,6 +55,8 @@ export function AutomationPage({ id }: { id: string }) {
         <span>Typical run {duration(stats.avgDurationMs ? Math.round(stats.avgDurationMs) : null)}</span>
         {detail.data.credentials.length > 0 && <span>Uses credentials: {detail.data.credentials.join(', ')}</span>}
       </div>
+
+      <AiFixes fixes={detail.data.fixes} flow={detail.data.definition} onDecided={detail.reload} />
 
       <Card padded={false}>
         <Tabs
@@ -478,8 +483,25 @@ function FlowSettings({ flow, onSaved }: { flow: FlowSummary; onSaved: () => voi
   const me = useMe();
   const [minutes, setMinutes] = useState(String(flow.minutesSaved));
   const builder = can(me.role, 'builder');
+  const { data: ai } = useApi<{ enabled: boolean }>('/api/ai/status');
   return (
     <div className="max-w-lg space-y-5 p-4">
+      {ai?.enabled && (
+        <Field
+          label="Let the AI assistant fix failed steps on robots"
+          inline
+          help="When a step fails, the assistant adjusts that step and tries it again (up to 3 times) without repeating earlier steps. A fix that works is offered here for a builder to keep; the automation never changes on its own."
+        >
+          <Switch
+            checked={flow.aiRepair}
+            disabled={!builder}
+            onChange={async (aiRepair) => {
+              await api(`/api/flows/${flow.id}`, { method: 'PATCH', body: { aiRepair } });
+              onSaved();
+            }}
+          />
+        </Field>
+      )}
       <Field label="Minutes of manual work saved per run" help="Used for the “time saved” figure on the overview." htmlFor="mins">
         <div className="flex gap-2">
           <Input id="mins" type="number" min={0} value={minutes} disabled={!builder} onChange={(e) => setMinutes(e.target.value)} className="w-32" />
