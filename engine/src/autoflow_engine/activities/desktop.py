@@ -91,7 +91,8 @@ def launch(ctx: RunContext, p: LaunchParams) -> None:
     if p.close_at_end:
         ctx.add_cleanup(f"app:{program.name}", lambda: _terminate(process))
     if p.window:
-        window = find_window({"window": p.window}, p.timeout)
+        # The program just started: its windows are the ones to look at.
+        window = find_window({"window": p.window, "process": program.name}, p.timeout, ctx.log)
         window.SetActive(waitTime=0.1)
     else:
         wait(1)
@@ -109,6 +110,10 @@ def _terminate(process: subprocess.Popen) -> None:
 
 class WindowParams(Params):
     window: str = Param(title="Window title contains", placeholder="Invoices")
+    process: str = Param(
+        "", title="Program", placeholder="EXCEL.EXE", advanced=True,
+        description="The program the window belongs to. Helps find it when its title changes (document names...).",
+    )
     timeout: float = Param(30, title="Wait up to (seconds)", ge=0, le=600, advanced=True)
 
 
@@ -123,7 +128,7 @@ class WindowParams(Params):
 )
 def activate_window(ctx: RunContext, p: WindowParams) -> None:
     _init(ctx)
-    window = find_window({"window": p.window}, p.timeout)
+    window = find_window({"window": p.window, "process": p.process}, p.timeout, ctx.log)
     window.SetActive(waitTime=0.2)
 
 
@@ -138,7 +143,8 @@ def activate_window(ctx: RunContext, p: WindowParams) -> None:
 def close_window(ctx: RunContext, p: WindowParams) -> None:
     _init(ctx)
     try:
-        window = find_window({"window": p.window}, p.timeout)
+        # Exact title only: closing a look-alike window could close someone's other document.
+        window = find_window({"window": p.window, "process": p.process}, p.timeout, close_match=False)
     except ActivityError:
         return
     pattern = window.GetWindowPattern()

@@ -8,6 +8,8 @@ name and type, or its position among similar controls. They are tried in order.
 from __future__ import annotations
 
 import ctypes
+import re
+import time
 from typing import Any
 
 from ..errors import ActivityError
@@ -65,21 +67,54 @@ def top_window(control: Any) -> Any:
         current = parent
 
 
-def find_window(context: dict[str, Any], timeout: float) -> Any:
-    """The application window an element belongs to (title contains, and program if known)."""
+# How long to hold out for the exact title before accepting a close one (a program that was
+# just started may still be opening the window that has it).
+CLOSE_MATCH_AFTER_S = 2.0
+_WORDS = re.compile(r"[\w+#]+")
+
+
+def title_similarity(wanted: str, actual: str) -> float:
+    """Share of the words of `wanted` that appear in `actual` (order and punctuation ignored).
+
+    Window titles change between runs: "Book1 - Excel" becomes "Microsoft Excel - Book1" or
+    "Invoices.xlsx - Excel", "*new 4 - Notepad++" becomes "new 5 - Notepad++".
+    """
+    words = {w for w in _WORDS.findall(wanted.casefold()) if len(w) > 1}
+    if not words:
+        return 0.0
+    found = {w for w in _WORDS.findall(actual.casefold()) if len(w) > 1}
+    return len(words & found) / len(words)
+
+
+def find_window(context: dict[str, Any], timeout: float, log: Any = None, close_match: bool = True) -> Any:
+    """The application window an element belongs to.
+
+    The exact title (contains, and the program if known) wins. If it doesn't show up, a window
+    of the same program, or with a very similar title, is used instead - titles carry document
+    names and states that change from run to run - and the run log says so. ``close_match=False``
+    accepts only the exact title (e.g. before closing a window: never close the wrong document).
+    """
     auto = uia()
-    title = str(context.get("window") or "").strip().casefold()
+    title = str(context.get("window") or "").strip()
     program = str(context.get("process") or "").strip().casefold()
     deadline = Deadline(timeout)
+    started = time.monotonic()
     while True:
-        for window in auto.GetRootControl().GetChildren():
-            name = (window.Name or "").casefold()
-            if title and title not in name:
+        windows = [(w, (w.Name or "").strip()) for w in auto.GetRootControl().GetChildren()]
+        for window, name in windows:
+            if title and title.casefold() not in name.casefold():
                 continue
             if program and process_name(window.ProcessId).casefold() != program:
                 continue
             if title or program:
                 return window
+        if close_match and title and (time.monotonic() - started >= CLOSE_MATCH_AFTER_S or deadline.passed):
+            near = _closest_window(windows, title, program)
+            if near is not None:
+                if log is not None:
+                    log(f"No window is titled '{title}' any more; using '{near.Name}' "
+                        f"({'the same program' if program else 'a very similar title'}).", "warning")
+                return near
         if deadline.passed:
             break
         wait(POLL)
@@ -88,6 +123,21 @@ def find_window(context: dict[str, Any], timeout: float) -> Any:
         f"The window '{what}' is not open.",
         "Start the application first (e.g. with 'Open application'), and check it isn't minimized behind a login.",
     )
+
+
+def _closest_window(windows: list[tuple[Any, str]], title: str, program: str) -> Any | None:
+    """Best stand-in for a window whose exact title wasn't found (windows are in front-to-back order)."""
+    candidates = [(w, n) for w, n in windows if n]
+    if program:
+        candidates = [(w, n) for w, n in candidates if process_name(w.ProcessId).casefold() == program]
+        if not candidates:
+            return None
+    scored = [(title_similarity(title, n), i, w) for i, (w, n) in enumerate(candidates)]
+    best_score, _, best = max(scored, key=lambda s: (s[0], -s[1]), default=(0.0, 0, None))
+    if best_score >= 0.5:
+        return best
+    # Same program but a different document (e.g. Book1 vs. the file saved earlier): the one in front.
+    return candidates[0][0] if program else None
 
 
 def _conditions(selector: Selector) -> dict[str, Any]:
@@ -133,7 +183,7 @@ def find(element: Element, timeout: float, log: Any = None) -> Any:
     if element.kind != "desktop":
         raise ActivityError(f"'{element.name}' is a web element, not a desktop one.")
     deadline = Deadline(timeout)
-    window = find_window(element.context, timeout)
+    window = find_window(element.context, timeout, log)
     while True:
         for i, selector in enumerate(element.selectors):
             if selector.strategy != "uia":
@@ -241,11 +291,16 @@ def snapshot(context: dict[str, Any] | None, limit: int = 150) -> dict[str, Any]
             item["name"] = ""  # some programs expose the typed text as the box's name
         if item["name"] or item["automation_id"]:
             controls.append({k: v for k, v in item.items() if v})
+    open_windows = []
+    for w in auto.GetRootControl().GetChildren():
+        if (w.Name or "").strip() and len(open_windows) < 30:
+            open_windows.append({"title": w.Name.strip()[:120], "program": process_name(w.ProcessId)})
     return {
         "kind": "desktop",
         "window": window.Name or "",
         "process": process_name(window.ProcessId),
         "controls": controls,
+        "open_windows": open_windows,  # lets the assistant pick the right window when a title changed
     }
 
 

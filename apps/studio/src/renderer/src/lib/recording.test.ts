@@ -54,7 +54,7 @@ describe('stepsFromRecording', () => {
         { action: 'select', option: 'EUR', element: box('b', 'Currency list', 'cboCurrency') },
         { action: 'click', click: 'double', element: box('c', 'Invoice row', 'row1') },
         { action: 'keys', keys: 'Control+S' },
-        { action: 'activate', window: 'Untitled - Notepad' },
+        { action: 'activate', window: 'Untitled - Notepad', program: 'notepad.exe' },
       ],
       { addOpenBrowser: true, startUrl: 'https://not-used' },
     );
@@ -65,7 +65,7 @@ describe('stepsFromRecording', () => {
       ['desktop.select', { element: 'b', option: 'EUR' }],
       ['desktop.click', { element: 'c', click: 'double' }],
       ['desktop.send_keys', { keys: 'Control+S' }],
-      ['desktop.activate_window', { window: 'Untitled - Notepad' }],
+      ['desktop.activate_window', { window: 'Untitled - Notepad', process: 'notepad.exe' }],
     ]);
   });
 

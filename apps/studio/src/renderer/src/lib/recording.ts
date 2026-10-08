@@ -79,7 +79,7 @@ export function stepsFromRecording(
         if (a.keys) step('desktop.send_keys', { keys: a.keys });
         break;
       case 'activate':
-        if (a.window) step('desktop.activate_window', { window: a.window });
+        if (a.window) step('desktop.activate_window', { window: a.window, ...(a.program ? { process: a.program } : {}) });
         break;
       case 'launch':
         if (a.program) step('desktop.launch', { program: a.program, window: a.window ?? '' });

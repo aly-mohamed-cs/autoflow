@@ -376,7 +376,8 @@ class DesktopRecorder:
             action = {"action": "launch", "program": path, "window": title}
         else:
             # Opened by an earlier recorded step (e.g. a double-click in File Explorer) or already open.
-            action = {"action": "activate", "window": title}
+            # The program goes along: titles change from run to run (document names, states).
+            action = {"action": "activate", "window": title, "program": process_name(pid)}
         self._state.last_was_shell = program == "explorer.exe"
         if title or action["action"] == "launch":
             self._state.actions.append(action)

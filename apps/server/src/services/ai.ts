@@ -75,7 +75,7 @@ const PROTECTED_UI = new Set(['credential', 'password']);
 // typed values, output files or credentials (robots use a fix before anyone reviews it, and page
 // text could try to steer the model). Keep in sync with engine/src/autoflow_engine/runtime/repair.py.
 const REPAIRABLE_CATEGORIES = new Set(['Browser', 'Desktop', 'Excel', 'Files', 'Data', 'Text', 'PDF']);
-const LOCATOR_PARAMS = new Set(['element', 'selector', 'timeout', 'sheet', 'range', 'column', 'columns', 'has_header', 'encoding']);
+const LOCATOR_PARAMS = new Set(['element', 'selector', 'timeout', 'sheet', 'range', 'column', 'columns', 'has_header', 'encoding', 'window', 'process']);
 const READ_ONLY = new Set([
   'browser.get_text', 'browser.extract_table', 'browser.wait_for', 'browser.element_exists', 'browser.page_info',
   'desktop.get_text', 'desktop.wait_for', 'desktop.read_table',

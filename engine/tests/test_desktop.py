@@ -329,3 +329,48 @@ def test_stopping_from_the_recording_bar_tells_studio():
     collected = threading.Event()
     recorder.stop(lambda result=None, error=None: collected.set())  # Studio then collects the steps
     assert collected.wait(10)
+
+
+def test_title_similarity_handles_changing_window_titles():
+    from autoflow_engine.selectors.desktop import _closest_window, title_similarity
+
+    assert title_similarity("Book1 - Excel (Product Activation Failed)",
+                            "Microsoft Excel (Product Activation Failed) - Book1") == 1.0
+    assert title_similarity("*new 4 - Notepad++", "new 5 - Notepad++") == 1.0
+    assert title_similarity("Invoices - Demo ERP", "Invoices.xlsx - Excel") < 0.5  # too different to count
+
+    class W:
+        def __init__(self, name):
+            self.Name = name
+
+    windows = [(W("Inbox - Outlook"), "Inbox - Outlook"), (W("new 5 - Notepad++"), "new 5 - Notepad++")]
+    assert _closest_window(windows, "*new 4 - Notepad++", "").Name == "new 5 - Notepad++"
+    assert _closest_window(windows, "Calculator", "") is None
+
+
+def test_windows_are_found_when_their_title_changed(h, demo_erp):
+    """Recorded titles go out of date (document names, states); the program finds the window."""
+    stale = {"id": "customer", "name": "Customer box", "kind": "desktop",
+             "context": {"window": "Old title of the invoice screen", "process": "DemoErp.exe"},
+             "selectors": [{"strategy": "uia", "value": "Edit #txtCustomer",
+                            "options": {"automation_id": "txtCustomer", "control_type": "Edit"}}]}
+    from autoflow_engine.flow import Flow
+    from autoflow_engine.runtime.context import RunOptions
+    from autoflow_engine.runtime.interpreter import FlowRunner
+
+    events: list[dict] = []
+    flow = Flow.model_validate({"id": "t", "name": "t", "elements": [stale], "settings": {"default_timeout": 6}, "steps": [
+        step("desktop.launch", {"program": str(demo_erp), "window": "Demo ERP - Old title", "close_at_end": True}),
+        step("desktop.activate_window", {"window": "Some other title", "process": "DemoErp.exe"}),
+        step("desktop.type", {"element": "customer", "text": "Found it"}),
+        step("desktop.get_text", {"element": "customer"}, outputs={"text": "typed"}),
+        # Closing only ever uses the exact title: a look-alike is left alone.
+        step("desktop.close_window", {"window": "Demo ERP - Old title", "process": "DemoErp.exe", "timeout": 1}),
+        step("desktop.activate_window", {"window": "Demo ERP - Invoices", "timeout": 2}),
+    ]})
+    runner = FlowRunner(flow, RunOptions(work_dir=h.tmp_path / "run"), events.append)
+    result = runner.run()
+    assert result.status == "succeeded", result.error
+    assert runner.ctx.variables["typed"] == "Found it"
+    warnings = [e["message"] for e in events if e["event"] == "log" and e.get("level") == "warning"]
+    assert any("using 'Demo ERP - Invoices'" in w for w in warnings), warnings

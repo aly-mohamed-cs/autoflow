@@ -41,7 +41,7 @@ PROTECTED_UI = frozenset({"credential", "password"})
 # anyone reviews it, and page text could try to steer the model (prompt injection).
 # Keep in sync with apps/server/src/services/ai.ts.
 LOCATOR_PARAMS = frozenset({"element", "selector", "timeout", "sheet", "range", "column", "columns", "has_header",
-                            "encoding"})
+                            "encoding", "window", "process"})
 READ_ONLY = frozenset({
     "browser.get_text", "browser.extract_table", "browser.wait_for", "browser.element_exists", "browser.page_info",
     "desktop.get_text", "desktop.wait_for", "desktop.read_table",
