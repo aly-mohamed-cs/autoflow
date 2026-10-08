@@ -24,7 +24,7 @@ import { Jobs } from './services/jobs.js';
 import { Repairs } from './services/repairs.js';
 import { Queues, Scheduler } from './services/triggers.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export interface Services {
   config: Config;
