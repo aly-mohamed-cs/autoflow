@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
-from ..runtime.context import RunContext
+from ..runtime.context import Deadline, RunContext, wait
 from ..selectors.web import find, selector_from_text
 from ..values import Table, to_text
 
@@ -471,13 +471,18 @@ def wait_for(ctx: RunContext, p: WaitForParams) -> bool:
         locator = _locate(ctx, ElementParams(element=p.element, selector=p.selector, timeout=0), visible=False)
     except ActivityError:
         return True  # already gone
-    try:
-        locator.wait_for(state="hidden", timeout=timeout * 1000)
-        return True
-    except Exception:
-        if p.fail_if_not:
-            raise ActivityError(f"The element was still on the page after {timeout:g} seconds.") from None
-        return False
+    # Polled rather than one long browser-side wait, so Stop and Pause work meanwhile.
+    deadline = Deadline(timeout)
+    while not deadline.passed:
+        try:
+            if not locator.is_visible():
+                return True
+        except Exception:
+            return True  # the page changed: it's gone
+        wait(0.25)
+    if p.fail_if_not:
+        raise ActivityError(f"The element was still on the page after {timeout:g} seconds.")
+    return False
 
 
 class ExistsParams(ElementParams):

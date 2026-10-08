@@ -8,11 +8,11 @@ name and type, or its position among similar controls. They are tried in order.
 from __future__ import annotations
 
 import ctypes
-import time
 from typing import Any
 
 from ..errors import ActivityError
 from ..flow import Element, Selector
+from ..runtime.context import Deadline, wait
 
 POLL = 0.25
 
@@ -70,7 +70,7 @@ def find_window(context: dict[str, Any], timeout: float) -> Any:
     auto = uia()
     title = str(context.get("window") or "").strip().casefold()
     program = str(context.get("process") or "").strip().casefold()
-    deadline = time.monotonic() + timeout
+    deadline = Deadline(timeout)
     while True:
         for window in auto.GetRootControl().GetChildren():
             name = (window.Name or "").casefold()
@@ -80,9 +80,9 @@ def find_window(context: dict[str, Any], timeout: float) -> Any:
                 continue
             if title or program:
                 return window
-        if time.monotonic() >= deadline:
+        if deadline.passed:
             break
-        time.sleep(POLL)
+        wait(POLL)
     what = context.get("window") or context.get("process") or "the application"
     raise ActivityError(
         f"The window '{what}' is not open.",
@@ -132,7 +132,7 @@ def find(element: Element, timeout: float, log: Any = None) -> Any:
     """Wait up to `timeout` seconds for the control described by `element`."""
     if element.kind != "desktop":
         raise ActivityError(f"'{element.name}' is a web element, not a desktop one.")
-    deadline = time.monotonic() + timeout
+    deadline = Deadline(timeout)
     window = find_window(element.context, timeout)
     while True:
         for i, selector in enumerate(element.selectors):
@@ -144,9 +144,9 @@ def find(element: Element, timeout: float, log: Any = None) -> Any:
                     log(f"'{element.name}' was found using a backup method. The application may have changed; "
                         "consider picking it again.", "warning")
                 return ctrl
-        if time.monotonic() >= deadline:
+        if deadline.passed:
             break
-        time.sleep(POLL)
+        wait(POLL)
     raise ActivityError(
         f"Couldn't find '{element.name}' in '{window.Name}' after {timeout:g} seconds.",
         "Check that the right screen of the application is showing, or pick the element again.",

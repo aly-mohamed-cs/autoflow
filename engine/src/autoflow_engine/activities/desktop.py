@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import contextlib
 import subprocess
-import time
 from pathlib import Path
 from typing import Any, Literal
 
 from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
 from ..flow import Element
-from ..runtime.context import RunContext
+from ..runtime.context import Deadline, RunContext, wait
 from ..selectors.desktop import find, find_window, specific, uia
 from ..values import Table, to_text
 
@@ -95,7 +94,7 @@ def launch(ctx: RunContext, p: LaunchParams) -> None:
         window = find_window({"window": p.window}, p.timeout)
         window.SetActive(waitTime=0.1)
     else:
-        time.sleep(1)
+        wait(1)
     ctx.resources["desktop_window"] = p.window
 
 
@@ -272,7 +271,7 @@ def _list_items(control: Any) -> list[str]:
         return []
     try:
         expander.Expand()
-        time.sleep(0.2)
+        wait(0.2)
         return [c.Name for c in _descendants(control, 3) if c.ControlTypeName == "ListItemControl" and c.Name]
     except Exception:
         return []
@@ -386,7 +385,7 @@ class WaitParams(ElementParams):
 )
 def wait_for(ctx: RunContext, p: WaitParams) -> None:
     timeout = p.timeout if p.timeout is not None else ctx.flow.settings.default_timeout
-    deadline = time.monotonic() + timeout
+    deadline = Deadline(timeout)
     if p.state == "appears":
         _locate(ctx, p)
         return
@@ -407,7 +406,7 @@ def wait_for(ctx: RunContext, p: WaitParams) -> None:
                 shown = _text_of(control).casefold()
                 if (wanted in shown) == (p.state == "text contains"):
                     return
-        if time.monotonic() >= deadline:
+        if deadline.passed:
             break
         ctx.sleep(0.25)
     raise ActivityError(f"'{p.state} {p.text}'".replace(" ''", "") + f" did not happen within {timeout:g} seconds.")

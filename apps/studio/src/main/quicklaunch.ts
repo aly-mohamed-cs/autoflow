@@ -11,6 +11,7 @@ export class QuickLaunch {
   private entries: QuickLaunchEntry[] = [];
   private tray: Tray | null = null;
   private failed: string[] = [];
+  private registered: string[] = [];
 
   constructor(
     userData: string,
@@ -47,12 +48,15 @@ export class QuickLaunch {
 
   /** Register the shortcuts and rebuild the tray menu. */
   private apply(): void {
-    globalShortcut.unregisterAll();
+    // Only our own keys: the test-run Pause/Stop keys (runguard.ts) must stay registered.
+    for (const accelerator of this.registered) globalShortcut.unregister(accelerator);
+    this.registered = [];
     this.failed = [];
     for (const entry of this.entries) {
       try {
         const ok = globalShortcut.register(entry.accelerator, () => void this.run(entry));
-        if (!ok) this.failed.push(entry.accelerator);
+        if (ok) this.registered.push(entry.accelerator);
+        else this.failed.push(entry.accelerator);
       } catch {
         this.failed.push(entry.accelerator);
       }
@@ -90,7 +94,8 @@ export class QuickLaunch {
   }
 
   dispose(): void {
-    globalShortcut.unregisterAll();
+    for (const accelerator of this.registered) globalShortcut.unregister(accelerator);
+    this.registered = [];
     this.tray?.destroy();
     this.tray = null;
   }

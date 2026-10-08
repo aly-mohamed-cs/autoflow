@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { FILE_PROTOCOL, IPC, type AiDraft, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
+import { RunGuard } from './runguard';
 import { QuickLaunch } from './quicklaunch';
 import { Updates } from './updates';
 import { FlowStore, newFlowId, Vault } from './storage';
@@ -39,14 +40,58 @@ const broadcast = (channel: string, payload: unknown) => {
 const engine = new EngineProcess(
   findPython(app.getAppPath(), process.resourcesPath),
   (method, params) => {
-    if (method === 'run.event') broadcast(IPC.runEvent, params);
-    else broadcast(IPC.engineNotification, { method, params });
+    if (method === 'run.event') {
+      broadcast(IPC.runEvent, params);
+      runGuard.onEvent(params as { event?: string });
+    } else {
+      broadcast(IPC.engineNotification, { method, params });
+    }
   },
   (status: EngineStatus) => broadcast(IPC.engineStatusChanged, status),
   // The engine asks for an AI fix when a step fails during a test run with repair on.
   async (method, params) => {
     if (method !== 'host.repair') throw new Error(`Unknown request ${method}`);
     return orchestrator.request('POST', '/api/ai/repair-step', params, 620_000);
+  },
+);
+
+const WEB_PREFERENCES = {
+  preload: join(__dirname, '../preload/index.js'),
+  contextIsolation: true,
+  nodeIntegration: false,
+  sandbox: true,
+};
+
+function loadRenderer(win: BrowserWindow, view?: string): void {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    void win.loadURL(view ? `${process.env.ELECTRON_RENDERER_URL}?view=${view}` : process.env.ELECTRON_RENDERER_URL);
+  } else {
+    void win.loadFile(join(__dirname, '../renderer/index.html'), view ? { query: { view } } : undefined);
+  }
+}
+
+// Pause / Stop for test runs while another program is in front (floating bar + shortcut keys).
+const runGuard = new RunGuard(
+  () => mainWindow,
+  (action) => void engine.call(`run.${action}`).catch(() => undefined),
+  () => {
+    const bar = new BrowserWindow({
+      width: 460,
+      height: 58,
+      frame: false,
+      resizable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      focusable: false, // clicking it must not take the keyboard away from the program being automated
+      show: false,
+      title: 'Autoflow test run',
+      backgroundColor: '#1f2430',
+      webPreferences: WEB_PREFERENCES,
+    });
+    bar.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    bar.webContents.on('will-navigate', (event) => event.preventDefault());
+    loadRenderer(bar, 'runbar');
+    return bar;
   },
 );
 
@@ -64,14 +109,12 @@ function createWindow(): void {
     title: 'Autoflow Studio',
     backgroundColor: '#f5f6f8',
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    webPreferences: WEB_PREFERENCES,
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+  for (const change of ['focus', 'blur', 'minimize', 'restore', 'show', 'hide'] as const) {
+    mainWindow.on(change as 'focus', () => runGuard.sync());
+  }
   // With quick-launch hotkeys set up, closing the window keeps Studio in the tray so they keep working.
   mainWindow.on('close', (event) => {
     if (!quitting && quickLaunch.active) {
@@ -90,11 +133,7 @@ function createWindow(): void {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url !== mainWindow?.webContents.getURL()) event.preventDefault();
   });
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  loadRenderer(mainWindow);
 }
 
 /** Only files inside the runs folder (screenshots, downloads) may be shown in the UI. */

@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
-from ..runtime.context import RunContext
+from ..runtime.context import Deadline, RunContext, wait
 from ..values import Table, to_text
 
 F = "Files"
@@ -235,7 +235,7 @@ class WaitForFileParams(Params):
 def wait_for_file(ctx: RunContext, p: WaitForFileParams) -> str:
     folder = _path(p.folder, "folder")
     started = time.time() - 1
-    deadline = time.monotonic() + p.timeout
+    deadline = Deadline(p.timeout)
     partial = (".crdownload", ".tmp", ".part", ".download")
     while True:
         if folder.is_dir():
@@ -248,7 +248,7 @@ def wait_for_file(ctx: RunContext, p: WaitForFileParams) -> str:
                     continue
                 if _is_stable(f):
                     return str(f)
-        if time.monotonic() >= deadline:
+        if deadline.passed:
             raise ActivityError(
                 f"No file matching '{p.pattern}' appeared in '{folder}' within {p.timeout:g} seconds.",
                 "Check that the file is saved to this folder, or wait longer.",
@@ -260,7 +260,7 @@ def _is_stable(path: Path) -> bool:
     """True when the file is no longer being written."""
     try:
         size = path.stat().st_size
-        time.sleep(0.3)
+        wait(0.3)
         if path.stat().st_size != size:
             return False
         with path.open("rb"):

@@ -19,6 +19,10 @@ No programming is needed. If you can describe the task step by step, you can aut
 4. Click a step to fill in its settings on the right. Red settings still need a value.
 5. Press **Test run**. Watch each step turn green, see the log at the bottom, and check the
    **Variables** tab to see what the automation read.
+   **Pause** and **Stop** work at any moment, also while a step is waiting for a window or a
+   page. When the automation works in another program, Studio is behind it: use the small bar
+   at the top of the screen, or the keys **Ctrl+Shift+F11** (pause / continue) and
+   **Ctrl+Shift+F12** (stop) from any program.
 6. When it works, press **Publish**. It now appears in the dashboard, ready for robots.
 
 > **Tip — let Autoflow watch you.** Press **Record** and choose:

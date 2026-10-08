@@ -327,8 +327,23 @@ function Toolbar() {
 
 function RunControls({ phase, startedAt, disabled, hasErrors }: { phase: string; startedAt: number | null; disabled: boolean; hasErrors: boolean }) {
   const elapsed = useElapsed(startedAt, phase === 'running' || phase === 'paused' || phase === 'starting');
-  const control = (action: 'pause' | 'resume' | 'step' | 'stop') =>
-    window.autoflow.run.control(action).catch((e) => useApp.getState().toast(errorMessage(e), 'error'));
+  // Feedback until the engine confirms (it reacts at once, also while a step is waiting).
+  const [requested, setRequested] = useState<'pause' | 'stop' | null>(null);
+  useEffect(() => setRequested(null), [phase]);
+  const control = (action: 'pause' | 'resume' | 'step' | 'stop') => {
+    if (action === 'pause' || action === 'stop') setRequested(action);
+    window.autoflow.run.control(action).catch((e) => {
+      setRequested(null);
+      useApp.getState().toast(errorMessage(e), 'error');
+    });
+  };
+  const stopButton = (
+    <Tooltip content="Stop the test run (Ctrl+Shift+F12, works from any program)">
+      <Button variant="danger" disabled={requested === 'stop'} onClick={() => control('stop')} icon={<Icon name="square" size={13} />}>
+        {requested === 'stop' ? 'Stopping…' : 'Stop'}
+      </Button>
+    </Tooltip>
+  );
 
   if (phase === 'running' || phase === 'starting') {
     return (
@@ -336,8 +351,12 @@ function RunControls({ phase, startedAt, disabled, hasErrors }: { phase: string;
         <span className="flex items-center gap-1.5 text-[13px] text-primary">
           <Spinner /> Running {elapsed}
         </span>
-        <Button onClick={() => control('pause')} icon={<Icon name="pause" size={15} />}>Pause</Button>
-        <Button variant="danger" onClick={() => control('stop')} icon={<Icon name="square" size={13} />}>Stop</Button>
+        <Tooltip content="Pause (Ctrl+Shift+F11, works from any program)">
+          <Button disabled={requested !== null} onClick={() => control('pause')} icon={<Icon name="pause" size={15} />}>
+            {requested === 'pause' ? 'Pausing…' : 'Pause'}
+          </Button>
+        </Tooltip>
+        {stopButton}
       </div>
     );
   }
@@ -348,8 +367,10 @@ function RunControls({ phase, startedAt, disabled, hasErrors }: { phase: string;
         <Tooltip content="Run only the next step">
           <Button onClick={() => control('step')} icon={<Icon name="step-forward" size={15} />}>Next step</Button>
         </Tooltip>
-        <Button variant="primary" onClick={() => control('resume')} icon={<Icon name="play" size={15} />}>Continue</Button>
-        <Button variant="danger" onClick={() => control('stop')} icon={<Icon name="square" size={13} />}>Stop</Button>
+        <Tooltip content="Continue (Ctrl+Shift+F11)">
+          <Button variant="primary" onClick={() => control('resume')} icon={<Icon name="play" size={15} />}>Continue</Button>
+        </Tooltip>
+        {stopButton}
       </div>
     );
   }

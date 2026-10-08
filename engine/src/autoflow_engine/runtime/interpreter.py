@@ -36,7 +36,7 @@ from ..errors import (
 from ..flow import Flow, Step, Variable
 from ..values import Table, to_jsonable, to_text
 from . import repair
-from .context import Emit, RunContext, RunControl, RunOptions, log
+from .context import Emit, RunContext, RunControl, RunOptions, log, set_active_control
 from .expressions import to_date, to_number, truthy
 from .templates import resolve
 
@@ -96,6 +96,7 @@ class FlowRunner:
         started = time.monotonic()
         ctx.emit("run_started", run_id=self.run_id, flow_id=self.flow.id, flow_name=self.flow.name)
         status, error = "succeeded", None
+        set_active_control(self.control)  # lets waits inside steps be stopped and paused
         try:
             self._init_variables()
             self.run_steps(self.flow.steps)
@@ -128,6 +129,7 @@ class FlowRunner:
                 "details": traceback.format_exc(limit=8),
             }
         finally:
+            set_active_control(None)
             ctx.current_step_id = None
             ctx.cleanup()
         outputs = {v.name: ctx.get(v.name) for v in self.flow.variables if v.is_output}
@@ -161,7 +163,9 @@ class FlowRunner:
             return
         ctx = self.ctx
         ctx.control.checkpoint(
-            step.id, on_pause=lambda reason: ctx.emit("paused", step_id=step.id, reason=reason)
+            step.id,
+            on_pause=lambda reason: ctx.emit("paused", step_id=step.id, reason=reason),
+            on_resume=lambda: ctx.emit("resumed", step_id=step.id),
         )
         parent_step = ctx.current_step_id
         ctx.current_step_id = step.id

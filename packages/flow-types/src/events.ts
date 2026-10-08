@@ -36,6 +36,7 @@ export type RunEvent =
   | (Base & { event: 'variable'; name: string; value: unknown })
   | (Base & { event: 'screenshot'; path: string; reason: 'error' | 'step' })
   | (Base & { event: 'paused'; step_id: string; reason: 'breakpoint' | 'paused' })
+  | (Base & { event: 'resumed'; step_id: string })
   | (Base & { event: 'repair_started'; step_id: string; attempt: number; of: number })
   | (Base & { event: 'repair_trying'; step_id: string; attempt: number; explanation: string; patch: RepairPatch })
   | (Base & { event: 'repair_failed'; step_id: string; attempt: number; reason: string })

@@ -214,3 +214,62 @@ def _wait_for(predicate, timeout=5.0):
             return
         time.sleep(0.02)
     raise AssertionError("condition not reached")
+
+
+def _run_in_thread(h, steps):
+    import threading
+
+    from autoflow_engine.runtime.context import RunControl
+
+    control = RunControl()
+    box: dict = {}
+    thread = threading.Thread(target=lambda: box.update(result=h.run(steps, control=control)), daemon=True)
+    thread.start()
+    return control, thread, box
+
+
+def _wait_for_event(h, kind, timeout=10):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(e["event"] == kind for e in list(h.events)):
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"no {kind} event")
+
+
+def test_stop_ends_a_step_that_is_waiting(h, tmp_path):
+    """Stop must not wait for a step's time limit (looking for a window or file can take minutes)."""
+    import time
+
+    control, thread, box = _run_in_thread(h, [
+        step("files.wait_for_file", {"folder": str(tmp_path), "pattern": "never.txt", "timeout": 120}),
+    ])
+    _wait_for_event(h, "step_started")
+    time.sleep(0.5)
+    stopped_at = time.monotonic()
+    control.cancel()
+    thread.join(5)
+    assert box["result"].status == "cancelled"
+    assert time.monotonic() - stopped_at < 2
+
+
+def test_pause_happens_inside_a_wait_and_paused_time_does_not_count(h, tmp_path):
+    import time
+
+    control, thread, box = _run_in_thread(h, [
+        step("files.wait_for_file", {"folder": str(tmp_path), "pattern": "late.txt", "timeout": 2}, id="w"),
+    ])
+    _wait_for_event(h, "step_started")
+    time.sleep(0.5)
+    control.pause()
+    _wait_for_event(h, "paused")
+    assert [e["step_id"] for e in h.events if e["event"] == "paused"] == ["w"]
+    time.sleep(3)  # longer than the step's 2-second limit
+    control.resume()
+    _wait_for_event(h, "resumed")
+    time.sleep(0.5)
+    (tmp_path / "late.txt").write_text("here")  # within the limit once the paused time is left out
+    thread.join(10)
+    assert box["result"].status == "succeeded", box["result"].error

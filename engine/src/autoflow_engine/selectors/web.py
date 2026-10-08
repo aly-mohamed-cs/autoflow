@@ -10,12 +10,12 @@ element should be re-picked - before the remaining selectors break too.
 from __future__ import annotations
 
 import re
-import time
 from dataclasses import dataclass
 from typing import Any
 
 from ..errors import ActivityError
 from ..flow import Element, Selector
+from ..runtime.context import Deadline, wait
 
 
 @dataclass
@@ -69,7 +69,7 @@ def find(page: Any, element: Element, timeout: float, *, visible: bool = True,
          log: Any = None) -> Match:
     """Wait up to ``timeout`` seconds for the element; raise a friendly error if absent."""
     scope = _scope(page, element)
-    deadline = time.monotonic() + timeout
+    deadline = Deadline(timeout)
     ambiguous: list[str] = []
     while True:
         ambiguous.clear()
@@ -102,9 +102,9 @@ def find(page: Any, element: Element, timeout: float, *, visible: bool = True,
                     "warning",
                 )
             return Match(target, selector, index)
-        if time.monotonic() >= deadline:
+        if deadline.passed:
             break
-        time.sleep(0.2)
+        wait(0.2)
     if ambiguous:
         raise ActivityError(
             f"'{element.name}' matches several elements on the page.",

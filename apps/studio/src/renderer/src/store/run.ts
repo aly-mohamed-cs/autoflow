@@ -169,6 +169,9 @@ export const useRun = create<RunState>((set, get) => ({
       case 'paused':
         set({ phase: 'paused', pausedStepId: event.step_id, currentStepId: event.step_id });
         break;
+      case 'resumed': // a step that was paused while waiting goes on
+        set({ phase: 'running', pausedStepId: null });
+        break;
       case 'run_finished':
         set({
           phase: 'finished',
