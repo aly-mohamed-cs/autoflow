@@ -125,7 +125,13 @@ if ($PfxPath) {
     $bytes = New-Object byte[] 24
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $pass = [Convert]::ToBase64String($bytes)
-    Export-PfxCertificate -Cert $cert -FilePath $pfxTarget -Password (ConvertTo-SecureString $pass -AsPlainText -Force) | Out-Null
+    $securePass = ConvertTo-SecureString $pass -AsPlainText -Force
+    try {
+        # AES keeps the file readable by Node/OpenSSL 3; older Windows lack the option and use their default.
+        Export-PfxCertificate -Cert $cert -FilePath $pfxTarget -Password $securePass -CryptoAlgorithmOption AES256_SHA256 | Out-Null
+    } catch {
+        Export-PfxCertificate -Cert $cert -FilePath $pfxTarget -Password $securePass | Out-Null
+    }
     Set-Content -Path $passFile -Value $pass -NoNewline
     Write-Host "Certificate fingerprint (SHA-256):"
     $sha = [System.Security.Cryptography.SHA256]::Create().ComputeHash($cert.RawData)
@@ -140,7 +146,8 @@ if (Test-Path $configFile) {
     $existing = Get-Content $configFile -Raw | ConvertFrom-Json
     foreach ($p in $existing.PSObject.Properties) { if (-not $config.ContainsKey($p.Name)) { $config[$p.Name] = $p.Value } }
 }
-$config | ConvertTo-Json | Set-Content -Path $configFile -Encoding UTF8
+# Without a byte-order mark: Windows PowerShell 5.1's "-Encoding UTF8" adds one, which JSON readers reject.
+[System.IO.File]::WriteAllText($configFile, ($config | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
 
 # -- 3. Windows service (WinSW) ---------------------------------------------------------
 Step "Registering the Windows service"

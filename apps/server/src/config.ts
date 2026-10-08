@@ -28,7 +28,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const dataDir = resolve(env.AUTOFLOW_DATA_DIR ?? join(serverRoot, '..', '..', 'data'));
   mkdirSync(dataDir, { recursive: true });
   const file = join(dataDir, 'config.json');
-  const fromFile = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Partial<Config>) : {};
+  // Windows PowerShell 5.1 saves UTF-8 with a byte-order mark, which JSON.parse rejects.
+  const fromFile = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, '')) as Partial<Config>) : {};
   const port = Number(env.AUTOFLOW_PORT ?? fromFile.port ?? 8443);
   const insecureHttp = (env.AUTOFLOW_INSECURE_HTTP ?? String(fromFile.insecureHttp ?? false)) === 'true' || env.AUTOFLOW_INSECURE_HTTP === '1';
   const tls = insecureHttp ? null : (fromFile.tls ?? defaultTls(dataDir));
