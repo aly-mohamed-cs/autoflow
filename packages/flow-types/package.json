@@ -1,6 +1,6 @@
 {
   "name": "@autoflow/flow-types",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "description": "Flow document and activity catalog types shared by Studio, dashboard and server.",
