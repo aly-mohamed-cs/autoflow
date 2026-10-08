@@ -201,7 +201,8 @@ class Agent:
             log.info("server knows this robot as %s", message.get("robot_id"))
             self._check_for_update(False)
         elif kind == "robot.update":
-            self._check_for_update(True)
+            # An administrator's "Update now" (force), or the server announcing a new package.
+            self._check_for_update(bool(message.get("force", True)))
         elif kind == "job.assign":
             job = message["job"]
             if self._updating:

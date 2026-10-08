@@ -14,7 +14,7 @@ import { aiRoutes } from './routes/ai.js';
 import { authRoutes } from './routes/auth.js';
 import { flowRoutes } from './routes/flows.js';
 import { jobRoutes } from './routes/jobs.js';
-import { robotRoutes } from './routes/robots.js';
+import { DEFAULT_ROBOT_UPDATES, robotRoutes, type RobotUpdateSettings } from './routes/robots.js';
 import { triggerRoutes } from './routes/triggers.js';
 import type { Vault } from './security.js';
 import { Audit, Bus, HttpError, Settings } from './services/core.js';
@@ -58,6 +58,9 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
   const repairs = new Repairs(db, bus);
   const audit = new Audit(db);
   const gateway = new Gateway(db, jobs, bus);
+  const robotReleases = new RobotReleases(join(config.dataDir, 'installers'));
+  gateway.newestRobotVersion = () =>
+    settings.get<RobotUpdateSettings>('robotUpdates', DEFAULT_ROBOT_UPDATES).automatic ? (robotReleases.newest()?.version ?? null) : null;
   gateway.onVersionChange = (robotId, from, to) => {
     const name = db.get<{ name: string }>('SELECT name FROM robots WHERE id = ?', robotId)?.name ?? robotId;
     audit.record({ name: `robot:${name}` }, 'robot.version_changed', robotId, { from, to });
@@ -81,7 +84,7 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
     queues: new Queues(db, jobs, bus),
     ai,
     repairs,
-    robotReleases: new RobotReleases(join(config.dataDir, 'installers')),
+    robotReleases,
   };
 }
 

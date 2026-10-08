@@ -110,9 +110,11 @@ cd C:\RPA-Server
 
 It backs up the database first, pulls the latest code, rebuilds and restarts the service.
 Database changes are applied automatically. With `-Installers` the new Studio and Robot packages
-land in Downloads, and both update themselves from there: Studio after its next restart, robots
-as soon as they are idle (see the **Robots** page; turn this off there if you prefer to choose
-when, then use **Update now** per robot). If something goes wrong, the previous backup is in
+land in Downloads, and both update themselves from there: Studio downloads the new version when
+it starts and offers **Restart to update** (Settings → Updates shows its status), and robots are
+told within a minute and install it as soon as they are idle (see the **Robots** page; turn this
+off there if you prefer to choose when, then use **Update now** per robot). Wait until the GitHub
+release has finished building before running `-Installers`, or run it again afterwards. If something goes wrong, the previous backup is in
 `data\backups`, and `git checkout <previous commit>` + running the script again goes back.
 
 ## Day-to-day operations

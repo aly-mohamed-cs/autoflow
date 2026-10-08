@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -526,6 +526,12 @@ describe('robot self-update', () => {
     writeFileSync(join(installers, 'Autoflow-Robot-0.9.0.zip'), 'older');
     writeFileSync(join(installers, 'Autoflow-Robot-0.10.0.zip'), pkg);
     writeFileSync(join(installers, 'Autoflow-Studio-Setup-0.10.0.exe'), 'studio');
+    const copiedEarlier = (file: string) => utimesSync(join(installers, file), new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    // A package that is still being copied in is not offered yet.
+    expect(await check()).toEqual({ version: null, automatic: true });
+    copiedEarlier('Autoflow-Robot-0.9.0.zip');
+    expect((await check()).version).toBe('0.9.0');
+    copiedEarlier('Autoflow-Robot-0.10.0.zip');
     expect(await check()).toEqual({
       version: '0.10.0',
       url: '/downloads/Autoflow-Robot-0.10.0.zip',
@@ -568,6 +574,17 @@ describe('robot self-update', () => {
     const audit = (await api('GET', '/api/audit')).body;
     expect(JSON.stringify(audit)).toContain('robot.version_changed');
     expect((await api('POST', `/api/robots/${robot.robotId}/update`, {})).status).toBe(409); // already newest
+
+    // A newer package copied into Downloads is announced to connected robots right away.
+    svc.gateway.checkRobotReleases();
+    messages.length = 0;
+    writeFileSync(join(installers, 'Autoflow-Robot-0.11.0.zip'), 'robot package 0.11.0');
+    svc.gateway.checkRobotReleases();
+    expect(messages).toEqual([]); // still being copied
+    copiedEarlier('Autoflow-Robot-0.11.0.zip');
+    svc.gateway.checkRobotReleases();
+    await waitFor(() => messages.some((m) => m.type === 'robot.update'));
+    expect(messages).toEqual([{ type: 'robot.update', force: false }]);
 
     expect((await api('PUT', '/api/settings/robot-updates', { automatic: false })).status).toBe(200);
     expect((await check()).automatic).toBe(false);

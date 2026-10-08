@@ -6,6 +6,7 @@ import type { Db } from '../db.js';
 import { json, now } from '../db.js';
 import type { Bus } from './core.js';
 import type { JobRow, Jobs } from './jobs.js';
+import { compareVersions } from './robotReleases.js';
 
 interface Connection {
   robotId: string;
@@ -29,11 +30,16 @@ const DISCONNECT_GRACE_MS = 90_000;
 const CANCEL_GRACE_MS = 60_000;
 /** A robot that started updating and never came back is shown as offline again after this. */
 const UPDATE_GIVE_UP_MS = 15 * 60_000;
+/** How often to look for a new robot package in Downloads. */
+const RELEASE_CHECK_MS = 30_000;
 
 export class Gateway {
   private readonly connections = new Map<string, Connection>();
   private readonly lostJobs = new Map<string, NodeJS.Timeout>();
   private timer: NodeJS.Timeout | null = null;
+  private releaseTimer: NodeJS.Timeout | null = null;
+  /** The robot version last seen in Downloads (undefined: not looked yet). */
+  private knownRelease: string | null | undefined;
   /** Robots installing a new version (robot id -> version) and the last update problem per robot. */
   private readonly updates = new Map<string, { version: string; since: number }>();
   private readonly updateErrors = new Map<string, string>();
@@ -41,6 +47,8 @@ export class Gateway {
   onVersionChange: (robotId: string, from: string, to: string) => void = () => undefined;
   /** Whether a job's robot may ask the AI assistant to fix failed steps (set by createServices). */
   repairAllowed: (job: JobRow) => boolean = () => false;
+  /** Newest robot version in Downloads while robots update by themselves, else null (set by createServices). */
+  newestRobotVersion: () => string | null = () => null;
 
   constructor(
     private readonly db: Db,
@@ -57,10 +65,13 @@ export class Gateway {
       this.dispatch();
       this.enforceTimeouts();
     }, 5_000);
+    this.checkRobotReleases();
+    this.releaseTimer = setInterval(() => this.checkRobotReleases(), RELEASE_CHECK_MS);
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.releaseTimer) clearInterval(this.releaseTimer);
     for (const t of this.lostJobs.values()) clearTimeout(t);
     for (const c of this.connections.values()) c.socket.close(1001, 'Server shutting down');
   }
@@ -87,6 +98,23 @@ export class Gateway {
     this.updateErrors.delete(robotId);
     this.send(conn, { type: 'robot.update' });
     return true;
+  }
+
+  /**
+   * When a newer robot package lands in Downloads, connected robots on an older version are told
+   * to look for it now instead of at their next check (every 6 hours). Robots still install it
+   * only when idle. Robots that connect later check by themselves.
+   */
+  checkRobotReleases(): void {
+    const version = this.newestRobotVersion();
+    const first = this.knownRelease === undefined;
+    if (version === this.knownRelease) return;
+    this.knownRelease = version;
+    if (first || !version) return;
+    for (const conn of this.connections.values()) {
+      const current = this.db.get<{ version: string }>('SELECT version FROM robots WHERE id = ?', conn.robotId)?.version ?? '';
+      if (!current || compareVersions(version, current) > 0) this.send(conn, { type: 'robot.update', force: false });
+    }
   }
 
   /** A robot authenticated and opened its connection. */

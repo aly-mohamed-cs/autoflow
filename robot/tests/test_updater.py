@@ -196,3 +196,14 @@ def test_update_script_goes_back_when_the_new_version_does_not_start(tmp_path):
     assert not staged.exists() and not (root / ".update" / "previous-files").exists()
     saved = json.loads(state.read_text(encoding="utf-8-sig"))
     assert "did not start" in saved["failed"]["0.3.0"]
+
+
+def test_update_messages_from_the_server():
+    from autoflow_robot.agent import Agent
+
+    agent = Agent.__new__(Agent)  # only the message handling is under test
+    asked: list[bool] = []
+    agent._check_for_update = asked.append
+    agent._handle({"type": "robot.update"})  # an administrator pressed "Update now"
+    agent._handle({"type": "robot.update", "force": False})  # a new package was copied to the server
+    assert asked == [True, False]

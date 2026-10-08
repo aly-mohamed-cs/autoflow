@@ -14,6 +14,8 @@ export interface RobotRelease {
 }
 
 const NAME = /^Autoflow-Robot-(\d+\.\d+\.\d+)\.zip$/;
+/** A package written to in the last moments may still be downloading: robots would get half a file. */
+const SETTLE_MS = 15_000;
 
 /** -1, 0 or 1 like a sort comparator; "0.10.0" is newer than "0.9.1". */
 export function compareVersions(a: string, b: string): number {
@@ -31,7 +33,7 @@ export class RobotReleases {
 
   constructor(private readonly dir: string) {}
 
-  /** Newest robot package on this server, without reading it. */
+  /** Newest (fully copied) robot package on this server, without reading it. */
   newest(): { version: string; file: string } | null {
     let names: string[];
     try {
@@ -43,7 +45,15 @@ export class RobotReleases {
       .map((file) => ({ file, version: NAME.exec(file)?.[1] }))
       .filter((f): f is { file: string; version: string } => !!f.version)
       .sort((a, b) => compareVersions(b.version, a.version));
-    return found[0] ?? null;
+    return found.find((f) => this.settled(f.file)) ?? null;
+  }
+
+  private settled(file: string): boolean {
+    try {
+      return Date.now() - statSync(join(this.dir, file)).mtimeMs > SETTLE_MS;
+    } catch {
+      return false;
+    }
   }
 
   async latest(): Promise<RobotRelease | null> {
