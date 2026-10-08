@@ -102,11 +102,13 @@ function RunLog() {
   const index = useApp((s) => s.index);
   const bottom = useRef<HTMLDivElement>(null);
   const [shot, setShot] = useState<string | null>(null);
+  const openFixes = useRun((s) => s.fixes.filter((f) => !f.decision).length);
+  const repairing = useRun((s) => s.repairing);
 
   useEffect(() => {
     // Braces matter: newer Chromium returns a Promise from scrollIntoView, which React would treat as a cleanup.
     bottom.current?.scrollIntoView({ block: 'nearest' });
-  }, [log.length]);
+  }, [log.length, openFixes, repairing]);
 
   if (phase === 'idle' && log.length === 0) {
     return (
@@ -124,7 +126,6 @@ function RunLog() {
 
   return (
     <div className="font-[450]">
-      <AiFixes stepName={stepName} />
       {phase === 'starting' && <p className="px-4 py-2 text-[13px] text-muted">Starting… {startedAt && ''}</p>}
       <ul className="divide-y divide-border/60">
         {log.map((entry) => {
@@ -152,6 +153,8 @@ function RunLog() {
           );
         })}
       </ul>
+      {/* Last, where the log scrolls to: what the AI is doing and the fixes waiting for a decision. */}
+      <AiFixes stepName={stepName} />
       <div ref={bottom} />
       <Dialog open={!!shot} onOpenChange={(o) => !o && setShot(null)} title="Screenshot" width="xl">
         {shot && <img src={window.autoflow.app.fileUrl(shot)} alt="Screenshot of the screen during the run" className="w-full rounded border border-border" />}
@@ -186,7 +189,7 @@ function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
   };
 
   return (
-    <div className="space-y-2 border-b border-border bg-surface-2 px-4 py-3">
+    <div className="space-y-2 border-t border-border bg-surface-2 px-4 py-3">
       {repairing && (
         <p className="flex items-center gap-2 text-[13px] text-muted" role="status">
           <Icon name="loader-circle" size={15} className="animate-spin text-primary" />

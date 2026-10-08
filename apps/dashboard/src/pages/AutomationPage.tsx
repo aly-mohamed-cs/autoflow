@@ -50,7 +50,7 @@ export function AutomationPage({ id }: { id: string }) {
       />
       <div className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-muted">
         <span>Version {flow.latestVersion}</span>
-        <span>{stats.runs30d} runs in 30 days</span>
+        <span>{stats.runs30d} {stats.runs30d === 1 ? 'run' : 'runs'} in 30 days</span>
         <span>Success {percent(stats.runs30d ? stats.succeeded30d / stats.runs30d : null)}</span>
         <span>Typical run {duration(stats.avgDurationMs ? Math.round(stats.avgDurationMs) : null)}</span>
         {detail.data.credentials.length > 0 && <span>Uses credentials: {detail.data.credentials.join(', ')}</span>}

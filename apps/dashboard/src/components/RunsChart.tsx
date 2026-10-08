@@ -51,7 +51,7 @@ export function RunsChart({ daily }: { daily: Day[] }) {
       ) : total === 0 ? (
         <p className="py-12 text-center text-[13px] text-subtle">No finished runs in the last 14 days.</p>
       ) : (
-        <div className="relative" role="img" aria-label={`Runs per day for the last 14 days: ${total} runs`}>
+        <div className="relative" role="img" aria-label={`Runs per day for the last 14 days: ${total} ${total === 1 ? 'run' : 'runs'}`}>
           <div className="flex">
             {/* y axis */}
             <div className="relative mr-2 w-6 shrink-0 text-right text-[11px] text-subtle tabular-nums" style={{ height: H }}>
