@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..errors import ExpressionError
 from ..values import to_text
@@ -88,6 +88,42 @@ class Condition(BaseModel):
     match: Literal["all", "any"] = "all"
     rules: list[Rule] = Field(default_factory=list)
     expression: str | None = Field(None, description="Advanced: a {{formula}} that is true or false.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize(cls, value: Any) -> Any:
+        return normalize_condition(value)
+
+
+def normalize_condition(value: Any) -> Any:
+    """Any stored condition value in the model's shape.
+
+    AI drafts may write a condition as text ("{{row['Paid']}}"), and Studio 0.3.0 and older split
+    such text into one entry per character when a rule was added ({"0": "{", "1": "{", ...}).
+    Text becomes a formula; split text is joined back unless the person added rules.
+    Mirrors packages/flow-types/src/conditions.ts.
+    """
+    if isinstance(value, str):
+        return {"expression": as_expression(value)} if value.strip() else {}
+    if not isinstance(value, dict) or "0" not in value:
+        return value
+    chars: list[str] = []
+    while isinstance(value.get(str(len(chars))), str):
+        chars.append(value[str(len(chars))])
+    cleaned = {k: v for k, v in value.items() if not (isinstance(k, str) and k.isdigit())}
+    text = "".join(chars)
+    if not cleaned.get("rules") and cleaned.get("expression") is None and text.strip():
+        cleaned["expression"] = as_expression(text)
+    return cleaned
+
+
+def as_expression(text: str) -> str:
+    """One formula from condition text: "{{row['A']}} > 100" would otherwise be the text "250 > 100"
+    (always true), so it becomes "{{row['A'] > 100}}"."""
+    stripped = text.strip()
+    if re.fullmatch(r"\{\{.*\}\}", stripped, re.S) and "{{" not in stripped[2:]:
+        return stripped
+    return "{{" + stripped.replace("{{", "").replace("}}", "").strip() + "}}"
 
 
 def evaluate_condition(condition: Condition, variables: Mapping[str, Any]) -> bool:

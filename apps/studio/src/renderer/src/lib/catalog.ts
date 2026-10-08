@@ -8,6 +8,7 @@ import type {
   Step,
   UiKind,
 } from '@autoflow/flow-types';
+import { normalizeCondition } from '@autoflow/flow-types';
 import { newStepId } from './flowOps';
 
 export type FieldKind = UiKind | 'object_list';
@@ -268,8 +269,9 @@ export function displayValue(field: FieldInfo, value: unknown): string {
   return truncate(String(value), 60);
 }
 
-export function conditionSummary(condition: Condition | undefined, index: CatalogIndex): string {
-  if (!condition) return '';
+export function conditionSummary(value: Condition | undefined, index: CatalogIndex): string {
+  if (!value) return '';
+  const condition = normalizeCondition(value);
   if (condition.expression?.trim()) return condition.expression.trim();
   const rules = (condition.rules ?? []).filter((r) => r.left !== '' && r.left !== undefined);
   if (!rules.length) return '';

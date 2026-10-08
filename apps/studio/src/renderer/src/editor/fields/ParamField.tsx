@@ -133,7 +133,7 @@ function Widget({
       const rowTable = field.name === 'condition' && 'table' in params ? referencedVariable(params.table) : null;
       return (
         <ConditionEditor
-          value={value as Condition | undefined}
+          value={value}
           onChange={onChange}
           variables={variables}
           columnsFor={columnsFor}

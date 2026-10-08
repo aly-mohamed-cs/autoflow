@@ -1,4 +1,4 @@
-import type { Condition, Rule } from '@autoflow/flow-types';
+import { normalizeCondition, type Condition, type Rule } from '@autoflow/flow-types';
 import { Button, Icon, Segmented, Select, Tooltip } from '@autoflow/ui';
 import type { VariableInfo } from '../../lib/scope';
 import { useApp } from '../../store/app';
@@ -15,7 +15,8 @@ export function ConditionEditor({
   columnsFor,
   rowVariable,
 }: {
-  value: Condition | undefined;
+  /** Usually a Condition, but AI drafts and older versions can leave text (see normalizeCondition). */
+  value: unknown;
   onChange: (value: Condition) => void;
   variables: VariableInfo[];
   columnsFor: (name: string) => string[];
@@ -23,7 +24,8 @@ export function ConditionEditor({
   rowVariable?: { name: string; columns: string[] };
 }) {
   const operators = useApp((s) => s.index.catalog.operators);
-  const condition: Condition = value ?? { match: 'all', rules: [] };
+  // Every edit saves this cleaned-up shape, which also repairs conditions damaged by Studio 0.3.0.
+  const condition = normalizeCondition(value);
   const rules = condition.rules ?? [];
   const usingFormula = condition.expression !== undefined && condition.expression !== null;
 

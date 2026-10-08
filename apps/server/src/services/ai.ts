@@ -2,7 +2,7 @@
 // (Ollama, LM Studio, vLLM...). Nothing leaves the company network; it is off until
 // an administrator configures it. Model output is never trusted: drafts are checked
 // against the activity catalog and reviewed by a person before anything runs.
-import type { Catalog, Flow, Step } from '@autoflow/flow-types';
+import { normalizeCondition, type ActivityDef, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { randomBytes } from 'node:crypto';
 import { HttpError, type Settings } from './core.js';
@@ -20,6 +20,7 @@ export interface AiSettings {
 export const DEFAULT_AI: AiSettings = { enabled: false, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b-instruct', apiKey: '', timeoutS: 120 };
 
 const catalog = catalogJson as unknown as Catalog;
+const OPERATORS = catalog.operators.map((o) => o.name).join(', ');
 const ACTIVITIES = new Map(catalog.activities.map((a) => [a.id, a]));
 
 /** A compact description of every step type for the model (id, purpose, settings). */
@@ -43,6 +44,9 @@ Rules:
 - Use ONLY the step ids listed below, with their setting names.
 - Refer to variables in settings as {{name}}; a column of the current row as {{row["Column"]}}.
 - Loops: control.for_each with params {"items": "{{table}}", "item_variable": "row"} and the loop steps in blocks.body.
+- Conditions (control.if / control.while "condition", data.filter "condition") are objects, never text:
+  {"match": "all", "rules": [{"left": "{{row[\"Amount\"]}}", "op": "greater", "right": "100"}]}
+  "match" is "all" or "any". Operators: ${OPERATORS}.
 - Leave settings you cannot know (web addresses, screen elements, file paths) as "" - the user fills them in.
 - Never put passwords in steps; use control.get_credential.
 Available steps:
@@ -271,7 +275,10 @@ export function sanitizeSteps(value: unknown, dropped: string[], depth = 0): Ste
     }
     const known = new Set(Object.keys(def.params.properties ?? {}));
     const params = Object.fromEntries(
-      Object.entries(s.params && typeof s.params === 'object' ? (s.params as Record<string, unknown>) : {}).filter(([k]) => known.has(k)),
+      Object.entries(s.params && typeof s.params === 'object' ? (s.params as Record<string, unknown>) : {})
+        .filter(([k]) => known.has(k))
+        // Models often write a condition as text; store the proper shape (a rule set or a formula).
+        .map(([k, v]) => [k, isConditionParam(def, k) ? normalizeCondition(v) : v]),
     );
     const outputNames = new Set(def.outputs.map((o) => o.name));
     const outputs = Object.fromEntries(
@@ -337,6 +344,10 @@ function fitPrompt(context: { screen: unknown } & Record<string, unknown>, maxCh
     text = JSON.stringify(context);
   }
   return text.slice(0, maxChars);
+}
+
+function isConditionParam(def: ActivityDef, name: string): boolean {
+  return String(def.params.properties?.[name]?.$ref ?? '').endsWith('/Condition');
 }
 
 /** fetch() only says "fetch failed"; turn the network cause into something an admin can act on. */

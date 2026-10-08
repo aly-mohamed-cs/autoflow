@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
-import { extractJson } from '../src/services/ai.js';
+import { extractJson, sanitizeSteps } from '../src/services/ai.js';
 import { applyPatches } from '../src/services/repairs.js';
 import { compareVersions } from '../src/services/robotReleases.js';
 import type { Config } from '../src/config.js';
@@ -497,6 +497,11 @@ describe('AI assistant (local model)', () => {
     expect(res.status).toBe(502);
     expect(res.body.error).toContain(`Nothing is answering at localhost:${port}`);
     await api('PUT', '/api/settings/ai', { ...shown, baseUrl: modelUrl });
+  });
+
+  it('stores conditions from drafts in their proper shape', () => {
+    const [step] = sanitizeSteps([{ activity: 'control.if', params: { condition: '{{amount}} > 100' }, blocks: { then: [] } }], []);
+    expect(step!.params!.condition).toEqual({ match: 'all', rules: [], expression: '{{amount > 100}}' });
   });
 
   it('finds JSON in chatty answers', () => {

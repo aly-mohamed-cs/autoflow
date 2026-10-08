@@ -1,5 +1,5 @@
 // Read-only view of an automation's steps, optionally with what happened in a run.
-import type { Catalog, Flow, Step } from '@autoflow/flow-types';
+import { normalizeCondition, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { cn, Icon, IconTile, Tooltip } from '@autoflow/ui';
 import type { ReactNode } from 'react';
@@ -104,8 +104,8 @@ function sentenceText(step: Step, sentence: string, elements: Map<string, string
     const value = step.params?.[name];
     if (value === undefined || value === null || value === '') return '…';
     if (name === 'element' && typeof value === 'string') return elements.get(value) ?? '…';
-    if (typeof value === 'object') {
-      const cond = value as { rules?: { left?: unknown; op?: string; right?: unknown }[]; expression?: string };
+    if (name === 'condition' || typeof value === 'object') {
+      const cond = name === 'condition' ? normalizeCondition(value) : (value as { rules?: { left?: unknown; op?: string; right?: unknown }[]; expression?: string | null });
       if (cond.expression) return cond.expression;
       if (cond.rules) return cond.rules.map((r) => `${pretty(String(r.left ?? ''))} ${(r.op ?? '').replace(/_/g, ' ')} ${pretty(String(r.right ?? ''))}`.trim()).join(' and ');
       return Array.isArray(value) ? value.join(', ') : Object.keys(value).join(', ');
