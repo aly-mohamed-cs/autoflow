@@ -1,7 +1,7 @@
 {
   "name": "@autoflow/studio",
   "productName": "Autoflow Studio",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Autoflow Studio - build automations without code",
   "author": "Autoflow",
