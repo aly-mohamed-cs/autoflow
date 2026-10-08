@@ -24,13 +24,18 @@
 
 .PARAMETER TrustCertificate
   Trust the Orchestrator's self-signed certificate (compare the fingerprint first).
+
+.PARAMETER KeepPowerSettings
+  Leave sleep and the screen saver as they are (for trying Autoflow on your own PC).
+  A real robot needs them off: desktop automation can't click on a locked screen.
 #>
 [CmdletBinding()]
 param(
     [string]$Server = "",
     [string]$Key = "",
     [string]$Name = $env:COMPUTERNAME,
-    [switch]$TrustCertificate
+    [switch]$TrustCertificate,
+    [switch]$KeepPowerSettings
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,11 +88,16 @@ $taskPrincipal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNA
 Register-ScheduledTask -TaskName "Autoflow Robot" -Action $action -Trigger $trigger -Settings $settings -Principal $taskPrincipal -Force | Out-Null
 Start-ScheduledTask -TaskName "Autoflow Robot"
 
-Step "Keeping the desktop available for automations"
-# Desktop automation can't click on a locked or sleeping screen.
-& powercfg /change standby-timeout-ac 0 | Out-Null
-& powercfg /change monitor-timeout-ac 0 | Out-Null
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name ScreenSaveActive -Value "0"
+if ($KeepPowerSettings) {
+    Write-Host ""
+    Write-Host "Sleep and screen saver left as they are (-KeepPowerSettings): desktop steps fail while the screen is locked." -ForegroundColor Yellow
+} else {
+    Step "Keeping the desktop available for automations"
+    # Desktop automation can't click on a locked or sleeping screen.
+    & powercfg /change standby-timeout-ac 0 | Out-Null
+    & powercfg /change monitor-timeout-ac 0 | Out-Null
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name ScreenSaveActive -Value "0"
+}
 
 Write-Host ""
 Write-Host "Done. The robot is running and should show as Online in the dashboard within a minute." -ForegroundColor Green

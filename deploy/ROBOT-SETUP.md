@@ -26,6 +26,9 @@ unattended. It connects **out** to the Orchestrator, so no inbound firewall rule
    .\install-robot.ps1 -Server https://rpa.company.local:8443 -Key afe_xxxxxxxx
    ```
 
+   Trying Autoflow on your own PC instead of a dedicated robot? Add `-KeepPowerSettings` so your
+   sleep and screen-saver settings stay as they are.
+
    If the server uses a self-signed certificate, the robot prints its fingerprint. Compare it with
    the one in the dashboard dialog, then run the command again with `-TrustCertificate`.
 
