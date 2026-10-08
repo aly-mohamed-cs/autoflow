@@ -2606,6 +2606,14 @@
             "type": "string",
             "x-placeholder": "Invoices"
           },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes (document names...).",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE"
+          },
           "timeout": {
             "default": 30,
             "maximum": 600,
@@ -2640,6 +2648,14 @@
             "title": "Window title contains",
             "type": "string",
             "x-placeholder": "Invoices"
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes (document names...).",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE"
           },
           "timeout": {
             "default": 30,
