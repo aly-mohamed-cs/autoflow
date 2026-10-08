@@ -1,4 +1,10 @@
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { launchTarget } from './target';
@@ -10,10 +16,17 @@ let userData: string;
 
 test.beforeEach(async () => {
   userData = mkdtempSync(join(tmpdir(), 'autoflow-e2e-'));
-  app = await electron.launch({ ...launchTarget(), env: { ...process.env, AUTOFLOW_USER_DATA: userData } });
+  app = await electron.launch({
+    ...launchTarget(),
+    env: { ...process.env, AUTOFLOW_USER_DATA: userData },
+  });
   win = await app.firstWindow();
   await win.setViewportSize({ width: 1440, height: 900 });
-  await win.waitForFunction(() => window.autoflow.engine.status().then((s) => s.state === 'ready'), null, { timeout: 30_000 });
+  await win.waitForFunction(
+    () => window.autoflow.engine.status().then((s) => s.state === 'ready'),
+    null,
+    { timeout: 30_000 },
+  );
 });
 
 test.afterEach(async () => {
@@ -22,7 +35,8 @@ test.afterEach(async () => {
 });
 
 async function newFlow(name: string, template = 'New automation') {
-  if (template === 'New automation') await win.getByRole('button', { name: 'New automation' }).click();
+  if (template === 'New automation')
+    await win.getByRole('button', { name: 'New automation' }).click();
   else await win.getByText(template).first().click();
   await win.getByLabel('Name').fill(name);
   await win.getByRole('button', { name: 'Create' }).click();
@@ -75,4 +89,19 @@ test('a failing step shows a friendly error on the step', async () => {
   await expect(win.getByText(/Run failed/)).toBeVisible({ timeout: 30_000 });
   await expect(inspector.getByText('This step failed in the last test run')).toBeVisible();
   await expect(inspector.getByText(/does not exist/)).toBeVisible();
+});
+
+test('settings show the Studio version and where updates come from', async () => {
+  await win.getByRole('button', { name: 'Settings' }).click();
+  const updates = win
+    .locator('section')
+    .filter({ has: win.getByRole('heading', { name: 'Updates' }) });
+  const version = await win.evaluate(() => window.autoflow.app.version());
+  await expect(updates.getByRole('status')).toContainText(`Autoflow Studio ${version}`);
+  await expect(updates.getByRole('status')).toContainText(
+    'once it is connected to the Orchestrator',
+  );
+  // Without an Orchestrator there is nothing to check yet.
+  await expect(updates.getByRole('button', { name: 'Check for updates' })).toBeDisabled();
+  if (process.env.SETTINGS_SHOT) await updates.screenshot({ path: process.env.SETTINGS_SHOT });
 });

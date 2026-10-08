@@ -4,6 +4,7 @@ import { OrchestratorSettings } from '../components/OrchestratorSettings';
 import { QuickLaunchSettings } from '../components/QuickLaunchSettings';
 import { aiRepairWanted, setAiRepairWanted, useAiEnabled } from '../lib/ai';
 import { useApp, type Theme } from '../store/app';
+import type { UpdateStatus } from '../../../shared/api';
 
 export function SettingsPage() {
   const theme = useApp((s) => s.theme);
@@ -39,8 +40,20 @@ export function SettingsPage() {
         <section className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-card">
           <div className="flex items-center gap-2">
             <h2 className="flex-1 font-semibold">Automation engine</h2>
-            <Badge tone={engine.state === 'ready' ? 'success' : engine.state === 'starting' ? 'warning' : 'danger'}>
-              {engine.state === 'ready' ? 'Ready' : engine.state === 'starting' ? 'Starting' : 'Not running'}
+            <Badge
+              tone={
+                engine.state === 'ready'
+                  ? 'success'
+                  : engine.state === 'starting'
+                    ? 'warning'
+                    : 'danger'
+              }
+            >
+              {engine.state === 'ready'
+                ? 'Ready'
+                : engine.state === 'starting'
+                  ? 'Starting'
+                  : 'Not running'}
             </Badge>
           </div>
           <dl className="grid grid-cols-[160px_1fr] gap-y-1.5 text-[13px]">
@@ -56,7 +69,10 @@ export function SettingsPage() {
               {engine.message}
             </pre>
           )}
-          <Button icon={<Icon name="rotate-ccw" size={14} />} onClick={() => void window.autoflow.engine.restart()}>
+          <Button
+            icon={<Icon name="rotate-ccw" size={14} />}
+            onClick={() => void window.autoflow.engine.restart()}
+          >
             Restart engine
           </Button>
         </section>
@@ -75,9 +91,71 @@ export function SettingsPage() {
 
         <AiSettings />
 
-        <p className="text-xs text-subtle">Autoflow Studio {version}</p>
+        <UpdateSettings version={version} connected={Boolean(orchestrator)} />
       </div>
     </div>
+  );
+}
+
+/** Studio's version and its updates from the Orchestrator (they download by themselves). */
+function UpdateSettings({ version, connected }: { version: string; connected: boolean }) {
+  const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' });
+  useEffect(() => {
+    void window.autoflow.updates.status().then(setStatus);
+    return window.autoflow.updates.onChange(setStatus);
+  }, []);
+  const busy = status.state === 'checking' || status.state === 'downloading';
+  const text = (() => {
+    switch (status.state) {
+      case 'checking':
+        return 'Checking for updates…';
+      case 'none':
+        return 'You have the latest version.';
+      case 'downloading':
+        return `Downloading version ${status.version}… ${status.percent}%`;
+      case 'ready':
+        return `Version ${status.version} is ready. Restart Studio to start using it.`;
+      case 'error':
+        return "Couldn't check for updates.";
+      default:
+        return connected
+          ? 'Studio updates itself from the Orchestrator.'
+          : 'Studio updates itself once it is connected to the Orchestrator.';
+    }
+  })();
+  return (
+    <section className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-card">
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 font-semibold">Updates</h2>
+        {status.state === 'ready' ? (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => void window.autoflow.updates.install()}
+          >
+            Restart to update
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            icon={<Icon name="refresh-cw" size={14} />}
+            disabled={busy || !connected}
+            onClick={() => void window.autoflow.updates.check()}
+          >
+            Check for updates
+          </Button>
+        )}
+      </div>
+      <p className="text-[13px]" role="status">
+        Autoflow Studio {version} ·{' '}
+        <span className={status.state === 'error' ? 'text-danger' : 'text-muted'}>{text}</span>
+      </p>
+      {status.state === 'error' && (
+        <pre className="max-h-32 overflow-auto rounded bg-danger-soft p-3 text-xs whitespace-pre-wrap text-danger">
+          {status.message}
+        </pre>
+      )}
+    </section>
   );
 }
 

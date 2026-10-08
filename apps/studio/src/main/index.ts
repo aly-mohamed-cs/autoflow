@@ -291,6 +291,7 @@ function registerIpc(): void {
   handle(IPC.quickRun, (entry: QuickLaunchEntry) => quickLaunch.run(entry));
 
   handle(IPC.updateStatus, () => updates.state);
+  handle(IPC.updateCheck, () => updates.checkNow());
   handle(IPC.updateInstall, () => {
     quitting = true;
     updates.install();

@@ -143,6 +143,8 @@ export interface StudioApi {
   updates: {
     status(): Promise<UpdateStatus>;
     install(): Promise<void>;
+    /** Look for a newer Studio on the Orchestrator now. */
+    check(): Promise<void>;
     onChange(listener: (status: UpdateStatus) => void): () => void;
   };
   app: {
@@ -195,6 +197,7 @@ export const IPC = {
   quickRun: 'quick:run',
   updateStatus: 'update:status',
   updateInstall: 'update:install',
+  updateCheck: 'update:check',
   updateChanged: 'update:changed',
   appVersion: 'app:version',
   appOpenPath: 'app:open-path',

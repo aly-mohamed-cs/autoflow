@@ -68,6 +68,7 @@ const api: StudioApi = {
   updates: {
     status: () => invoke(IPC.updateStatus),
     install: () => invoke(IPC.updateInstall),
+    check: () => invoke(IPC.updateCheck),
     onChange: (listener) => subscribe<UpdateStatus>(IPC.updateChanged, listener),
   },
   app: {
