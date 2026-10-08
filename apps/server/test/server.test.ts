@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,7 @@ import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
 import { extractJson } from '../src/services/ai.js';
 import { applyPatches } from '../src/services/repairs.js';
+import { compareVersions } from '../src/services/robotReleases.js';
 import type { Config } from '../src/config.js';
 import { Db } from '../src/db.js';
 import { Vault } from '../src/security.js';
@@ -487,6 +489,77 @@ describe('AI assistant (local model)', () => {
   it('finds JSON in chatty answers', () => {
     expect(extractJson('Sure! {"a": {"b": 1}} Hope that helps')).toBe('{"a": {"b": 1}}');
     expect(extractJson('```json\n{"x": 2}\n```')).toBe('{"x": 2}');
+  });
+});
+
+describe('robot self-update', () => {
+  it('offers the newest robot package, lets admins trigger it and notices a rollback', async () => {
+    const asRobot = async (pool: string, name: string) => {
+      const { key } = (await api('POST', '/api/robots/enrollment-keys', { pool, hours: 1 })).body;
+      return (await app.inject({ method: 'POST', url: '/api/robot/enroll', payload: { key, name } })).json() as { token: string; robotId: string };
+    };
+    const robot = await asRobot('updates', 'Updating robot');
+    const auth = { authorization: `Bearer ${robot.token}` };
+    const check = async () => (await app.inject({ method: 'GET', url: '/api/robot/update', headers: auth })).json();
+
+    expect(await check()).toEqual({ version: null, automatic: true });
+    const installers = join(svc.config.dataDir, 'installers');
+    const pkg = Buffer.from('robot package 0.10.0');
+    writeFileSync(join(installers, 'Autoflow-Robot-0.9.0.zip'), 'older');
+    writeFileSync(join(installers, 'Autoflow-Robot-0.10.0.zip'), pkg);
+    writeFileSync(join(installers, 'Autoflow-Studio-Setup-0.10.0.exe'), 'studio');
+    expect(await check()).toEqual({
+      version: '0.10.0',
+      url: '/downloads/Autoflow-Robot-0.10.0.zip',
+      size: pkg.length,
+      sha256: createHash('sha256').update(pkg).digest('hex'),
+      automatic: true,
+    });
+    expect((await app.inject({ method: 'GET', url: '/downloads/Autoflow-Robot-0.10.0.zip' })).body).toBe('robot package 0.10.0');
+    expect((await app.inject({ method: 'GET', url: '/api/robot/update' })).statusCode).toBe(401);
+
+    const messages: any[] = [];
+    const ws = new WebSocket(`ws://${base}/api/robot/connect`, { headers: auth });
+    ws.on('message', (m) => messages.push(JSON.parse(m.toString())));
+    await new Promise((resolve) => ws.on('open', resolve));
+    ws.send(JSON.stringify({ type: 'hello', version: '0.2.0', capabilities: [] }));
+    const listed = async () => (await api('GET', '/api/robots')).body;
+    await waitFor(async () => (await listed()).robots.find((r: any) => r.id === robot.robotId)?.version === '0.2.0');
+    let list = await listed();
+    expect(list).toMatchObject({ latestVersion: '0.10.0', automaticUpdates: true });
+    expect(list.robots.find((r: any) => r.id === robot.robotId)).toMatchObject({ updateAvailable: true, updating: null, updateError: null });
+
+    // "Update now" reaches the robot, which reports that it is installing.
+    expect((await api('POST', `/api/robots/${robot.robotId}/update`, {})).body).toEqual({ ok: true, version: '0.10.0' });
+    await waitFor(() => messages.some((m) => m.type === 'robot.update'));
+    ws.send(JSON.stringify({ type: 'robot.updating', version: '0.10.0' }));
+    await waitFor(async () => (await listed()).robots.find((r: any) => r.id === robot.robotId)?.updating === '0.10.0');
+
+    // It comes back on the old version: the update was rolled back.
+    ws.send(JSON.stringify({ type: 'hello', version: '0.2.0', capabilities: [] }));
+    await waitFor(async () => !!(await listed()).robots.find((r: any) => r.id === robot.robotId)?.updateError);
+    list = await listed();
+    expect(list.robots.find((r: any) => r.id === robot.robotId)).toMatchObject({ updating: null });
+    expect(list.robots.find((r: any) => r.id === robot.robotId).updateError).toContain('did not start');
+
+    // A successful update shows up in the audit log.
+    ws.send(JSON.stringify({ type: 'robot.updating', version: '0.10.0' }));
+    ws.send(JSON.stringify({ type: 'hello', version: '0.10.0', capabilities: [] }));
+    await waitFor(async () => (await listed()).robots.find((r: any) => r.id === robot.robotId)?.version === '0.10.0');
+    expect((await listed()).robots.find((r: any) => r.id === robot.robotId)).toMatchObject({ updateAvailable: false, updateError: null });
+    const audit = (await api('GET', '/api/audit')).body;
+    expect(JSON.stringify(audit)).toContain('robot.version_changed');
+    expect((await api('POST', `/api/robots/${robot.robotId}/update`, {})).status).toBe(409); // already newest
+
+    expect((await api('PUT', '/api/settings/robot-updates', { automatic: false })).status).toBe(200);
+    expect((await check()).automatic).toBe(false);
+    ws.close();
+  });
+
+  it('compares versions numerically', () => {
+    expect(compareVersions('0.10.0', '0.9.9')).toBe(1);
+    expect(compareVersions('1.0.0', '1.0.0')).toBe(0);
+    expect(compareVersions('0.2.0', '0.10.0')).toBe(-1);
   });
 });
 

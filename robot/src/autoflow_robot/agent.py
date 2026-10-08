@@ -7,6 +7,7 @@ import json
 import logging
 import platform
 import socket
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -16,10 +17,12 @@ import websockets
 
 from .config import RobotConfig, __version__, home
 from .runner import JobRunner
+from .updater import UpdateError, Updater, install_root, mark_failed
 
 log = logging.getLogger("autoflow.robot")
 
 HEARTBEAT_S = 15
+UPDATE_CHECK_S = 6 * 3600
 MAX_BUFFER = 5000
 
 
@@ -40,6 +43,11 @@ class Agent:
         )
         self.runner = JobRunner(home() / "runs", self.send_threadsafe, self.upload, self.fetch_credentials,
                                 repair=self.request_repair)
+        self.updater = Updater(self.http, install_root())
+        self._update_task: asyncio.Task | None = None
+        self._updating = False  # downloading or installing: no new jobs
+        self._update_waiting: bool | None = None  # found while busy (value: forced by an admin)
+        self._last_update_check = 0.0
 
     # -- called from the runner thread ---------------------------------------------------
     def send_threadsafe(self, message: dict[str, Any]) -> None:
@@ -131,6 +139,52 @@ class Agent:
         while True:
             await asyncio.sleep(HEARTBEAT_S)
             await ws.send(json.dumps({"type": "heartbeat", "busy_job_id": self.runner.job_id}))
+            if self._update_waiting is not None and not self.runner.busy:
+                self._check_for_update(self._update_waiting)
+            elif time.monotonic() - self._last_update_check > UPDATE_CHECK_S:
+                self._check_for_update(False)
+
+    # -- self-update (see updater.py) -----------------------------------------------------
+    def _check_for_update(self, force: bool) -> None:
+        if self._update_task is None or self._update_task.done():
+            self._update_task = asyncio.ensure_future(self._update(force))
+
+    async def _update(self, force: bool) -> None:
+        self._last_update_check = time.monotonic()
+        try:
+            release = await asyncio.to_thread(self.updater.check, force)
+        except UpdateError as exc:
+            self._queue({"type": "robot.update_failed", "version": "", "error": str(exc)})
+            return
+        except Exception as exc:  # the server may be busy or older; try again later
+            log.warning("could not check for updates: %s", exc)
+            return
+        if release is None:
+            self._update_waiting = None
+            return
+        if self.runner.busy:
+            log.info("version %s is available; installing it after the current run", release.version)
+            self._update_waiting = force
+            return
+        self._update_waiting = None
+        self._updating = True
+        log.info("updating to version %s", release.version)
+        self._queue({"type": "robot.updating", "version": release.version})
+        try:
+            staged = await asyncio.to_thread(self.updater.prepare, release)
+            self.updater.hand_over(staged, release.version)
+        except Exception as exc:
+            reason = str(exc) if isinstance(exc, UpdateError) else f"{type(exc).__name__}: {exc}"
+            log.error("update to %s failed: %s", release.version, reason)
+            mark_failed(release.version, reason)
+            self._queue({"type": "robot.update_failed", "version": release.version, "error": reason})
+            self._updating = False
+            return
+        log.info("handing over to version %s; this robot restarts in a moment", release.version)
+        await self._flush()
+        self.stop()
+        if self._ws is not None:
+            await self._ws.close()
 
     def _hello(self) -> dict[str, Any]:
         return {
@@ -145,9 +199,14 @@ class Agent:
         kind = message.get("type")
         if kind == "welcome":
             log.info("server knows this robot as %s", message.get("robot_id"))
+            self._check_for_update(False)
+        elif kind == "robot.update":
+            self._check_for_update(True)
         elif kind == "job.assign":
             job = message["job"]
-            if self.runner.start(job):
+            if self._updating:
+                self._queue({"type": "job.rejected", "job_id": job["id"], "reason": "updating"})
+            elif self.runner.start(job):
                 log.info("running job %s (%s v%s)", job["id"], job["flow"].get("name"), job.get("version"))
             else:
                 self._queue({"type": "job.rejected", "job_id": job["id"], "reason": "busy"})

@@ -8,6 +8,7 @@ import { json, now } from '../db.js';
 import { hashToken, newId, newToken } from '../security.js';
 import { HttpError, notFound } from '../services/core.js';
 import type { RepairRequest } from '../services/ai.js';
+import { compareVersions } from '../services/robotReleases.js';
 import { RepairBody } from './ai.js';
 import { credentialNames } from './flows.js';
 
@@ -17,6 +18,14 @@ const EnrollBody = z.object({
   machine: z.string().max(200).optional(),
 });
 const KeyBody = z.object({ pool: z.string().trim().min(1).max(64).default('default'), hours: z.number().min(1).max(24 * 30).default(24) });
+const UpdateSettingsBody = z.object({ automatic: z.boolean() });
+
+/** Robots install new versions from the Orchestrator's Downloads by themselves unless turned off. */
+export interface RobotUpdateSettings {
+  automatic: boolean;
+}
+export const DEFAULT_ROBOT_UPDATES: RobotUpdateSettings = { automatic: true };
+
 const PatchBody = z.object({ name: z.string().trim().min(1).max(100).optional(), pool: z.string().trim().min(1).max(64).optional(), enabled: z.boolean().optional() });
 
 interface RobotRow {
@@ -32,7 +41,8 @@ interface RobotRow {
 }
 
 export async function robotRoutes(app: FastifyInstance) {
-  const { db, gateway, jobs, vault, audit, config, ai } = app.svc;
+  const { db, gateway, jobs, vault, audit, config, ai, settings, robotReleases } = app.svc;
+  const actor = (r: { user?: { id: string; username: string } }) => ({ id: r.user!.id, name: r.user!.username });
 
   // Allow raw uploads (screenshots, output files) from robots.
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) => done(null, payload));
@@ -50,6 +60,7 @@ export async function robotRoutes(app: FastifyInstance) {
   // -- for people -----------------------------------------------------------------------
 
   app.get('/api/robots', { preHandler: requireRole('viewer') }, async () => {
+    const latest = robotReleases.newest()?.version ?? null;
     const rows = db.all<RobotRow & { job_flow: string | null }>(
       `SELECT r.*, (SELECT f.name FROM jobs j JOIN flows f ON f.id = j.flow_id
                      WHERE j.robot_id = r.id AND j.status = 'running' LIMIT 1) AS job_flow
@@ -69,8 +80,33 @@ export async function robotRoutes(app: FastifyInstance) {
         online: gateway.isOnline(r.id),
         jobId: gateway.busyJob(r.id),
         jobFlowName: r.job_flow,
+        updateAvailable: !!latest && !!r.version && compareVersions(latest, r.version) > 0,
+        ...gateway.updateState(r.id),
       })),
+      latestVersion: latest,
+      automaticUpdates: settings.get<RobotUpdateSettings>('robotUpdates', DEFAULT_ROBOT_UPDATES).automatic,
     };
+  });
+
+  app.put('/api/settings/robot-updates', { preHandler: requireRole('admin') }, async (request) => {
+    const body = UpdateSettingsBody.parse(request.body);
+    settings.set('robotUpdates', body);
+    audit.record(actor(request), 'settings.robot_updates', undefined, body);
+    return { ok: true };
+  });
+
+  /** "Update now": the robot installs the newest version even if automatic updates are off. */
+  app.post('/api/robots/:id/update', { preHandler: requireRole('admin') }, async (request) => {
+    const { id } = request.params as { id: string };
+    const robot = db.get<RobotRow>('SELECT * FROM robots WHERE id = ?', id);
+    if (!robot) throw notFound('The robot');
+    const latest = robotReleases.newest();
+    if (!latest || (robot.version && compareVersions(latest.version, robot.version) <= 0)) {
+      throw new HttpError(409, 'There is no newer robot version on this server. The administrator copies it here with update-server.ps1 -Installers.');
+    }
+    if (!gateway.requestUpdate(id)) throw new HttpError(409, 'The robot is offline. It updates by itself when it connects again.');
+    audit.record(actor(request), 'robot.update_requested', id, { version: latest.version });
+    return { ok: true, version: latest.version };
   });
 
   app.post('/api/robots/enrollment-keys', { preHandler: requireRole('admin') }, async (request) => {
@@ -156,6 +192,16 @@ export async function robotRoutes(app: FastifyInstance) {
     }
     audit.record({ name: `robot:${robot.name}` }, 'credentials.read', id, { names: Object.keys(out) });
     return { credentials: out };
+  });
+
+  /** The newest robot version on this server; robots download it from /downloads/ and check the hash. */
+  app.get('/api/robot/update', async (request) => {
+    robotFor(request);
+    const release = await robotReleases.latest();
+    const { automatic } = settings.get<RobotUpdateSettings>('robotUpdates', DEFAULT_ROBOT_UPDATES);
+    return release
+      ? { version: release.version, url: release.url, size: release.size, sha256: release.sha256, automatic }
+      : { version: null, automatic };
   });
 
   /** AI self-repair during a robot run. The fix only changes this run; builders approve keeping it. */

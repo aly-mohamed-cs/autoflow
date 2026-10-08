@@ -15,13 +15,15 @@ unattended. It connects **out** to the Orchestrator, so no inbound firewall rule
 ## 2. Install and enroll
 
 1. In the dashboard: **Robots → Add robot → Create enrollment key**. Copy the command it shows.
-2. Signed in as the robot account, install **Autoflow Robot** (Dashboard → Settings → Downloads),
-   or — before installers are published — use a clone of the repository with
-   [uv](https://docs.astral.sh/uv/) installed.
-3. In PowerShell (as the robot account, *not* as administrator):
+2. Signed in as the robot account, download **Autoflow Robot** (Dashboard → Settings → Downloads)
+   and unzip it into a folder **the robot account owns**, for example `C:\Autoflow\Robot`
+   (create it as that account; not under Program Files). The robot updates itself there.
+   Before installers are published you can use a clone of the repository with
+   [uv](https://docs.astral.sh/uv/) installed instead (it then updates with `git pull`).
+3. In PowerShell (as the robot account, *not* as administrator), in that folder:
 
    ```powershell
-   .\deploy\windows\install-robot.ps1 -Server https://rpa.company.local:8443 -Key afe_xxxxxxxx
+   .\install-robot.ps1 -Server https://rpa.company.local:8443 -Key afe_xxxxxxxx
    ```
 
    If the server uses a self-signed certificate, the robot prints its fingerprint. Compare it with
@@ -44,6 +46,24 @@ Desktop automation (clicking in applications) needs a signed-in, **unlocked** de
   `tscon %sessionname% /dest:console` (run as administrator) so the desktop stays active.
 
 Browser-only automations also work on a locked screen, but desktop steps do not.
+
+## Updates
+
+Robots update themselves. When the administrator copies a new robot package to the server
+(`update-server.ps1 -Installers`), each robot notices within a few hours — or at once with
+**Robots → ⋯ → Update now** — and, as soon as it isn't running anything:
+
+1. downloads the package and checks its checksum,
+2. unpacks it next to the current version and checks it starts,
+3. restarts on the new version. If the new version doesn't start within two minutes, the robot
+   goes back to the previous one by itself and the dashboard shows why.
+
+Progress is in `<install folder>\.update\update.log`. Automatic updates can be turned off on the
+**Robots** page; robots then only update with **Update now**.
+
+Robots on 0.2.0 or older don't have this yet: reinstall them once from the new package (unzip
+over the old folder while the robot is stopped, or into a new folder and run `install-robot.ps1`
+there). From then on they update by themselves.
 
 ## Troubleshooting
 

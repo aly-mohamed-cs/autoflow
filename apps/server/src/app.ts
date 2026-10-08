@@ -22,6 +22,7 @@ import { Gateway } from './services/gateway.js';
 import { AiService } from './services/ai.js';
 import { Jobs } from './services/jobs.js';
 import { Repairs } from './services/repairs.js';
+import { RobotReleases } from './services/robotReleases.js';
 import { Queues, Scheduler } from './services/triggers.js';
 
 export const VERSION = '0.2.0';
@@ -39,6 +40,7 @@ export interface Services {
   queues: Queues;
   ai: AiService;
   repairs: Repairs;
+  robotReleases: RobotReleases;
 }
 
 declare module 'fastify' {
@@ -54,7 +56,12 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
   const settings = new Settings(db);
   const ai = new AiService(settings, (sealed) => vault.decrypt(sealed));
   const repairs = new Repairs(db, bus);
+  const audit = new Audit(db);
   const gateway = new Gateway(db, jobs, bus);
+  gateway.onVersionChange = (robotId, from, to) => {
+    const name = db.get<{ name: string }>('SELECT name FROM robots WHERE id = ?', robotId)?.name ?? robotId;
+    audit.record({ name: `robot:${name}` }, 'robot.version_changed', robotId, { from, to });
+  };
   // Robots may ask the AI to fix failed steps when it is on and the automation allows it.
   gateway.repairAllowed = (job) =>
     ai.config().enabled && !!db.get<{ ai_repair: number }>('SELECT ai_repair FROM flows WHERE id = ?', job.flow_id)?.ai_repair;
@@ -67,13 +74,14 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
     vault,
     bus,
     settings,
-    audit: new Audit(db),
+    audit,
     jobs,
     gateway,
     scheduler: new Scheduler(db, jobs),
     queues: new Queues(db, jobs, bus),
     ai,
     repairs,
+    robotReleases: new RobotReleases(join(config.dataDir, 'installers')),
   };
 }
 

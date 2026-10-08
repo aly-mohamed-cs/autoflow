@@ -104,7 +104,10 @@ cd C:\RPA-Server
 ```
 
 It backs up the database first, pulls the latest code, rebuilds and restarts the service.
-Database changes are applied automatically. If something goes wrong, the previous backup is in
+Database changes are applied automatically. With `-Installers` the new Studio and Robot packages
+land in Downloads, and both update themselves from there: Studio after its next restart, robots
+as soon as they are idle (see the **Robots** page; turn this off there if you prefer to choose
+when, then use **Update now** per robot). If something goes wrong, the previous backup is in
 `data\backups`, and `git checkout <previous commit>` + running the script again goes back.
 
 ## Day-to-day operations

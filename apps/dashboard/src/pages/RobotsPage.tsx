@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, EmptyState, Field, Icon, Input, Menu } from '@autoflow/ui';
+import { Badge, Button, Dialog, EmptyState, Field, Icon, Input, Menu, Switch } from '@autoflow/ui';
 import { useState } from 'react';
 import { useMe } from '../App';
 import { Card, ErrorBox, Loading, PageHeader } from '../components/common';
@@ -9,7 +9,8 @@ import { href } from '../lib/router';
 
 export function RobotsPage() {
   const me = useMe();
-  const { data, error, reload } = useApi<{ robots: Robot[] }>('/api/robots');
+  const { data, error, reload } = useApi<{ robots: Robot[]; latestVersion: string | null; automaticUpdates: boolean }>('/api/robots');
+  const [updateMessage, setUpdateMessage] = useState('');
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<Robot | null>(null);
   useLiveReload(reload, (e) => e.type === 'robot.updated' || e.type === 'job.updated');
@@ -23,6 +24,35 @@ export function RobotsPage() {
         actions={admin && <Button variant="primary" icon={<Icon name="plus" size={15} />} onClick={() => setAdding(true)}>Add robot</Button>}
       />
       {error && <ErrorBox error={error} onRetry={reload} />}
+      {data && data.robots.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-surface px-4 py-3 text-[13px] shadow-card">
+          <span className="flex items-center gap-2">
+            <Icon name="package" size={16} className="text-primary" />
+            {data.latestVersion ? <>Newest robot version on this server: <strong>{data.latestVersion}</strong></> : 'No robot package on this server yet (update-server.ps1 -Installers copies it here).'}
+          </span>
+          <span className="flex-1" />
+          {admin ? (
+            <label htmlFor="auto-updates" className="flex cursor-pointer items-center gap-2.5">
+              Update robots automatically
+              <Switch
+                id="auto-updates"
+                checked={data.automaticUpdates}
+                onChange={async (automatic) => {
+                  await api('/api/settings/robot-updates', { method: 'PUT', body: { automatic } });
+                  reload();
+                }}
+              />
+            </label>
+          ) : (
+            <span className="text-muted">{data.automaticUpdates ? 'Robots update automatically' : 'Automatic robot updates are off'}</span>
+          )}
+        </div>
+      )}
+      {updateMessage && (
+        <p className="mb-4 text-[13px] text-muted" role="status">
+          {updateMessage}
+        </p>
+      )}
       {!data ? (
         !error && <Loading />
       ) : data.robots.length === 0 ? (
@@ -45,10 +75,22 @@ export function RobotsPage() {
                     {!r.enabled && <Badge>disabled</Badge>}
                     {r.pool !== 'default' && <Badge tone="primary">{r.pool}</Badge>}
                   </p>
-                  <p className="truncate text-xs text-subtle">{r.machine || 'unknown computer'} · v{r.version || '?'}</p>
+                  <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-subtle">
+                    <span className="truncate">{r.machine || 'unknown computer'} · v{r.version || '?'}</span>
+                    {r.updateAvailable && !r.updating && <Badge tone="primary">update to {data.latestVersion}</Badge>}
+                  </p>
+                  {r.updateError && (
+                    <p className="mt-0.5 flex items-start gap-1 text-xs text-warning">
+                      <Icon name="triangle-alert" size={13} className="mt-px shrink-0" /> {r.updateError}
+                    </p>
+                  )}
                 </div>
                 <div className="w-64 text-[13px]">
-                  {r.online ? (
+                  {r.updating ? (
+                    <span className="flex items-center gap-1.5 text-primary">
+                      <Icon name="loader" size={14} className="animate-spin" /> Updating to {r.updating}…
+                    </span>
+                  ) : r.online ? (
                     r.jobId ? (
                       <a href={href('runs', r.jobId)} className="flex items-center gap-1.5 text-primary">
                         <Icon name="loader" size={14} className="animate-spin" /> Running {r.jobFlowName}
@@ -64,6 +106,23 @@ export function RobotsPage() {
                   <Menu
                     trigger={<Button variant="ghost" size="icon" aria-label={`Actions for ${r.name}`}><Icon name="ellipsis" size={16} /></Button>}
                     items={[
+                      ...(r.updateAvailable && !r.updating
+                        ? [
+                            {
+                              label: `Update now to ${data.latestVersion}`,
+                              icon: <Icon name="download" size={14} />,
+                              onSelect: async () => {
+                                try {
+                                  await api(`/api/robots/${r.id}/update`, { method: 'POST', body: {} });
+                                  setUpdateMessage(`${r.name} installs version ${data.latestVersion} as soon as it isn't running anything.`);
+                                } catch (e) {
+                                  setUpdateMessage((e as Error).message);
+                                }
+                                reload();
+                              },
+                            },
+                          ]
+                        : []),
                       { label: 'Rename or change pool', icon: <Icon name="pencil" size={14} />, onSelect: () => setRenaming(r) },
                       {
                         label: r.enabled ? 'Disable' : 'Enable',

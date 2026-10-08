@@ -163,6 +163,11 @@ export interface Robot {
   jobFlowName: string | null;
   lastSeenAt: string | null;
   enrolledAt: string;
+  /** A newer robot package is on this server. */
+  updateAvailable: boolean;
+  /** Version the robot is installing right now. */
+  updating: string | null;
+  updateError: string | null;
 }
 
 export interface Schedule {

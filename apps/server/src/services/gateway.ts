@@ -21,15 +21,24 @@ export type RobotMessage =
   | { type: 'heartbeat'; busy_job_id?: string | null }
   | { type: 'job.event'; job_id: string; event: Record<string, unknown> }
   | { type: 'job.finished'; job_id: string; status: 'succeeded' | 'failed' | 'cancelled'; duration_ms?: number; outputs?: Record<string, unknown>; error?: { message: string; hint?: string | null; step_id?: string } | null }
-  | { type: 'job.rejected'; job_id: string; reason?: string };
+  | { type: 'job.rejected'; job_id: string; reason?: string }
+  | { type: 'robot.updating'; version: string }
+  | { type: 'robot.update_failed'; version: string; error: string };
 
 const DISCONNECT_GRACE_MS = 90_000;
 const CANCEL_GRACE_MS = 60_000;
+/** A robot that started updating and never came back is shown as offline again after this. */
+const UPDATE_GIVE_UP_MS = 15 * 60_000;
 
 export class Gateway {
   private readonly connections = new Map<string, Connection>();
   private readonly lostJobs = new Map<string, NodeJS.Timeout>();
   private timer: NodeJS.Timeout | null = null;
+  /** Robots installing a new version (robot id -> version) and the last update problem per robot. */
+  private readonly updates = new Map<string, { version: string; since: number }>();
+  private readonly updateErrors = new Map<string, string>();
+  /** Called when a robot comes back with a different version (audit log). */
+  onVersionChange: (robotId: string, from: string, to: string) => void = () => undefined;
   /** Whether a job's robot may ask the AI assistant to fix failed steps (set by createServices). */
   repairAllowed: (job: JobRow) => boolean = () => false;
 
@@ -62,6 +71,22 @@ export class Gateway {
 
   busyJob(robotId: string): string | null {
     return this.connections.get(robotId)?.jobId ?? null;
+  }
+
+  /** Self-update progress for the dashboard. */
+  updateState(robotId: string): { updating: string | null; updateError: string | null } {
+    const update = this.updates.get(robotId);
+    if (update && Date.now() - update.since > UPDATE_GIVE_UP_MS) this.updates.delete(robotId);
+    return { updating: this.updates.get(robotId)?.version ?? null, updateError: this.updateErrors.get(robotId) ?? null };
+  }
+
+  /** Ask an online robot to look for a new version now (admins: "Update now"). */
+  requestUpdate(robotId: string): boolean {
+    const conn = this.connections.get(robotId);
+    if (!conn) return false;
+    this.updateErrors.delete(robotId);
+    this.send(conn, { type: 'robot.update' });
+    return true;
   }
 
   /** A robot authenticated and opened its connection. */
@@ -120,7 +145,20 @@ export class Gateway {
     conn.lastSeen = Date.now();
     this.touch(conn.robotId);
     switch (msg.type) {
-      case 'hello':
+      case 'hello': {
+        const before = this.db.get<{ version: string }>('SELECT version FROM robots WHERE id = ?', conn.robotId)?.version ?? '';
+        const after = msg.version ?? '';
+        const pending = this.updates.get(conn.robotId);
+        if (pending) {
+          this.updates.delete(conn.robotId);
+          if (after !== pending.version) {
+            this.updateErrors.set(conn.robotId, `Version ${pending.version} did not start, so the robot went back to ${after || 'its previous version'}. See update.log in the robot's install folder.`);
+          }
+        }
+        if (before && after && before !== after) {
+          if (after === pending?.version) this.updateErrors.delete(conn.robotId);
+          this.onVersionChange(conn.robotId, before, after);
+        }
         this.db.run(
           'UPDATE robots SET version = ?, capabilities = ?, machine = COALESCE(?, machine) WHERE id = ?',
           msg.version ?? '',
@@ -129,6 +167,18 @@ export class Gateway {
           conn.robotId,
         );
         this.resume(conn, msg.busy_job_id ?? null);
+        this.publishRobot(conn.robotId);
+        this.dispatch();
+        break;
+      }
+      case 'robot.updating':
+        this.updates.set(conn.robotId, { version: String(msg.version).slice(0, 40), since: Date.now() });
+        this.updateErrors.delete(conn.robotId);
+        this.publishRobot(conn.robotId);
+        break;
+      case 'robot.update_failed':
+        this.updates.delete(conn.robotId);
+        this.updateErrors.set(conn.robotId, `Could not update to ${String(msg.version).slice(0, 40)}: ${String(msg.error).slice(0, 300)}`);
         this.publishRobot(conn.robotId);
         this.dispatch();
         break;
@@ -187,7 +237,7 @@ export class Gateway {
   /** Offer queued jobs to idle robots. */
   dispatch(): void {
     for (const conn of this.connections.values()) {
-      if (conn.jobId) continue;
+      if (conn.jobId || this.updates.has(conn.robotId)) continue; // busy, or installing a new version
       const enabled = this.db.get<{ enabled: number }>('SELECT enabled FROM robots WHERE id = ?', conn.robotId)?.enabled;
       if (!enabled) continue;
       const job = this.jobs.claimNext(conn.robotId, conn.pool);
@@ -259,6 +309,6 @@ export class Gateway {
   }
 
   private publishRobot(robotId: string): void {
-    this.bus.publish({ type: 'robot.updated', robot: { id: robotId, online: this.isOnline(robotId), jobId: this.busyJob(robotId) } });
+    this.bus.publish({ type: 'robot.updated', robot: { id: robotId, online: this.isOnline(robotId), jobId: this.busyJob(robotId), ...this.updateState(robotId) } });
   }
 }

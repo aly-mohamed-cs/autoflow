@@ -43,11 +43,14 @@ def cmd_enroll(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     from .agent import Agent
+    from .updater import mark_started
 
     _setup_logging(args.verbose)
     config = RobotConfig.load()
     logging.getLogger("autoflow.robot").info("Autoflow Robot %s starting (%s)", __version__, config.name)
+    mark_started()  # after a self-update, tells apply-update.ps1 the new version came up
     agent = Agent(config)
+    agent.updater.cleanup()
     try:
         asyncio.run(agent.run())
     except KeyboardInterrupt:
