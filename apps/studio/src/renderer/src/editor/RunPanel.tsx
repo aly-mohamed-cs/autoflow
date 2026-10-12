@@ -1,5 +1,6 @@
 import type { Flow, RepairPatch, Selector } from '@autoflow/flow-types';
 import { walkFlow } from '@autoflow/flow-types';
+import { DebugConsole } from './DebugConsole';
 import { Badge, Button, cn, Dialog, EmptyState, Icon, Tabs } from '@autoflow/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogIndex } from '../lib/catalog';
@@ -21,7 +22,11 @@ export function RunPanel({ height, onResize }: { height: number; onResize: (h: n
   }, [phase]);
 
   return (
-    <section className="flex shrink-0 flex-col border-t border-border bg-surface" style={{ height }} aria-label="Run and problems">
+    <section
+      className="flex shrink-0 flex-col border-t border-border bg-surface"
+      style={{ height }}
+      aria-label="Run and problems"
+    >
       <ResizeHandle height={height} onResize={onResize} />
       <Tabs
         value={tab}
@@ -34,24 +39,55 @@ export function RunPanel({ height, onResize }: { height: number; onResize: (h: n
               <>
                 <Icon name="list-video" size={14} /> Test run
                 {result && (
-                  <Badge tone={result.status === 'succeeded' ? 'success' : result.status === 'failed' ? 'danger' : 'neutral'}>
-                    {result.status === 'succeeded' ? 'passed' : result.status === 'failed' ? 'failed' : 'stopped'}
+                  <Badge
+                    tone={
+                      result.status === 'succeeded'
+                        ? 'success'
+                        : result.status === 'failed'
+                          ? 'danger'
+                          : 'neutral'
+                    }
+                  >
+                    {result.status === 'succeeded'
+                      ? 'passed'
+                      : result.status === 'failed'
+                        ? 'failed'
+                        : 'stopped'}
                   </Badge>
                 )}
               </>
             ),
             content: <RunLog />,
           },
-          { value: 'variables', label: <><Icon name="variable" size={14} /> Variables</>, content: <VariablesView /> },
+          {
+            value: 'variables',
+            label: (
+              <>
+                <Icon name="variable" size={14} /> Variables
+              </>
+            ),
+            content: <VariablesView />,
+          },
           {
             value: 'problems',
             label: (
               <>
                 <Icon name="triangle-alert" size={14} /> Problems
-                {issues.length > 0 && <Badge tone={errorCount ? 'danger' : 'warning'}>{issues.length}</Badge>}
+                {issues.length > 0 && (
+                  <Badge tone={errorCount ? 'danger' : 'warning'}>{issues.length}</Badge>
+                )}
               </>
             ),
             content: <ProblemsView />,
+          },
+          {
+            value: 'console',
+            label: (
+              <>
+                <Icon name="square-terminal" size={14} /> Console
+              </>
+            ),
+            content: <DebugConsole />,
           },
         ]}
       />
@@ -74,7 +110,8 @@ function ResizeHandle({ height, onResize }: { height: number; onResize: (h: numb
       onPointerDown={(e) => {
         const startY = e.clientY;
         const start = height;
-        const move = (ev: PointerEvent) => onResize(Math.min(Math.max(start + startY - ev.clientY, 120), window.innerHeight * 0.7));
+        const move = (ev: PointerEvent) =>
+          onResize(Math.min(Math.max(start + startY - ev.clientY, 120), window.innerHeight * 0.7));
         const up = () => {
           window.removeEventListener('pointermove', move);
           window.removeEventListener('pointerup', up);
@@ -99,7 +136,7 @@ function RunLog() {
   const phase = useRun((s) => s.phase);
   const startedAt = useRun((s) => s.startedAt);
   const flow = useEditor((s) => s.flow);
-  const select = useEditor((s) => s.select);
+  const select = useEditor((s) => s.revealStep);
   const index = useApp((s) => s.index);
   const bottom = useRef<HTMLDivElement>(null);
   const [shot, setShot] = useState<string | null>(null);
@@ -113,8 +150,13 @@ function RunLog() {
 
   if (phase === 'idle' && log.length === 0) {
     return (
-      <EmptyState icon={<Icon name="play" size={24} />} title="Test your automation here" className="py-6">
-        Press <strong>Test run</strong> to run it on this computer. You'll see every step, its results and screenshots.
+      <EmptyState
+        icon={<Icon name="play" size={24} />}
+        title="Test your automation here"
+        className="py-6"
+      >
+        Press <strong>Test run</strong> to run it on this computer. You'll see every step, its
+        results and screenshots.
       </EmptyState>
     );
   }
@@ -127,29 +169,49 @@ function RunLog() {
 
   return (
     <div className="font-[450]">
-      {phase === 'starting' && <p className="px-4 py-2 text-[13px] text-muted">Starting… {startedAt && ''}</p>}
+      {phase === 'starting' && (
+        <p className="px-4 py-2 text-[13px] text-muted">Starting… {startedAt && ''}</p>
+      )}
       <ul className="divide-y divide-border/60">
         {log.map((entry) => {
           const level = LEVEL_ICON[entry.level];
           const name = stepName(entry.stepId);
           return (
             <li key={entry.id} className="flex items-start gap-2 px-4 py-1.5 text-[13px]">
-              <Icon name={level.icon} size={15} className={cn('mt-0.5 shrink-0', level.className)} />
+              <Icon
+                name={level.icon}
+                size={15}
+                className={cn('mt-0.5 shrink-0', level.className)}
+              />
               <div className="min-w-0 flex-1">
                 <p className="break-words">{entry.message}</p>
                 {entry.hint && <p className="text-xs text-muted">{entry.hint}</p>}
                 {entry.screenshot && (
-                  <button type="button" onClick={() => setShot(entry.screenshot!)} className="mt-1 block">
-                    <img src={window.autoflow.app.fileUrl(entry.screenshot)} alt="Screenshot" className="h-20 rounded border border-border" />
+                  <button
+                    type="button"
+                    onClick={() => setShot(entry.screenshot!)}
+                    className="mt-1 block"
+                  >
+                    <img
+                      src={window.autoflow.app.fileUrl(entry.screenshot)}
+                      alt="Screenshot"
+                      className="h-20 rounded border border-border"
+                    />
                   </button>
                 )}
               </div>
               {name && (
-                <button type="button" onClick={() => select(entry.stepId!)} className="shrink-0 truncate text-xs text-primary hover:underline">
+                <button
+                  type="button"
+                  onClick={() => select(entry.stepId!)}
+                  className="shrink-0 truncate text-xs text-primary hover:underline"
+                >
                   {name}
                 </button>
               )}
-              <time className="shrink-0 text-[11px] text-subtle tabular-nums">{new Date(entry.ts * 1000).toLocaleTimeString()}</time>
+              <time className="shrink-0 text-[11px] text-subtle tabular-nums">
+                {new Date(entry.ts * 1000).toLocaleTimeString()}
+              </time>
             </li>
           );
         })}
@@ -158,7 +220,13 @@ function RunLog() {
       <AiFixes stepName={stepName} />
       <div ref={bottom} />
       <Dialog open={!!shot} onOpenChange={(o) => !o && setShot(null)} title="Screenshot" width="xl">
-        {shot && <img src={window.autoflow.app.fileUrl(shot)} alt="Screenshot of the screen during the run" className="w-full rounded border border-border" />}
+        {shot && (
+          <img
+            src={window.autoflow.app.fileUrl(shot)}
+            alt="Screenshot of the screen during the run"
+            className="w-full rounded border border-border"
+          />
+        )}
       </Dialog>
     </div>
   );
@@ -172,7 +240,7 @@ function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
   const runFlowId = useRun((s) => s.flowId);
   const flow = useEditor((s) => s.flow);
   const change = useEditor((s) => s.change);
-  const select = useEditor((s) => s.select);
+  const select = useEditor((s) => s.revealStep);
   const index = useApp((s) => s.index);
   const toast = useApp((s) => s.toast);
   const open = fixes.filter((f) => !f.decision);
@@ -194,15 +262,25 @@ function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
       {repairing && (
         <p className="flex items-center gap-2 text-[13px] text-muted" role="status">
           <Icon name="loader-circle" size={15} className="animate-spin text-primary" />
-          The AI assistant is looking at “{stepName(repairing.stepId) ?? 'a step'}” (attempt {repairing.attempt} of {repairing.of})…
+          The AI assistant is looking at “{stepName(repairing.stepId) ?? 'a step'}” (attempt{' '}
+          {repairing.attempt} of {repairing.of})…
         </p>
       )}
       {open.map((fix) => (
-        <div key={fix.stepId} className="rounded-md border border-primary/30 bg-surface p-3 text-[13px]" role="group" aria-label="AI fix">
+        <div
+          key={fix.stepId}
+          className="rounded-md border border-primary/30 bg-surface p-3 text-[13px]"
+          role="group"
+          aria-label="AI fix"
+        >
           <p className="flex items-center gap-2 font-semibold">
             <Icon name="sparkles" size={15} className="text-primary" />
             The AI assistant fixed
-            <button type="button" className="text-primary hover:underline" onClick={() => select(fix.stepId)}>
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => select(fix.stepId)}
+            >
               {stepName(fix.stepId) ?? 'a step'}
             </button>
             and it worked
@@ -214,7 +292,12 @@ function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
             ))}
           </ul>
           <div className="mt-2 flex gap-2">
-            <Button size="sm" variant="primary" icon={<Icon name="check" size={14} />} onClick={() => keep(fix)}>
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<Icon name="check" size={14} />}
+              onClick={() => keep(fix)}
+            >
               Keep fix
             </Button>
             <Button size="sm" onClick={() => decideFix(fix.stepId, 'discarded')}>
@@ -228,18 +311,28 @@ function AiFixes({ stepName }: { stepName: (id?: string) => string | null }) {
 }
 
 /** Plain-language list of what an AI fix changes. */
-export function describePatch(patch: RepairPatch, flow: Flow | null, index: CatalogIndex): string[] {
+export function describePatch(
+  patch: RepairPatch,
+  flow: Flow | null,
+  index: CatalogIndex,
+): string[] {
   const step = flow ? findStep(flow, patch.step_id) : undefined;
   const def = step ? index.get(step.activity) : undefined;
   const titles = new Map((def ? index.fields(def) : []).map((f) => [f.name, f.title]));
   const lines: string[] = [];
   for (const [name, value] of Object.entries(patch.params)) {
     if (name === 'element' && patch.new_element) continue;
-    lines.push(`${titles.get(name) ?? name}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+    lines.push(
+      `${titles.get(name) ?? name}: ${typeof value === 'string' ? value : JSON.stringify(value)}`,
+    );
   }
   if (patch.element) {
     const how = describeSelector(patch.element.selectors[0]);
-    lines.push(patch.new_element ? `Picked the element “${patch.element.name}” (${how})` : `New way to find “${patch.element.name}”: ${how}`);
+    lines.push(
+      patch.new_element
+        ? `Picked the element “${patch.element.name}” (${how})`
+        : `New way to find “${patch.element.name}”: ${how}`,
+    );
   }
   return lines;
 }
@@ -289,18 +382,32 @@ function VariablesView() {
               <td className="w-56 px-4 py-1.5 align-top font-medium">{name}</td>
               <td className="px-4 py-1.5">
                 {isTable(value) ? (
-                  <button type="button" className="text-primary hover:underline" onClick={() => setTable({ name, value })}>
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    onClick={() => setTable({ name, value })}
+                  >
                     Table · {value.row_count} rows · {value.columns.join(', ')}
                   </button>
                 ) : (
-                  <span className="line-clamp-2 font-mono text-xs break-all">{formatPreview(value)}</span>
+                  <span className="line-clamp-2 font-mono text-xs break-all">
+                    {formatPreview(value)}
+                  </span>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <Dialog open={!!table} onOpenChange={(o) => !o && setTable(null)} title={table?.name ?? ''} description={table ? `${table.value.row_count} rows (first ${table.value.rows.length} shown)` : ''} width="xl">
+      <Dialog
+        open={!!table}
+        onOpenChange={(o) => !o && setTable(null)}
+        title={table?.name ?? ''}
+        description={
+          table ? `${table.value.row_count} rows (first ${table.value.rows.length} shown)` : ''
+        }
+        width="xl"
+      >
         {table && <TableView value={table.value} />}
       </Dialog>
     </>
@@ -314,7 +421,8 @@ interface TablePreview {
   row_count: number;
 }
 
-const isTable = (v: unknown): v is TablePreview => !!v && typeof v === 'object' && (v as { $type?: string }).$type === 'table';
+const isTable = (v: unknown): v is TablePreview =>
+  !!v && typeof v === 'object' && (v as { $type?: string }).$type === 'table';
 
 function TableView({ value }: { value: TablePreview }) {
   return (
@@ -324,7 +432,9 @@ function TableView({ value }: { value: TablePreview }) {
           <tr>
             <th className="px-2 py-1 text-right text-subtle">#</th>
             {value.columns.map((c) => (
-              <th key={c} className="px-2 py-1 text-left font-semibold whitespace-nowrap">{c}</th>
+              <th key={c} className="px-2 py-1 text-left font-semibold whitespace-nowrap">
+                {c}
+              </th>
             ))}
           </tr>
         </thead>
@@ -333,7 +443,9 @@ function TableView({ value }: { value: TablePreview }) {
             <tr key={i}>
               <td className="px-2 py-1 text-right text-subtle">{i + 1}</td>
               {value.columns.map((c) => (
-                <td key={c} className="px-2 py-1 whitespace-nowrap">{formatPreview(row[c])}</td>
+                <td key={c} className="px-2 py-1 whitespace-nowrap">
+                  {formatPreview(row[c])}
+                </td>
               ))}
             </tr>
           ))}
@@ -346,12 +458,20 @@ function TableView({ value }: { value: TablePreview }) {
 function ProblemsView() {
   const issues = useEditor((s) => s.issues);
   const flow = useEditor((s) => s.flow);
-  const select = useEditor((s) => s.select);
+  const select = useEditor((s) => s.revealStep);
   const index = useApp((s) => s.index);
-  const sorted = useMemo(() => [...issues].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)), [issues]);
+  const sorted = useMemo(
+    () =>
+      [...issues].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
+    [issues],
+  );
   if (!issues.length) {
     return (
-      <EmptyState icon={<Icon name="circle-check" size={24} className="text-success" />} title="No problems found" className="py-6">
+      <EmptyState
+        icon={<Icon name="circle-check" size={24} className="text-success" />}
+        title="No problems found"
+        className="py-6"
+      >
         Every step has the settings it needs.
       </EmptyState>
     );
@@ -370,10 +490,17 @@ function ProblemsView() {
               <Icon
                 name={issue.severity === 'error' ? 'circle-x' : 'triangle-alert'}
                 size={15}
-                className={cn('mt-0.5 shrink-0', issue.severity === 'error' ? 'text-danger' : 'text-warning')}
+                className={cn(
+                  'mt-0.5 shrink-0',
+                  issue.severity === 'error' ? 'text-danger' : 'text-warning',
+                )}
               />
               <span className="flex-1">{issue.message}</span>
-              {step && <span className="text-xs text-subtle">{step.label || index.get(step.activity)?.title}</span>}
+              {step && (
+                <span className="text-xs text-subtle">
+                  {step.label || index.get(step.activity)?.title}
+                </span>
+              )}
             </button>
           </li>
         );

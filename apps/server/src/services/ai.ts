@@ -2,7 +2,7 @@
 // (Ollama, LM Studio, vLLM...). Nothing leaves the company network; it is off until
 // an administrator configures it. Model output is never trusted: drafts are checked
 // against the activity catalog and reviewed by a person before anything runs.
-import { normalizeCondition, type ActivityDef, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
+import { blocksOf, normalizeCondition, type ActivityDef, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { randomBytes } from 'node:crypto';
 import { HttpError, type Settings } from './core.js';
@@ -29,7 +29,8 @@ function catalogForPrompt(): string {
     .filter((a) => !a.advanced)
     .map((a) => {
       const params = Object.keys(a.params.properties ?? {}).filter((p) => !a.params.properties[p]?.['x-advanced']);
-      const blocks = a.blocks.length ? ` blocks: ${a.blocks.map((b) => b.name).join('/')}` : '';
+      const cases = a.block_list ? `${a.block_list.prefix}1/${a.block_list.prefix}2/... (one per item of ${a.block_list.param})/` : '';
+      const blocks = a.blocks.length ? ` blocks: ${cases}${a.blocks.map((b) => b.name).join('/')}` : '';
       const outputs = a.outputs.length ? ` outputs: ${a.outputs.map((o) => o.name).join(',')}` : '';
       return `- ${a.id}: ${a.title}. settings: ${params.join(', ') || 'none'}.${blocks}${outputs}`;
     })
@@ -290,9 +291,10 @@ export function sanitizeSteps(value: unknown, dropped: string[], depth = 0): Ste
     const step: Step = { id: `s${randomBytes(6).toString('hex')}`, activity: def.id, params };
     if (typeof s.label === 'string' && s.label.trim()) step.label = s.label.trim().slice(0, 120);
     if (def.outputs.length) step.outputs = outputs;
-    if (def.blocks.length) {
+    const sections = blocksOf(def, params);
+    if (sections.length) {
       const blocks = s.blocks && typeof s.blocks === 'object' ? (s.blocks as Record<string, unknown>) : {};
-      step.blocks = Object.fromEntries(def.blocks.map((b) => [b.name, sanitizeSteps(blocks[b.name], dropped, depth + 1)]));
+      step.blocks = Object.fromEntries(sections.map((b) => [b.name, sanitizeSteps(blocks[b.name], dropped, depth + 1)]));
     }
     out.push(step);
   }

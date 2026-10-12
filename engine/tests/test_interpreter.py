@@ -319,3 +319,73 @@ def test_running_a_missing_sub_process_fails_clearly(h):
     result = h.run([step("control.run_process", {"process": "gone"})])
     assert result.status == "failed"
     assert "no longer exists" in result.error["message"]
+
+
+# -- Release B: more flow control ----------------------------------------------------------------
+
+
+def test_switch_runs_the_matching_case_or_otherwise(h):
+    switch = step("control.switch", {"value": "{{status}}", "cases": ["Paid", "{{late}}"]}, blocks={
+        "case_1": [step("control.set_variable", {"variable": "path", "value": "paid"})],
+        "case_2": [step("control.set_variable", {"variable": "path", "value": "late"})],
+        "default": [step("control.set_variable", {"variable": "path", "value": "other"})],
+    })
+    for status, expected in [("paid ", "paid"), ("Overdue", "late"), ("Draft", "other")]:
+        result = h.run([switch], variables=[{"name": "status", "default": status}, {"name": "late", "default": "overdue"}])
+        assert result.status == "succeeded", result.error
+        assert h.vars["path"] == expected, status
+
+
+def test_do_while_runs_at_least_once(h):
+    body = [step("control.increase", {"variable": "n"})]
+    cond = {"rules": [{"left": "{{n}}", "op": "less", "right": 3}]}
+    h.run([step("control.do_while", {"condition": cond}, blocks={"body": body})],
+          variables=[{"name": "n", "type": "number", "default": 10}])
+    assert h.vars["n"] == 11  # the condition was false from the start, yet the steps ran once
+    h.run([step("control.do_while", {"condition": cond}, blocks={"body": body})],
+          variables=[{"name": "n", "type": "number", "default": 0}])
+    assert h.vars["n"] == 3
+
+
+def test_retry_runs_the_steps_again_until_they_work(h):
+    body = [
+        step("control.increase", {"variable": "tries"}),
+        step("control.check", {"condition": {"rules": [{"left": "{{tries}}", "op": "greater_or_equal", "right": 3}]},
+                               "message": "Not yet"}),
+    ]
+    result = h.run([step("control.retry", {"times": 5, "wait": 0}, blocks={"body": body})],
+                   variables=[{"name": "tries", "type": "number", "default": 0}])
+    assert result.status == "succeeded", result.error
+    assert h.vars["tries"] == 3
+    assert sum("Try 1 of 5 failed: Not yet" in m for m in h.logs()) == 1
+
+    result = h.run([step("control.retry", {"times": 2, "wait": 0}, blocks={"body": body})],
+                   variables=[{"name": "tries", "type": "number", "default": -10}])
+    assert result.status == "failed"
+    assert result.error["message"] == "Not yet"
+
+
+def test_groups_and_checks(h):
+    result = h.run([
+        step("control.group", {"name": "Prepare"}, blocks={"body": [step("control.set_variable", {"variable": "x", "value": "1"})]}),
+        step("control.check", {"condition": {"rules": [{"left": "{{x}}", "op": "equals", "right": "2"}]}}),
+    ])
+    assert h.vars["x"] == "1"
+    assert result.status == "failed"
+    assert "check failed" in result.error["message"]
+
+
+def test_dialogs_that_nobody_answers_close_by_themselves(h):
+    result = h.run([
+        step("control.message", {"message": "Hello", "close_after": 0.2}),
+        step("control.ask", {"question": "Which month?", "default": "May", "close_after": 0.2}, outputs={"answer": "month"}),
+    ])
+    assert result.status == "succeeded", result.error
+    assert h.vars["month"] == "May"
+
+
+def test_a_pause_after_every_step(h):
+    started = time.monotonic()
+    h.run([step("control.log", {"message": "a"}), step("control.log", {"message": "b"})],
+          settings={"step_delay": 0.3})
+    assert time.monotonic() - started >= 0.6

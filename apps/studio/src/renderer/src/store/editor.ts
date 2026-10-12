@@ -9,7 +9,12 @@ interface EditorState {
   flow: Flow | null;
   /** The process shown in the editor: a sub-process id, or null for the main one. */
   processId: string | null;
+  /** The step shown in the settings panel (the last one picked). */
   selectedId: string | null;
+  /** All selected steps (Ctrl+click, Shift+drag a box); includes selectedId. */
+  selectedIds: string[];
+  /** Set to scroll a step into view (find, problems list); the number changes on every request. */
+  reveal: { id: string; nonce: number } | null;
   dirty: boolean;
   saving: boolean;
   savedAt: number | null;
@@ -32,6 +37,12 @@ interface EditorState {
   select(id: string | null): void;
   /** Show a process (null: the main one). */
   showProcess(id: string | null): void;
+  /** Add a step to the selection, or take it out (Ctrl+click). */
+  toggleSelect(id: string): void;
+  /** Select exactly these steps (e.g. by drawing a box). */
+  selectMany(ids: string[]): void;
+  /** Select a step and scroll it into view. */
+  revealStep(id: string): void;
   setIssues(issues: ValidationIssue[]): void;
   markSaving(saving: boolean): void;
   markSaved(flow: Flow): void;
@@ -46,6 +57,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   flow: null,
   processId: null,
   selectedId: null,
+  selectedIds: [],
+  reveal: null,
   dirty: false,
   saving: false,
   savedAt: null,
@@ -60,6 +73,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       flow,
       processId: null,
       selectedId: null,
+      selectedIds: [],
       dirty: false,
       past: [],
       future: [],
@@ -67,7 +81,16 @@ export const useEditor = create<EditorState>((set, get) => ({
       savedAt: Date.now(),
       lastKey: null,
     }),
-  close: () => set({ flow: null, processId: null, selectedId: null, past: [], future: [], issues: [] }),
+  close: () =>
+    set({
+      flow: null,
+      processId: null,
+      selectedId: null,
+      selectedIds: [],
+      past: [],
+      future: [],
+      issues: [],
+    }),
 
   change: (fn, coalesceKey) => {
     const { flow, past, lastKey, lastAt } = get();
@@ -118,12 +141,38 @@ export const useEditor = create<EditorState>((set, get) => ({
   select: (selectedId) => {
     const { flow, processId } = get();
     const home = selectedId && flow ? processOfStep(flow, selectedId) : undefined;
-    set({ selectedId, processId: home === undefined ? processId : home });
+    set({
+      selectedId,
+      selectedIds: selectedId ? [selectedId] : [],
+      processId: home === undefined ? processId : home,
+    });
   },
   showProcess: (processId) => {
     const { flow, selectedId } = get();
     const keep = selectedId && flow && processOfStep(flow, selectedId) === processId;
-    set({ processId, selectedId: keep ? selectedId : null });
+    set({
+      processId,
+      selectedId: keep ? selectedId : null,
+      selectedIds: keep ? [selectedId!] : [],
+    });
+  },
+  toggleSelect: (id) => {
+    const { selectedIds } = get();
+    const next = selectedIds.includes(id)
+      ? selectedIds.filter((s) => s !== id)
+      : [...selectedIds, id];
+    set({ selectedIds: next, selectedId: next.at(-1) ?? null });
+  },
+  selectMany: (ids) => {
+    const { selectedId } = get();
+    set({
+      selectedIds: ids,
+      selectedId: selectedId && ids.includes(selectedId) ? selectedId : (ids.at(-1) ?? null),
+    });
+  },
+  revealStep: (id) => {
+    get().select(id);
+    set({ reveal: { id, nonce: Date.now() } });
   },
   setIssues: (issues) => set({ issues }),
   markSaving: (saving) => set({ saving }),

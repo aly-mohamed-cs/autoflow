@@ -1,5 +1,5 @@
 // Read-only view of an automation's steps, optionally with what happened in a run.
-import { findStep, normalizeCondition, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
+import { blocksOf, findStep, normalizeCondition, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { cn, Icon, IconTile, Tooltip } from '@autoflow/ui';
 import type { ReactNode } from 'react';
@@ -81,9 +81,9 @@ function List({ steps, elements, runs, details }: { steps: Step[]; elements: Map
               </div>
               {run && <StatusIcon run={run} />}
             </div>
-            {def?.blocks.length ? (
+            {def && blocksOf(def, step.params).length ? (
               <div className="mt-1.5 ml-3 space-y-1.5 border-l-2 border-border pl-4">
-                {def.blocks.map((b) =>
+                {blocksOf(def, step.params).map((b) =>
                   step.blocks?.[b.name]?.length ? (
                     <div key={b.name}>
                       <p className="mb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">{b.title}</p>

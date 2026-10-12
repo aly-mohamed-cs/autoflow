@@ -1,5 +1,16 @@
 import type { Variable, VariableType } from '@autoflow/flow-types';
-import { Badge, Button, Dialog, Field, Icon, Input, SectionTitle, Select, Switch, Textarea } from '@autoflow/ui';
+import {
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  Icon,
+  Input,
+  SectionTitle,
+  Select,
+  Switch,
+  Textarea,
+} from '@autoflow/ui';
 import { useState } from 'react';
 import { toVariableName, TYPE_ICONS, TYPE_LABELS } from '../lib/scope';
 import { useEditor } from '../store/editor';
@@ -26,7 +37,9 @@ export function FlowPanel() {
             rows={3}
             value={flow.description ?? ''}
             placeholder="What does this automation do, and for whom?"
-            onChange={(e) => change((f) => ({ ...f, description: e.target.value }), 'flow:description')}
+            onChange={(e) =>
+              change((f) => ({ ...f, description: e.target.value }), 'flow:description')
+            }
           />
         </Field>
       </section>
@@ -38,7 +51,9 @@ export function FlowPanel() {
               size="sm"
               variant="ghost"
               icon={<Icon name="plus" size={14} />}
-              onClick={() => setEditing({ variable: { name: '', type: 'text', is_input: true }, isNew: true })}
+              onClick={() =>
+                setEditing({ variable: { name: '', type: 'text', is_input: true }, isNew: true })
+              }
             >
               Add
             </Button>
@@ -50,7 +65,9 @@ export function FlowPanel() {
           Start values are filled in when the automation is run — e.g. which Excel file to process.
         </p>
         {declared.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border-strong p-3 text-center text-[13px] text-subtle">No start values</p>
+          <p className="rounded-md border border-dashed border-border-strong p-3 text-center text-[13px] text-subtle">
+            No start values
+          </p>
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {declared.map((v) => (
@@ -90,7 +107,11 @@ export function FlowPanel() {
 
       <section className="space-y-3">
         <SectionTitle>Behaviour</SectionTitle>
-        <Field label="Wait for screens up to" inline help="How long steps wait for an element before failing.">
+        <Field
+          label="Wait for screens up to"
+          inline
+          help="How long steps wait for an element before failing."
+        >
           <div className="flex w-32 items-center gap-1">
             <Input
               type="number"
@@ -98,7 +119,42 @@ export function FlowPanel() {
               value={settings.default_timeout ?? 30}
               aria-label="Seconds to wait for elements"
               onChange={(e) =>
-                change((f) => ({ ...f, settings: { ...f.settings, default_timeout: Number(e.target.value) || 30 } }), 'flow:timeout')
+                change(
+                  (f) => ({
+                    ...f,
+                    settings: { ...f.settings, default_timeout: Number(e.target.value) || 30 },
+                  }),
+                  'flow:timeout',
+                )
+              }
+            />
+            <span className="text-xs text-subtle">sec</span>
+          </div>
+        </Field>
+        <Field
+          label="Pause after every step"
+          inline
+          help="Slows the automation down: to watch a test run, or for programs that need a moment after each action."
+        >
+          <div className="flex w-32 items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={60}
+              step={0.5}
+              value={settings.step_delay ?? 0}
+              aria-label="Seconds to pause after every step"
+              onChange={(e) =>
+                change(
+                  (f) => ({
+                    ...f,
+                    settings: {
+                      ...f.settings,
+                      step_delay: Math.min(60, Math.max(0, Number(e.target.value) || 0)),
+                    },
+                  }),
+                  'flow:step_delay',
+                )
               }
             />
             <span className="text-xs text-subtle">sec</span>
@@ -107,13 +163,21 @@ export function FlowPanel() {
         <Field label="Screenshot when a step fails" inline>
           <Switch
             checked={settings.screenshot_on_error ?? true}
-            onChange={(v) => change((f) => ({ ...f, settings: { ...f.settings, screenshot_on_error: v } }))}
+            onChange={(v) =>
+              change((f) => ({ ...f, settings: { ...f.settings, screenshot_on_error: v } }))
+            }
           />
         </Field>
-        <Field label="Screenshot after every step" inline help="Useful for audits; uses more disk space.">
+        <Field
+          label="Screenshot after every step"
+          inline
+          help="Useful for audits; uses more disk space."
+        >
           <Switch
             checked={settings.screenshot_each_step ?? false}
-            onChange={(v) => change((f) => ({ ...f, settings: { ...f.settings, screenshot_each_step: v } }))}
+            onChange={(v) =>
+              change((f) => ({ ...f, settings: { ...f.settings, screenshot_each_step: v } }))
+            }
           />
         </Field>
       </section>
@@ -123,7 +187,10 @@ export function FlowPanel() {
           <SectionTitle>Screen elements</SectionTitle>
           <ul className="space-y-1.5">
             {flow.elements!.map((e) => (
-              <li key={e.id} className="flex items-center gap-2 rounded-md border border-border p-1.5">
+              <li
+                key={e.id}
+                className="flex items-center gap-2 rounded-md border border-border p-1.5"
+              >
                 <Thumbnail element={e} size={28} />
                 <span className="min-w-0 flex-1 truncate text-[13px]">{e.name}</span>
                 <Badge>{e.kind}</Badge>
@@ -140,7 +207,10 @@ export function FlowPanel() {
         onSave={(variable, previousName) => {
           change((f) => {
             const list = (f.variables ?? []).filter((v) => v.name !== previousName);
-            return { ...f, variables: [...list, variable].sort((a, b) => a.name.localeCompare(b.name)) };
+            return {
+              ...f,
+              variables: [...list, variable].sort((a, b) => a.name.localeCompare(b.name)),
+            };
           });
           setEditing(null);
         }}
@@ -185,7 +255,11 @@ function VariableDialog({
       footer={
         <>
           {!value.isNew && (
-            <Button variant="ghost" className="mr-auto text-danger" onClick={() => onDelete(value.variable.name)}>
+            <Button
+              variant="ghost"
+              className="mr-auto text-danger"
+              onClick={() => onDelete(value.variable.name)}
+            >
               Delete
             </Button>
           )}
@@ -201,9 +275,23 @@ function VariableDialog({
       }
     >
       <div className="space-y-4">
-        <Field label="Name" htmlFor="var-name" required error={duplicate ? 'A variable with this name already exists.' : undefined}
-          help={draft.name && name !== draft.name ? `Will be saved as “${name}”.` : 'Letters, numbers and _ only.'}>
-          <Input id="var-name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+        <Field
+          label="Name"
+          htmlFor="var-name"
+          required
+          error={duplicate ? 'A variable with this name already exists.' : undefined}
+          help={
+            draft.name && name !== draft.name
+              ? `Will be saved as “${name}”.`
+              : 'Letters, numbers and _ only.'
+          }
+        >
+          <Input
+            id="var-name"
+            autoFocus
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          />
         </Field>
         <Field label="Type">
           <Select
@@ -212,25 +300,46 @@ function VariableDialog({
             options={TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
           />
         </Field>
-        <Field label="Default value" htmlFor="var-default" help="Used when no value is given at start.">
+        <Field
+          label="Default value"
+          htmlFor="var-default"
+          help="Used when no value is given at start."
+        >
           <Input
             id="var-default"
-            value={draft.default === undefined || draft.default === null ? '' : String(draft.default)}
-            onChange={(e) => setDraft({ ...draft, default: e.target.value === '' ? undefined : e.target.value })}
+            value={
+              draft.default === undefined || draft.default === null ? '' : String(draft.default)
+            }
+            onChange={(e) =>
+              setDraft({ ...draft, default: e.target.value === '' ? undefined : e.target.value })
+            }
           />
         </Field>
         <Field label="Description" htmlFor="var-desc">
-          <Input id="var-desc" value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+          <Input
+            id="var-desc"
+            value={draft.description ?? ''}
+            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          />
         </Field>
         <div className="space-y-2 rounded-md bg-surface-2 p-3">
           <Field label="Ask for it when the automation starts" inline>
-            <Switch checked={!!draft.is_input} onChange={(is_input) => setDraft({ ...draft, is_input })} />
+            <Switch
+              checked={!!draft.is_input}
+              onChange={(is_input) => setDraft({ ...draft, is_input })}
+            />
           </Field>
           <Field label="Return it as a result" inline>
-            <Switch checked={!!draft.is_output} onChange={(is_output) => setDraft({ ...draft, is_output })} />
+            <Switch
+              checked={!!draft.is_output}
+              onChange={(is_output) => setDraft({ ...draft, is_output })}
+            />
           </Field>
           <Field label="Hide its value in logs" inline>
-            <Switch checked={!!draft.sensitive} onChange={(sensitive) => setDraft({ ...draft, sensitive })} />
+            <Switch
+              checked={!!draft.sensitive}
+              onChange={(sensitive) => setDraft({ ...draft, sensitive })}
+            />
           </Field>
         </div>
       </div>

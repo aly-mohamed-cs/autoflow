@@ -20,8 +20,15 @@ const def = (id: string) => index.get(id)!;
 
 describe('fields', () => {
   it('infers widgets from the schema', () => {
-    const kinds = Object.fromEntries(index.fields(def('browser.type')).map((f) => [f.name, f.kind]));
-    expect(kinds).toMatchObject({ element: 'element', text: 'text', clear_first: 'boolean', timeout: 'number' });
+    const kinds = Object.fromEntries(
+      index.fields(def('browser.type')).map((f) => [f.name, f.kind]),
+    );
+    expect(kinds).toMatchObject({
+      element: 'element',
+      text: 'text',
+      clear_first: 'boolean',
+      timeout: 'number',
+    });
     const timeout = index.fields(def('browser.type')).find((f) => f.name === 'timeout')!;
     expect(timeout.nullable && timeout.advanced).toBe(true);
   });
@@ -82,7 +89,15 @@ describe('templates', () => {
 
 describe('sentence', () => {
   const elements = new Map<string, Element>([
-    ['e1', { id: 'e1', name: 'Login button', kind: 'web', selectors: [{ strategy: 'css', value: '#b' }] }],
+    [
+      'e1',
+      {
+        id: 'e1',
+        name: 'Login button',
+        kind: 'web',
+        selectors: [{ strategy: 'css', value: '#b' }],
+      },
+    ],
   ]);
   const ctx = { index, elements };
 
@@ -95,7 +110,11 @@ describe('sentence', () => {
     const values = parts.filter((p) => p.kind === 'value');
     expect(values.map((p) => p.kind === 'value' && p.field)).toEqual(['text', 'element']);
     expect(values[1]!.kind === 'value' && values[1]!.element?.name).toBe('Login button');
-    const empty = sentence({ id: 's', activity: 'control.log', params: {} }, def('control.log'), ctx);
+    const empty = sentence(
+      { id: 's', activity: 'control.log', params: {} },
+      def('control.log'),
+      ctx,
+    );
     expect(empty.find((p) => p.kind === 'value')).toMatchObject({ empty: true, required: true });
   });
 
@@ -104,7 +123,15 @@ describe('sentence', () => {
       {
         id: 's',
         activity: 'control.if',
-        params: { condition: { match: 'any', rules: [{ left: '{{total}}', op: 'greater', right: '100' }, { left: '{{name}}', op: 'is_empty' }] } },
+        params: {
+          condition: {
+            match: 'any',
+            rules: [
+              { left: '{{total}}', op: 'greater', right: '100' },
+              { left: '{{name}}', op: 'is_empty' },
+            ],
+          },
+        },
       },
       def('control.if'),
       ctx,

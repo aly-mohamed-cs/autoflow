@@ -21,13 +21,13 @@ gaps.
 - [x] Mouse: hover, scroll, drag and drop (element or position)
 
 ## Release B - designer convenience
-- [ ] Select several steps (Ctrl+click / box select); copy, cut, paste (also between automations)
-- [ ] Group steps into a named, collapsible block (Brity "Block" / groups)
-- [ ] Find a step (Ctrl+F), replace a step with another kind keeping its settings
-- [ ] Switch / case, Do ... while, Retry these steps N times (RetryTask)
-- [ ] Checks: "Make sure that ..." (Brity Assert* family) failing with a clear message
-- [ ] Speed: pause between every step (SetPlayOption); debug console to evaluate formulas while paused
-- [ ] Message box and input box for attended use
+- [x] Select several steps (Ctrl+click / box select); copy, cut, paste (also between automations)
+- [x] Group steps into a named, collapsible block (Brity "Block" / groups)
+- [x] Find a step (Ctrl+F), replace a step with another kind keeping its settings
+- [x] Switch / case, Do ... while, Retry these steps N times (RetryTask)
+- [x] Checks: "Make sure that ..." (Brity Assert* family) failing with a clear message
+- [x] Speed: pause between every step (SetPlayOption); debug console to evaluate formulas while paused
+- [x] Message box and input box for attended use
 
 ## Release C - screen recognition
 - [ ] Image recognition: click / double / right-click / hover / type on an image, wait for an image

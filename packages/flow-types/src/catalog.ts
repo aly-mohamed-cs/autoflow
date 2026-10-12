@@ -66,8 +66,20 @@ export interface ActivityDef {
   params: ParamsSchema;
   outputs: OutputDef[];
   blocks: BlockDef[];
+  /** One more block per item of a list setting (Switch: a block per case), named prefix + number. */
+  block_list?: { param: string; prefix: string } | null;
   advanced: boolean;
   requires: string | null;
+}
+
+/** The step lists a step has: one per item of its block_list setting, then the fixed ones. */
+export function blocksOf(def: ActivityDef, params: Record<string, unknown> | undefined): BlockDef[] {
+  if (!def.block_list) return def.blocks;
+  const items = params?.[def.block_list.param];
+  const extra = Array.isArray(items)
+    ? items.map((item, i) => ({ name: `${def.block_list!.prefix}${i + 1}`, title: String(item ?? '') || `Case ${i + 1}` }))
+    : [];
+  return [...extra, ...def.blocks];
 }
 
 export interface CategoryDef {

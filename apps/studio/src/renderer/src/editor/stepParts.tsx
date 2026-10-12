@@ -42,7 +42,7 @@ export const STATUS_STYLES: Record<StepRunStatus, string> = {
 
 /** The step's ⋯ menu (duplicate, move, skip, pause point, delete) and its pause point. */
 export function useStepActions(step: Step) {
-  const selected = useEditor((s) => s.selectedId === step.id);
+  const selected = useEditor((s) => s.selectedIds.includes(step.id));
   const select = useEditor((s) => s.select);
   const change = useEditor((s) => s.change);
   const flowId = useEditor((s) => s.flow?.id ?? '');

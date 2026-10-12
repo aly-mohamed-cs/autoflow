@@ -7,7 +7,13 @@ let cached: { at: number; enabled: Promise<boolean> } | null = null;
 /** Whether the AI assistant is available (asked at most once a minute). */
 export function aiEnabled(): Promise<boolean> {
   if (!cached || Date.now() - cached.at > 60_000) {
-    cached = { at: Date.now(), enabled: window.autoflow.ai.status().then((s) => s.enabled, () => false) };
+    cached = {
+      at: Date.now(),
+      enabled: window.autoflow.ai.status().then(
+        (s) => s.enabled,
+        () => false,
+      ),
+    };
   }
   return cached.enabled;
 }

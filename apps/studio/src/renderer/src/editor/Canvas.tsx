@@ -1,17 +1,43 @@
-import type { ActivityDef, Step } from '@autoflow/flow-types';
-import { Badge, Button, categoryColor, cn, EmptyState, Icon, IconTile, Menu, Segmented, Tooltip } from '@autoflow/ui';
+import { blocksOf, type ActivityDef, type Step } from '@autoflow/flow-types';
+import {
+  Badge,
+  Button,
+  categoryColor,
+  cn,
+  EmptyState,
+  Icon,
+  IconTile,
+  Menu,
+  Segmented,
+  Tooltip,
+} from '@autoflow/ui';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { memo, useState } from 'react';
-import { getList, listKey, NO_STEPS, processSteps, rootRef, type ListRef } from '../lib/flowOps';
+import { memo, useEffect, useState } from 'react';
+import {
+  getList,
+  listKey,
+  NO_STEPS,
+  processSteps,
+  rootRef,
+  toggleCollapsed,
+  type ListRef,
+} from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun } from '../store/run';
 import { AddStepMenu } from './AddStepMenu';
 import { useDnd } from './dnd';
 import { FlowCanvas, LayoutControls } from './FlowCanvas';
+import { FindSteps } from './FindSteps';
 import { ProcessTabs } from './ProcessTabs';
 import { useStepIssues } from './hooks';
-import { RunStatusIcon, STATUS_STYLES, StepSentence, useAddStep, useStepActions } from './stepParts';
+import {
+  RunStatusIcon,
+  STATUS_STYLES,
+  StepSentence,
+  useAddStep,
+  useStepActions,
+} from './stepParts';
 
 export { useAddStep } from './stepParts';
 
@@ -35,6 +61,7 @@ export function Canvas() {
         <div className="min-w-0 flex-1">
           <ProcessTabs />
         </div>
+        <FindSteps />
         {view === 'flow' && <LayoutControls />}
         <Segmented
           size="sm"
@@ -63,6 +90,18 @@ function ListCanvas() {
   const processId = useEditor((s) => s.processId);
   const steps = useEditor((s) => (s.flow ? processSteps(s.flow, processId) : NO_STEPS));
   const select = useEditor((s) => s.select);
+  const reveal = useEditor((s) => s.reveal);
+  useEffect(() => {
+    if (!reveal) return;
+    const t = setTimeout(
+      () =>
+        document
+          .querySelector(`[data-step-id="${reveal.id}"]`)
+          ?.scrollIntoView({ block: 'center' }),
+      60,
+    );
+    return () => clearTimeout(t);
+  }, [reveal]);
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto bg-bg"
@@ -70,8 +109,15 @@ function ListCanvas() {
         if (e.target === e.currentTarget) select(null);
       }}
     >
-      <div className="mx-auto max-w-3xl px-6 pt-6 pb-40" onClick={(e) => e.target === e.currentTarget && select(null)}>
-        {steps.length === 0 ? <EmptyCanvas /> : <StepList steps={steps} listRef={rootRef(processId)} />}
+      <div
+        className="mx-auto max-w-3xl px-6 pt-6 pb-40"
+        onClick={(e) => e.target === e.currentTarget && select(null)}
+      >
+        {steps.length === 0 ? (
+          <EmptyCanvas />
+        ) : (
+          <StepList steps={steps} listRef={rootRef(processId)} />
+        )}
       </div>
     </div>
   );
@@ -102,8 +148,8 @@ function EmptyCanvas() {
           />
         }
       >
-        Drag a step from the left panel, or search for what should happen first — like “Open browser” or “Read Excel
-        sheet”.
+        Drag a step from the left panel, or search for what should happen first — like “Open
+        browser” or “Read Excel sheet”.
       </EmptyState>
     </EndZone>
   );
@@ -119,25 +165,46 @@ function StepList({ steps, listRef }: { steps: Step[]; listRef: ListRef }) {
   );
 }
 
-const StepItem = memo(function StepItem({ step, listRef, index }: { step: Step; listRef: ListRef; index: number }) {
+const StepItem = memo(function StepItem({
+  step,
+  listRef,
+  index,
+}: {
+  step: Step;
+  listRef: ListRef;
+  index: number;
+}) {
   const def = useApp((s) => s.index.get(step.activity));
-  const [collapsed, setCollapsed] = useState(false);
-  const blocks = def?.blocks ?? [];
+  // Folding is shared with the Flow view (and kept with the automation).
+  const collapsed = useEditor((s) => !!s.flow?.layout?.collapsed?.includes(step.id));
+  const change = useEditor((s) => s.change);
+  const blocks = def ? blocksOf(def, step.params) : [];
 
   return (
     <li className="relative">
-      <StepRow step={step} def={def} listRef={listRef} index={index} collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <StepRow
+        step={step}
+        def={def}
+        listRef={listRef}
+        index={index}
+        collapsed={collapsed}
+        onToggle={() => change((f) => toggleCollapsed(f, step.id))}
+      />
       {!collapsed && blocks.length > 0 && (
         <div
           className="mt-1.5 ml-[27px] space-y-2 border-l-2 pl-5"
-          style={{ borderColor: `color-mix(in srgb, ${categoryColor(def?.category)} 35%, transparent)` }}
+          style={{
+            borderColor: `color-mix(in srgb, ${categoryColor(def?.category)} 35%, transparent)`,
+          }}
         >
           {blocks.map((block) => {
             const ref = { parentId: step.id, block: block.name };
             const children = step.blocks?.[block.name] ?? [];
             return (
               <section key={block.name} aria-label={block.title}>
-                <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-subtle uppercase">{block.title}</p>
+                <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-subtle uppercase">
+                  {block.title}
+                </p>
                 {children.length > 0 && <StepList steps={children} listRef={ref} />}
                 <EndZone listRef={ref} />
               </section>
@@ -193,7 +260,8 @@ function StepRow({
         data-step-id={step.id}
         onClick={(e) => {
           e.stopPropagation();
-          select(step.id);
+          if (e.ctrlKey || e.metaKey) useEditor.getState().toggleSelect(step.id);
+          else select(step.id);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -204,7 +272,9 @@ function StepRow({
         className={cn(
           'group relative flex items-start gap-2 rounded-lg border bg-surface py-2 pr-2 pl-1 shadow-card transition-[box-shadow,border-color,opacity] outline-none',
           isComment && 'border-dashed bg-warning-soft/40',
-          selected ? 'border-primary ring-2 ring-primary/25' : 'border-border hover:border-border-strong',
+          selected
+            ? 'border-primary ring-2 ring-primary/25'
+            : 'border-border hover:border-border-strong',
           runStatus && STATUS_STYLES[runStatus],
           paused && 'border-warning ring-2 ring-warning/30',
           step.disabled && 'opacity-55',
@@ -213,7 +283,12 @@ function StepRow({
       >
         {/* gutter: pause point + drag handle */}
         <div className="flex w-6 shrink-0 flex-col items-center gap-1 pt-1.5">
-          <Tooltip content={breakpoint ? 'Testing pauses before this step' : 'Pause here when testing (F9)'} side="left">
+          <Tooltip
+            content={
+              breakpoint ? 'Testing pauses before this step' : 'Pause here when testing (F9)'
+            }
+            side="left"
+          >
             <button
               type="button"
               aria-label={breakpoint ? 'Remove pause point' : 'Add pause point'}
@@ -223,7 +298,9 @@ function StepRow({
               }}
               className={cn(
                 'h-3 w-3 rounded-full border-2 transition-opacity',
-                breakpoint ? 'border-danger bg-danger opacity-100' : 'border-border-strong opacity-0 group-hover:opacity-100',
+                breakpoint
+                  ? 'border-danger bg-danger opacity-100'
+                  : 'border-border-strong opacity-0 group-hover:opacity-100',
               )}
             />
           </Tooltip>
@@ -249,8 +326,16 @@ function StepRow({
           )}
           {(errors > 0 || warnings > 0 || step.disabled) && (
             <div className="mt-1 flex flex-wrap gap-1">
-              {errors > 0 && <Badge tone="danger">{errors === 1 ? '1 setting to fix' : `${errors} settings to fix`}</Badge>}
-              {warnings > 0 && <Badge tone="warning">{warnings === 1 ? '1 warning' : `${warnings} warnings`}</Badge>}
+              {errors > 0 && (
+                <Badge tone="danger">
+                  {errors === 1 ? '1 setting to fix' : `${errors} settings to fix`}
+                </Badge>
+              )}
+              {warnings > 0 && (
+                <Badge tone="warning">
+                  {warnings === 1 ? '1 warning' : `${warnings} warnings`}
+                </Badge>
+              )}
               {step.disabled && <Badge>skipped</Badge>}
             </div>
           )}
@@ -258,15 +343,28 @@ function StepRow({
 
         <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
           <RunStatusIcon status={runStatus} paused={paused} />
-          {def && def.blocks.length > 0 && (
-            <Button variant="ghost" size="icon-sm" aria-label={collapsed ? 'Expand' : 'Collapse'} onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+          {def && blocksOf(def, step.params).length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={collapsed ? 'Expand' : 'Collapse'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+            >
               <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={15} />
             </Button>
           )}
           <span onClick={(e) => e.stopPropagation()}>
             <Menu
               trigger={
-                <Button variant="ghost" size="icon-sm" aria-label="Step actions" className="opacity-60 group-hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Step actions"
+                  className="opacity-60 group-hover:opacity-100"
+                >
                   <Icon name="ellipsis" size={15} />
                 </Button>
               }
@@ -276,7 +374,10 @@ function StepRow({
         </div>
 
         {/* insert-after button on the bottom edge */}
-        <span className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
+        <span
+          className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
           <AddStepMenu
             open={insertOpen}
             onOpenChange={setInsertOpen}
@@ -303,14 +404,27 @@ function StepRow({
 
 function DropLine({ className }: { className?: string }) {
   return (
-    <div className={cn('pointer-events-none absolute right-0 left-0 z-20 h-[3px] rounded-full bg-primary', className)}>
+    <div
+      className={cn(
+        'pointer-events-none absolute right-0 left-0 z-20 h-[3px] rounded-full bg-primary',
+        className,
+      )}
+    >
       <span className="absolute -top-[3px] -left-1 h-[9px] w-[9px] rounded-full border-2 border-primary bg-surface" />
     </div>
   );
 }
 
 /** Drop area and "Add step" button at the end of a list. */
-function EndZone({ listRef, big, children }: { listRef: ListRef; big?: boolean; children?: React.ReactNode }) {
+function EndZone({
+  listRef,
+  big,
+  children,
+}: {
+  listRef: ListRef;
+  big?: boolean;
+  children?: React.ReactNode;
+}) {
   const key = listKey(listRef);
   const drop = useDroppable({ id: `end:${key}`, data: { kind: 'end', listKey: key } });
   const target = useDnd((s) => s.target);
@@ -351,4 +465,3 @@ function EndZone({ listRef, big, children }: { listRef: ListRef; big?: boolean; 
     </div>
   );
 }
-

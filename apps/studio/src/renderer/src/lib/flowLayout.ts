@@ -3,7 +3,7 @@
 // Flows are structured - a sequence of steps where If, loops and Try hold their own step
 // lists - so the tidy chart is computed, never drawn by hand, and can't become invalid:
 //   Start ─ step ─ step ─ End          a sequence: one line along the main axis
-//   If ─┬─ Yes lane ─┐                 If: its lanes side by side, joining again at a dot
+//   If ─┬─ Yes lane ─┐                 If / Switch: lanes side by side, joining again at a dot
 //       └─ No lane ──┘
 //   ┌ For each ──────────┐             loops / Try: a box (title on top) holding their lanes
 //   │ ─ step ─ step ─    │
@@ -15,7 +15,7 @@
 // The layout is computed along a main axis (m: the direction of the flow) and a cross
 // axis (c), then turned into x / y for the chosen direction.
 // Every connector knows where a step dropped on it would go ("slot": list + position).
-import type { ActivityDef, Offset, Step } from '@autoflow/flow-types';
+import { blocksOf, type ActivityDef, type Offset, type Step } from '@autoflow/flow-types';
 import { listKey, parseListKey, ROOT, type ListRef } from './flowOps';
 
 export const SIZES = {
@@ -55,6 +55,10 @@ export interface LayoutNode {
   owner?: string;
   /** Offsets key moving this node (steps, start and end); absent for helper nodes. */
   moveKey?: string;
+  /** Decisions (If, Switch): their outgoing connectors, one per lane. */
+  handles?: string[];
+  /** Boxes shown folded (just their title). */
+  collapsed?: boolean;
 }
 
 export interface Slot {
@@ -70,7 +74,9 @@ export interface LayoutEdge {
   targetHandle: string;
   depth: number;
   slot?: Slot;
-  label?: 'Yes' | 'No';
+  /** Decision lanes: "Yes" / "No" for If, the case for Switch. */
+  label?: string;
+  tone?: 'yes' | 'no' | 'case';
   kind: 'flow' | 'loop';
   /** Loop arrows: how far beside the lane's line they run back to its start. */
   drop?: number;
@@ -94,6 +100,8 @@ export interface LayoutOptions {
   offsets?: Record<string, Offset>;
   /** Prefix of the start / end keys in offsets (each sub-process has its own). */
   terminalPrefix?: string;
+  /** Boxes shown folded, by step id. */
+  collapsed?: Iterable<string>;
 }
 
 interface End {
@@ -115,6 +123,8 @@ interface Item {
   owner?: string;
   slot?: Slot;
   loop?: boolean;
+  handles?: string[];
+  collapsed?: boolean;
   /** Containers: cross-axis position of their line (connectors in and out). */
   line?: number;
   /** Container lane titles: start along both axes and size across. */
@@ -139,7 +149,7 @@ type DefOf = (activity: string) => ActivityDef | undefined;
 export function layoutFlow(steps: Step[], defOf: DefOf, options: LayoutOptions = {}): FlowLayout {
   const direction = options.direction ?? 'horizontal';
   const root = options.root ?? ROOT;
-  const builder = new Builder(direction, defOf);
+  const builder = new Builder(direction, defOf, new Set(options.collapsed ?? []));
   const t = SIZES.terminal;
   const body = builder.sequence(steps, root, 0);
   const spine = Math.max(body.spine, t / 2);
@@ -198,6 +208,7 @@ class Builder {
   constructor(
     private readonly direction: Direction,
     private readonly defOf: DefOf,
+    private readonly collapsed: Set<string>,
   ) {}
 
   private get vertical() {
@@ -241,8 +252,8 @@ class Builder {
 
   private item(step: Step, depth: number): Box {
     const def = this.defOf(step.activity);
-    if (def && def.blocks.length > 0) {
-      return step.activity === 'control.if'
+    if (def && blocksOf(def, step.params).length > 0) {
+      return DECISIONS.has(step.activity)
         ? this.branch(step, def, depth)
         : this.container(step, def, depth);
     }
@@ -259,12 +270,13 @@ class Builder {
     };
   }
 
-  /** If: the decision, then its lanes side by side, joining again at a dot. */
+  /** If / Switch: the decision, then its lanes side by side, joining again at a dot. */
   private branch(step: Step, def: ActivityDef, depth: number): Box {
     const { sm: nm, sc: nc } = this.size(SIZES.node.w, SIZES.node.h);
     const id = `s:${step.id}`;
     const merge = `m:${step.id}`;
-    const lanes = def.blocks.map((block) => {
+    const isIf = step.activity === 'control.if';
+    const lanes = blocksOf(def, step.params).map((block) => {
       const ref = { parentId: step.id, block: block.name };
       return { ref, block, box: this.sequence(step.blocks?.[block.name] ?? [], ref, depth) };
     });
@@ -292,7 +304,17 @@ class Builder {
       c: Math.max(lanesC + lift, spine + nc / 2),
       spine,
       items: [
-        { id, type: 'branch', m: 0, c: spine - nc / 2, sm: nm, sc: nc, depth, stepId: step.id },
+        {
+          id,
+          type: 'branch',
+          m: 0,
+          c: spine - nc / 2,
+          sm: nm,
+          sc: nc,
+          depth,
+          stepId: step.id,
+          handles: isIf ? ['yes', 'no'] : lanes.map((_, i) => `b${i}`),
+        },
         {
           id: merge,
           type: 'merge',
@@ -312,8 +334,9 @@ class Builder {
       box.items.push(...lane.items);
       box.edges.push(...lane.edges);
       const count = step.blocks?.[ref.block]?.length ?? 0;
-      const label = ref.block === 'then' ? 'Yes' : ref.block === 'else' ? 'No' : undefined;
-      const handle = i === 0 ? 'yes' : 'no';
+      const label = isIf ? (i === 0 ? 'Yes' : 'No') : lanes[i]!.block.title;
+      const tone = isIf ? (i === 0 ? 'yes' : 'no') : 'case';
+      const handle = isIf ? (i === 0 ? 'yes' : 'no') : `b${i}`;
       const endSlot = count ? { listKey: listKey(ref), index: count } : undefined;
       box.edges.push(
         connect(
@@ -322,6 +345,7 @@ class Builder {
           depth,
           count ? { listKey: listKey(ref), index: 0 } : undefined,
           label,
+          tone,
         ),
       );
       if (lane.m < lanesM) {
@@ -352,8 +376,36 @@ class Builder {
     const vertical = this.vertical;
     const id = `c:${step.id}`;
     const loop = /for_each|repeat|while/.test(step.activity);
-    const showLabels = def.blocks.length > 1;
-    const lanes = def.blocks.map((block) => {
+    if (this.collapsed.has(step.id)) {
+      // Folded: just the title bar; connectors go in and out at its line.
+      const { sm, sc } = this.size(SIZES.node.w + 2 * SIZES.pad, SIZES.header);
+      return {
+        m: sm,
+        c: sc,
+        spine: sc / 2,
+        items: [
+          {
+            id,
+            type: 'container',
+            m: 0,
+            c: 0,
+            sm,
+            sc,
+            depth,
+            stepId: step.id,
+            lanes: [],
+            loop,
+            collapsed: true,
+          },
+        ],
+        edges: [],
+        entry: { node: id, handle: 'in' },
+        exit: { node: id, handle: 'out' },
+      };
+    }
+    const blocks = blocksOf(def, step.params);
+    const showLabels = blocks.length > 1;
+    const lanes = blocks.map((block) => {
       const ref = { parentId: step.id, block: block.name };
       return { ref, block, box: this.sequence(step.blocks?.[block.name] ?? [], ref, depth + 1) };
     });
@@ -496,7 +548,17 @@ class Builder {
   }
 }
 
-function connect(from: End, to: End, depth: number, slot?: Slot, label?: 'Yes' | 'No'): LayoutEdge {
+/** Steps drawn as a decision whose lanes join again (other steps with step lists are boxes). */
+const DECISIONS = new Set(['control.if', 'control.switch']);
+
+function connect(
+  from: End,
+  to: End,
+  depth: number,
+  slot?: Slot,
+  label?: string,
+  tone?: LayoutEdge['tone'],
+): LayoutEdge {
   return {
     id: `e:${from.node}:${from.handle}->${to.node}`,
     source: from.node,
@@ -506,7 +568,7 @@ function connect(from: End, to: End, depth: number, slot?: Slot, label?: 'Yes' |
     depth,
     kind: 'flow',
     ...(slot ? { slot } : {}),
-    ...(label ? { label } : {}),
+    ...(label ? { label, tone: tone ?? 'case' } : {}),
   };
 }
 
@@ -539,6 +601,8 @@ function toNode(item: Item, direction: Direction): LayoutNode {
   if (item.owner) node.owner = item.owner;
   if (item.slot) node.slot = item.slot;
   if (item.loop !== undefined) node.loop = item.loop;
+  if (item.handles) node.handles = item.handles;
+  if (item.collapsed) node.collapsed = true;
   if (item.lanes) {
     node.lanes = item.lanes.map((lane) =>
       vertical

@@ -123,6 +123,8 @@ class ActivityDef:
     lazy_fields: frozenset[str] = field(default_factory=frozenset)
     text_fields: frozenset[str] = field(default_factory=frozenset)
     uses_runner: bool = False
+    # One extra block per item of a list setting (Switch: one per case): (setting, block prefix).
+    block_list: tuple[str, str] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -144,6 +146,9 @@ class ActivityDef:
                 for o in self.outputs
             ],
             "blocks": [{"name": b.name, "title": b.title} for b in self.blocks],
+            "block_list": (
+                {"param": self.block_list[0], "prefix": self.block_list[1]} if self.block_list else None
+            ),
             "advanced": self.advanced,
             "requires": self.requires,
         }
@@ -182,6 +187,7 @@ def activity(
     advanced: bool = False,
     requires: str | None = None,
     uses_runner: bool = False,
+    block_list: tuple[str, str] | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Register an activity. The function receives ``(ctx, params)``, plus a
     ``BlockRunner`` when the activity has blocks or ``uses_runner`` (it runs other
@@ -217,6 +223,7 @@ def activity(
             lazy_fields=lazy,
             text_fields=text,
             uses_runner=uses_runner,
+            block_list=block_list,
         )
         return func
 
@@ -245,6 +252,17 @@ def get(activity_id: str) -> ActivityDef | None:
 
 
 _loaded = False
+
+
+def blocks_of(adef: ActivityDef, params: dict[str, Any]) -> list[BlockDef]:
+    """The step lists a step has: one per item of its block_list setting, then the fixed ones."""
+    extra: list[BlockDef] = []
+    if adef.block_list:
+        setting, prefix = adef.block_list
+        items = params.get(setting) or []
+        if isinstance(items, list):
+            extra = [BlockDef(f"{prefix}{i}", str(item) or f"Case {i}") for i, item in enumerate(items, start=1)]
+    return [*extra, *adef.blocks]
 
 
 def load_activities() -> dict[str, ActivityDef]:

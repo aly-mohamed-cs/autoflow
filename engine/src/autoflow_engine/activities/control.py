@@ -248,6 +248,138 @@ def while_loop(ctx: RunContext, p: WhileParams, blocks: BlockRunner) -> None:
             break
 
 
+class DoWhileParams(Params):
+    condition: Condition = Param(title="Repeat while")
+    max_iterations: int = Param(
+        10_000, title="Safety limit", ge=1, advanced=True,
+        description="Stop with an error after this many rounds, so a mistake can't loop forever.",
+    )
+
+
+@activity(
+    "control.do_while",
+    title="Do … while",
+    category=C,
+    icon="repeat-2",
+    sentence="Do, then repeat while {condition}",
+    description="Run steps once, then again as long as a condition stays true (checked after each round).",
+    params=DoWhileParams,
+    blocks=[BlockDef("body", "Do")],
+)
+def do_while(ctx: RunContext, p: DoWhileParams, blocks: BlockRunner) -> None:
+    rounds = 0
+    while True:
+        rounds += 1
+        if rounds > p.max_iterations:
+            raise ActivityError(
+                f"The loop ran more than {p.max_iterations} times and was stopped.",
+                "Check that the condition eventually becomes false, or raise the safety limit.",
+            )
+        if not _loop_body(blocks) or not evaluate_condition(p.condition, ctx.variables):
+            break
+
+
+class RetryParams(Params):
+    times: int = Param(3, title="Try up to (times)", ge=1, le=100)
+    wait: float = Param(2, title="Wait between tries (seconds)", ge=0, le=3600, ui="duration")
+
+
+@activity(
+    "control.retry",
+    title="Retry steps",
+    category=C,
+    icon="rotate-ccw",
+    sentence="Try up to {times} times",
+    description="When one of these steps fails, wait and run them again from the first one "
+    "(e.g. a log-in that sometimes times out). Fails only when the last try fails too.",
+    params=RetryParams,
+    blocks=[BlockDef("body", "Try")],
+)
+def retry(ctx: RunContext, p: RetryParams, blocks: BlockRunner) -> None:
+    for attempt in range(1, p.times + 1):
+        try:
+            blocks.run("body")
+            return
+        except StepFailed as failed:
+            if attempt == p.times:
+                raise
+            ctx.log(f"Try {attempt} of {p.times} failed: {failed.error.message} "
+                    f"Trying again in {p.wait:g}s.", "warning")
+            ctx.sleep(p.wait)
+
+
+class SwitchParams(Params):
+    value: Any = Param(title="Look at", placeholder='{{row["Status"]}}')
+    cases: list[str] = Param(
+        default_factory=list, title="Cases",
+        description="One value per case. The steps of the first case equal to the value run; "
+        "when none is, the 'Otherwise' steps run.",
+    )
+    ignore_case: bool = Param(True, title="Ignore upper / lower case", advanced=True)
+
+
+@activity(
+    "control.switch",
+    title="Switch / case",
+    category=C,
+    icon="git-fork",
+    sentence="Depending on {value}",
+    description="Run different steps depending on a value, e.g. a status: one path per case.",
+    params=SwitchParams,
+    blocks=[BlockDef("default", "Otherwise")],
+    block_list=("cases", "case_"),
+)
+def switch(ctx: RunContext, p: SwitchParams, blocks: BlockRunner) -> None:
+    value = to_text(p.value).strip()
+    for i, case in enumerate(p.cases, start=1):
+        expected = to_text(case).strip()
+        if (value.casefold() == expected.casefold()) if p.ignore_case else value == expected:
+            blocks.run(f"case_{i}")
+            return
+    blocks.run("default")
+
+
+class GroupParams(Params):
+    name: str = Param("", title="Name of the group", placeholder="Log in to the portal")
+
+
+@activity(
+    "control.group",
+    title="Group",
+    category=C,
+    icon="square-dashed",
+    sentence="{name}",
+    description="Keep related steps together in a named box you can fold away. It does nothing else.",
+    params=GroupParams,
+    blocks=[BlockDef("body", "Steps")],
+)
+def group(ctx: RunContext, p: GroupParams, blocks: BlockRunner) -> None:
+    blocks.run("body")
+
+
+class CheckParams(Params):
+    condition: Condition = Param(title="Make sure that")
+    message: str = Param("", title="Error message if not", placeholder="The invoice has no total")
+
+
+@activity(
+    "control.check",
+    title="Make sure that",
+    category=C,
+    icon="shield-check",
+    sentence="Make sure that {condition}",
+    description="Stop with a clear error when something is not as expected (e.g. a total is empty), "
+    "instead of carrying on with wrong data.",
+    params=CheckParams,
+)
+def check(ctx: RunContext, p: CheckParams) -> None:
+    if not evaluate_condition(p.condition, ctx.variables):
+        raise ActivityError(
+            to_text(p.message) or "A check failed: its condition was not true.",
+            "Look at the values in the Variables tab of the run.",
+        )
+
+
 @activity(
     "control.break",
     title="Exit loop",

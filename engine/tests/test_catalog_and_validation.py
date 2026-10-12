@@ -151,3 +151,36 @@ def test_rpc_server_round_trip(tmp_path):
     assert replies[5]["error"]["code"] == -32601
     events = [m["params"]["event"] for m in messages if m.get("method") == "run.event"]
     assert events[0] == "run_started" and events[-1] == "run_finished"
+
+
+def test_switch_cases_are_its_sections():
+    issues = validate_flow({
+        "id": "f", "name": "f",
+        "steps": [step("control.switch", {"value": "x", "cases": ["A", "B"]}, id="sw", blocks={
+            "case_1": [], "case_2": [], "default": [], "case_3": [],
+        })],
+    })
+    assert [(i.step_id, i.message) for i in issues] == [("sw", "'Switch / case' has no section called 'case_3'.")]
+    exported = next(a for a in catalog.export_catalog()["activities"] if a["id"] == "control.switch")
+    assert exported["block_list"] == {"param": "cases", "prefix": "case_"}
+
+
+def test_debug_console_reads_the_variables_of_a_paused_run(tmp_path):
+    server = EngineServer(io.StringIO(), io.StringIO())
+    events: list[dict] = []
+    server.notify = lambda method, params: events.append(params)
+    assert server._run_evaluate({"expression": "1"})["ok"] is False  # nothing ran yet
+    server._run_start({"work_dir": str(tmp_path), "breakpoints": ["b"], "flow": {
+        "id": "f", "name": "f", "variables": [{"name": "x", "type": "number", "default": 5}],
+        "steps": [{"id": "a", "activity": "control.increase", "params": {"variable": "x"}},
+                  {"id": "b", "activity": "control.log", "params": {"message": "{{x}}"}}],
+    }})
+    deadline = time.monotonic() + 5
+    while not any(e.get("event") == "paused" for e in events) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert server._run_evaluate({"expression": "x * 2"}) == {"ok": True, "value": 12}
+    assert server._run_evaluate({"expression": "UPPER("})["ok"] is False
+    server._with_control(lambda c: c.resume())
+    while not any(e.get("event") == "run_finished" for e in events) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert events[-1]["status"] == "succeeded"

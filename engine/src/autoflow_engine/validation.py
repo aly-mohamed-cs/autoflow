@@ -85,7 +85,7 @@ def validate_flow(document: Flow | dict[str, Any]) -> list[Issue]:
         if adef is None:
             issues.append(Issue("error", f"Unknown step type '{step.activity}'.", step.id))
             continue
-        block_names = {b.name for b in adef.blocks}
+        block_names = {b.name for b in catalog.blocks_of(adef, step.params)}
         for name in step.blocks:
             if name not in block_names:
                 issues.append(Issue("warning", f"'{adef.title}' has no section called '{name}'.", step.id))

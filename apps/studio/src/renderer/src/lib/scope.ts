@@ -28,13 +28,19 @@ const NAMED_VARIABLE_TYPES: Record<string, Record<string, VariableType>> = {
   'data.add_row': { table: 'table' },
 };
 
-const LOOP_FIELDS = new Set(['item_variable', 'index_variable', 'counter_variable', 'error_variable']);
+const LOOP_FIELDS = new Set([
+  'item_variable',
+  'index_variable',
+  'counter_variable',
+  'error_variable',
+]);
 
 export function collectVariables(flow: Flow, index: CatalogIndex): VariableInfo[] {
   const found = new Map<string, VariableInfo>();
   const add = (info: VariableInfo) => {
     const existing = found.get(info.name);
-    if (!existing || (existing.type === 'any' && info.type !== 'any')) found.set(info.name, { ...existing, ...info });
+    if (!existing || (existing.type === 'any' && info.type !== 'any'))
+      found.set(info.name, { ...existing, ...info });
   };
   for (const v of flow.variables ?? []) {
     add({
@@ -59,11 +65,16 @@ export function collectVariables(flow: Flow, index: CatalogIndex): VariableInfo[
           const name = (step.params?.[field] ?? fallback) as string | undefined;
           if (!name || typeof name !== 'string' || name.includes('{{')) continue;
           const isLoop = LOOP_FIELDS.has(field);
-          const items = field === 'item_variable' ? referencedVariable(step.params?.items) : undefined;
+          const items =
+            field === 'item_variable' ? referencedVariable(step.params?.items) : undefined;
           add({
             name,
             type,
-            source: isLoop ? (field === 'error_variable' ? 'Error message' : `Loop: ${def.title}`) : `Set by “${def.title}”`,
+            source: isLoop
+              ? field === 'error_variable'
+                ? 'Error message'
+                : `Loop: ${def.title}`
+              : `Set by “${def.title}”`,
             loopStepId: isLoop ? step.id : undefined,
             itemsOf: items ?? undefined,
           });

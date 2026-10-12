@@ -22,7 +22,9 @@ export function StepLibrary() {
       : categories
           .map((category) => ({
             category,
-            items: (index.byCategory.get(category) ?? []).filter((a) => showAdvanced || !a.advanced),
+            items: (index.byCategory.get(category) ?? []).filter(
+              (a) => showAdvanced || !a.advanced,
+            ),
           }))
           .filter((g) => g.items.length);
     return found;
@@ -38,11 +40,20 @@ export function StepLibrary() {
   };
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface" aria-label="Step library">
+    <aside
+      className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface"
+      aria-label="Step library"
+    >
       <div className="space-y-2 border-b border-border p-3">
         <div className="relative">
           <Icon name="search" size={15} className="absolute top-2 left-2.5 text-subtle" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a step" aria-label="Find a step" className="pl-8" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find a step"
+            aria-label="Find a step"
+            className="pl-8"
+          />
         </div>
         <p className="text-[11px] text-subtle">Drag steps into the automation, or click to add.</p>
       </div>
@@ -68,7 +79,11 @@ export function StepLibrary() {
                 <IconTile name={meta?.icon ?? 'box'} category={category} size="sm" />
                 <span className="flex-1 text-[13px] font-semibold">{category}</span>
                 <span className="text-[11px] text-subtle">{items.length}</span>
-                <Icon name={isClosed ? 'chevron-right' : 'chevron-down'} size={14} className="text-subtle" />
+                <Icon
+                  name={isClosed ? 'chevron-right' : 'chevron-down'}
+                  size={14}
+                  className="text-subtle"
+                />
               </button>
               {!isClosed && (
                 <ul className="mt-0.5 mb-2 space-y-px pl-2">
@@ -80,11 +95,17 @@ export function StepLibrary() {
             </section>
           );
         })}
-        {groups.length === 0 && <p className="p-4 text-center text-[13px] text-subtle">No step matches “{query}”.</p>}
+        {groups.length === 0 && (
+          <p className="p-4 text-center text-[13px] text-subtle">No step matches “{query}”.</p>
+        )}
       </div>
       {!query && (
         <label className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted">
-          <input type="checkbox" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={showAdvanced}
+            onChange={(e) => setShowAdvanced(e.target.checked)}
+          />
           Show advanced steps
         </label>
       )}

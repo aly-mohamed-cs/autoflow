@@ -8,7 +8,7 @@ import type {
   Step,
   UiKind,
 } from '@autoflow/flow-types';
-import { normalizeCondition } from '@autoflow/flow-types';
+import { blocksOf, normalizeCondition } from '@autoflow/flow-types';
 import { newStepId } from './flowOps';
 
 export type FieldKind = UiKind | 'object_list';
@@ -64,7 +64,11 @@ export class CatalogIndex {
 function resolveRef(root: ParamsSchema, schema: ParamSchema): ParamSchema {
   if (schema.$ref) {
     const name = schema.$ref.split('/').pop()!;
-    return { ...(root.$defs?.[name] ?? {}), title: schema.title ?? root.$defs?.[name]?.title, ...stripRef(schema) };
+    return {
+      ...(root.$defs?.[name] ?? {}),
+      title: schema.title ?? root.$defs?.[name]?.title,
+      ...stripRef(schema),
+    };
   }
   return schema;
 }
@@ -101,7 +105,10 @@ export function fieldsOf(params: ParamsSchema, root: ParamsSchema = params): Fie
     };
     if (schema.enum) {
       const labels = schema['x-labels'] ?? {};
-      info.options = schema.enum.map((v) => ({ value: String(v), label: labels[String(v)] ?? humanize(String(v)) }));
+      info.options = schema.enum.map((v) => ({
+        value: String(v),
+        label: labels[String(v)] ?? humanize(String(v)),
+      }));
     }
     if (kind === 'object_list' && schema.items) {
       const item = resolveRef(root, schema.items) as unknown as ParamsSchema;
@@ -115,7 +122,11 @@ export function fieldsOf(params: ParamsSchema, root: ParamsSchema = params): Fie
  * Whether a setting applies: settings with "x-show-when" only count while the other
  * setting (or its default) has one of the listed values.
  */
-export function isShown(field: FieldInfo, params: Record<string, unknown>, fields: FieldInfo[]): boolean {
+export function isShown(
+  field: FieldInfo,
+  params: Record<string, unknown>,
+  fields: FieldInfo[],
+): boolean {
   const rule = field.schema['x-show-when'];
   if (!rule) return true;
   return Object.entries(rule).every(([other, values]) => {
@@ -157,16 +168,23 @@ export function humanize(value: string): string {
 }
 
 /** A new step with sensible defaults: output variables pre-named, empty condition rule. */
-export function createStep(def: ActivityDef, index: CatalogIndex, existingVariables: Set<string> = new Set()): Step {
+export function createStep(
+  def: ActivityDef,
+  index: CatalogIndex,
+  existingVariables: Set<string> = new Set(),
+): Step {
   const params: Record<string, unknown> = {};
   for (const field of index.fields(def)) {
-    if (field.kind === 'condition') params[field.name] = { match: 'all', rules: [{ left: '', op: 'equals', right: '' }] };
+    if (field.kind === 'condition')
+      params[field.name] = { match: 'all', rules: [{ left: '', op: 'equals', right: '' }] };
   }
   const outputs: Record<string, string> = {};
-  for (const out of def.outputs) outputs[out.name] = uniqueName(out.default_variable || out.name, existingVariables);
+  for (const out of def.outputs)
+    outputs[out.name] = uniqueName(out.default_variable || out.name, existingVariables);
   const step: Step = { id: newStepId(), activity: def.id, params };
   if (def.outputs.length) step.outputs = outputs;
-  if (def.blocks.length) step.blocks = Object.fromEntries(def.blocks.map((b) => [b.name, []]));
+  const blocks = blocksOf(def, params);
+  if (blocks.length) step.blocks = Object.fromEntries(blocks.map((b) => [b.name, []]));
   return step;
 }
 
@@ -204,7 +222,9 @@ export function exprLabel(expr: string): { label: string; formula: boolean } {
   const m = PATH.exec(expr.trim());
   if (!m) return { label: expr.trim(), formula: true };
   const parts = [m[1]!];
-  for (const p of m[2]!.matchAll(/\.([A-Za-z_]\w*)|\["((?:[^"\\]|\\.)*)"\]|\['((?:[^'\\]|\\.)*)'\]/g)) {
+  for (const p of m[2]!.matchAll(
+    /\.([A-Za-z_]\w*)|\["((?:[^"\\]|\\.)*)"\]|\['((?:[^'\\]|\\.)*)'\]/g,
+  )) {
     parts.push((p[1] ?? p[2] ?? p[3] ?? '').replace(/\\(.)/g, '$1'));
   }
   return { label: parts.join(' › '), formula: false };
@@ -263,7 +283,13 @@ export function sentence(step: Step, def: ActivityDef, ctx: SentenceContext): Se
 
 function valuePart(field: FieldInfo, value: unknown, ctx: SentenceContext): SentencePart {
   const fallback = field.placeholder?.match(/^\((.+)\)/)?.[1];
-  const base = { kind: 'value' as const, field: field.name, title: field.title, required: field.required, fallback };
+  const base = {
+    kind: 'value' as const,
+    field: field.name,
+    title: field.title,
+    required: field.required,
+    fallback,
+  };
   const empty = (segments: Segment[] = []) => ({ ...base, empty: true, segments });
   if (value === undefined || value === null || value === '') return empty();
   if (field.kind === 'element' && typeof value === 'string') {
@@ -274,7 +300,11 @@ function valuePart(field: FieldInfo, value: unknown, ctx: SentenceContext): Sent
   }
   if (field.kind === 'process' && typeof value === 'string') {
     const name = ctx.processes?.get(value);
-    return { ...base, empty: false, segments: [{ kind: 'text', text: name ?? `${value} (missing)` }] };
+    return {
+      ...base,
+      empty: false,
+      segments: [{ kind: 'text', text: name ?? `${value} (missing)` }],
+    };
   }
   if (field.kind === 'condition') {
     const text = conditionSummary(value as Condition, ctx.index);
@@ -285,8 +315,10 @@ function valuePart(field: FieldInfo, value: unknown, ctx: SentenceContext): Sent
 
 export function displayValue(field: FieldInfo, value: unknown): string {
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
-  if (field.kind === 'choice' && typeof value === 'string') return field.options?.find((o) => o.value === value)?.label ?? value;
-  if (Array.isArray(value)) return value.map((v) => (typeof v === 'object' ? '…' : String(v))).join(', ');
+  if (field.kind === 'choice' && typeof value === 'string')
+    return field.options?.find((o) => o.value === value)?.label ?? value;
+  if (Array.isArray(value))
+    return value.map((v) => (typeof v === 'object' ? '…' : String(v))).join(', ');
   if (value && typeof value === 'object') return Object.keys(value).join(', ');
   return truncate(String(value), 60);
 }
@@ -302,7 +334,9 @@ export function conditionSummary(value: Condition | undefined, index: CatalogInd
     .map((r) => {
       const op = index.operatorLabel(r.op);
       const needs = index.catalog.operators.find((o) => o.name === r.op)?.needs_value ?? true;
-      const right = needs ? ` ${r.right === '' || r.right === undefined ? '…' : quoteIfText(r.right)}` : '';
+      const right = needs
+        ? ` ${r.right === '' || r.right === undefined ? '…' : quoteIfText(r.right)}`
+        : '';
       return `${String(r.left)} ${op}${right}`;
     })
     .join(joiner);

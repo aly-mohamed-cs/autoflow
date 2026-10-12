@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   addProcess,
   applyRepairPatch,
+  changeActivity,
+  copySteps,
+  pasteSteps,
+  readClipboard,
+  removeSteps,
+  wrapSteps,
   duplicateProcess,
   duplicateStep,
   findStep,
@@ -19,6 +25,7 @@ import {
   removeStep,
   ROOT,
   rootRef,
+  setBlockList,
   setParam,
   updateProcess,
 } from './flowOps';
@@ -203,5 +210,129 @@ describe('sub-processes', () => {
       'process_2',
       copy.id,
     ]);
+  });
+});
+
+describe('switch cases', () => {
+  const def = { block_list: { param: 'cases', prefix: 'case_' }, blocks: [{ name: 'default' }] };
+  const log = (id: string) => ({ id, activity: 'control.log' });
+  const flow: Flow = {
+    id: 'f',
+    name: 'f',
+    steps: [
+      {
+        id: 'sw',
+        activity: 'control.switch',
+        params: { value: 'x', cases: ['A', 'B', 'C'] },
+        blocks: { case_1: [log('a')], case_2: [log('b')], case_3: [log('c')], default: [log('d')] },
+      },
+    ],
+  };
+  const lanes = (f: Flow) => {
+    const step = findStep(f, 'sw')!;
+    return Object.fromEntries(
+      Object.entries(step.blocks ?? {}).map(([k, v]) => [k, v.map((s) => s.id)]),
+    );
+  };
+
+  it('keeps steps with their case when cases are renamed, added or removed', () => {
+    expect(lanes(setBlockList(flow, 'sw', def, ['A', 'Bee', 'C']))).toEqual({
+      case_1: ['a'],
+      case_2: ['b'],
+      case_3: ['c'],
+      default: ['d'],
+    });
+    expect(lanes(setBlockList(flow, 'sw', def, ['C', 'A', 'B', 'New']))).toEqual({
+      case_1: ['c'],
+      case_2: ['a'],
+      case_3: ['b'],
+      default: ['d'],
+    });
+    expect(lanes(setBlockList(flow, 'sw', def, ['A', 'C']))).toEqual({
+      case_1: ['a'],
+      case_2: ['c'],
+      default: ['d', 'b'], // nothing is lost
+    });
+  });
+});
+
+describe('several steps at once', () => {
+  const flow: Flow = {
+    id: 'f',
+    name: 'f',
+    elements: [
+      {
+        id: 'el1',
+        name: 'Save button',
+        kind: 'web',
+        selectors: [{ strategy: 'css', value: '#save' }],
+      },
+      { id: 'el2', name: 'Other', kind: 'web', selectors: [{ strategy: 'css', value: '#x' }] },
+    ],
+    steps: [
+      { id: 'a', activity: 'browser.click', params: { element: 'el1' } },
+      { id: 'b', activity: 'control.log' },
+      {
+        id: 'loop',
+        activity: 'control.for_each',
+        blocks: { body: [{ id: 'c', activity: 'control.log' }] },
+      },
+    ],
+  };
+
+  it('copies the outermost selected steps with the elements they use, and pastes fresh copies', () => {
+    const clip = copySteps(flow, ['loop', 'c', 'a'])!;
+    expect(clip.steps.map((s) => s.id)).toEqual(['a', 'loop']); // c is inside loop
+    expect(clip.elements.map((e) => e.id)).toEqual(['el1']);
+    const text = JSON.stringify(clip);
+    expect(readClipboard(text)?.steps).toHaveLength(2);
+    expect(readClipboard('hello')).toBeNull();
+
+    const into: Flow = { id: 'g', name: 'g', steps: [{ id: 'z', activity: 'control.log' }] };
+    const pasted = pasteSteps(into, ROOT, 1, readClipboard(text)!);
+    expect(pasted.ids).toHaveLength(2);
+    expect(pasted.flow.steps!.map((s) => s.activity)).toEqual([
+      'control.log',
+      'browser.click',
+      'control.for_each',
+    ]);
+    expect(pasted.ids).not.toContain('a');
+    expect(pasted.flow.elements!.map((e) => e.id)).toEqual(['el1']);
+    expect(removeSteps(pasted.flow, pasted.ids).steps!.map((s) => s.id)).toEqual(['z']);
+  });
+
+  it('wraps steps of one list into a group, and refuses steps from different lists', () => {
+    const box = {
+      id: 'g1',
+      activity: 'control.group',
+      params: { name: 'Start' },
+      blocks: { body: [] },
+    };
+    const wrapped = wrapSteps(flow, ['b', 'a'], box, 'body')!;
+    expect(wrapped.steps!.map((s) => s.id)).toEqual(['g1', 'loop']);
+    expect(findStep(wrapped, 'g1')!.blocks!.body!.map((s) => s.id)).toEqual(['a', 'b']);
+    expect(wrapSteps(flow, ['a', 'c'], box, 'body')).toBeNull();
+  });
+
+  it('changes a step into another kind without losing settings or inner steps', () => {
+    const typeDef = {
+      id: 'browser.type',
+      params: { properties: { element: {}, text: {} } },
+      outputs: [],
+      blocks: [],
+    };
+    expect(findStep(changeActivity(flow, 'a', typeDef), 'a')).toMatchObject({
+      activity: 'browser.type',
+      params: { element: 'el1' },
+    });
+    const logDef = {
+      id: 'control.log',
+      params: { properties: { message: {} } },
+      outputs: [],
+      blocks: [],
+    };
+    const flat = changeActivity(flow, 'loop', logDef);
+    expect(flat.steps!.map((s) => s.id)).toEqual(['a', 'b', 'loop', 'c']); // c moved out, after it
+    expect(findStep(flat, 'loop')!.blocks).toBeUndefined();
   });
 });

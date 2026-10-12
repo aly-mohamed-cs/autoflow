@@ -4,7 +4,17 @@ import { walkFlow } from '@autoflow/flow-types';
 import { newStepId } from './flowOps';
 
 export interface RecordedAction {
-  action: 'click' | 'type' | 'select' | 'check' | 'upload' | 'goto' | 'switch_tab' | 'keys' | 'activate' | 'launch';
+  action:
+    | 'click'
+    | 'type'
+    | 'select'
+    | 'check'
+    | 'upload'
+    | 'goto'
+    | 'switch_tab'
+    | 'keys'
+    | 'activate'
+    | 'launch';
   element?: Element;
   value?: string | null;
   password?: boolean;
@@ -60,14 +70,25 @@ export function stepsFromRecording(
     const kind = a.element?.kind === 'desktop' ? 'desktop' : 'browser';
     switch (a.action) {
       case 'click':
-        step(`${kind}.click`, { element: elementId(a.element), ...(a.click && a.click !== 'single' ? { click: a.click } : {}) });
+        step(`${kind}.click`, {
+          element: elementId(a.element),
+          ...(a.click && a.click !== 'single' ? { click: a.click } : {}),
+        });
         break;
       case 'type':
         if (a.password) {
           // Never store a password in a flow: leave it empty and ask for a credential.
-          step(`${kind}.type`, { element: elementId(a.element), text: '', press_enter: !!a.press_enter }, `Type the password into ${a.element?.name ?? 'the field'} (choose a credential)`);
+          step(
+            `${kind}.type`,
+            { element: elementId(a.element), text: '', press_enter: !!a.press_enter },
+            `Type the password into ${a.element?.name ?? 'the field'} (choose a credential)`,
+          );
         } else {
-          step(`${kind}.type`, { element: elementId(a.element), text: a.value ?? '', ...(a.press_enter ? { press_enter: true } : {}) });
+          step(`${kind}.type`, {
+            element: elementId(a.element),
+            text: a.value ?? '',
+            ...(a.press_enter ? { press_enter: true } : {}),
+          });
         }
         break;
       case 'select':
@@ -80,7 +101,11 @@ export function stepsFromRecording(
         if (a.keys) step('desktop.send_keys', { keys: a.keys });
         break;
       case 'activate':
-        if (a.window) step('desktop.activate_window', { window: a.window, ...(a.program ? { process: a.program } : {}) });
+        if (a.window)
+          step('desktop.activate_window', {
+            window: a.window,
+            ...(a.program ? { process: a.program } : {}),
+          });
         break;
       case 'launch':
         if (a.program) step('desktop.launch', { program: a.program, window: a.window ?? '' });
@@ -103,7 +128,8 @@ export function stepsFromRecording(
 export function firstBrowserUrl(flow: Flow): string | undefined {
   for (const { step } of walkFlow(flow)) {
     const url = step.params?.url;
-    if (step.activity === 'browser.open' && typeof url === 'string' && url && !url.includes('{{')) return url;
+    if (step.activity === 'browser.open' && typeof url === 'string' && url && !url.includes('{{'))
+      return url;
   }
   return undefined;
 }

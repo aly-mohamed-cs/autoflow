@@ -108,7 +108,8 @@ export function getList(flow: Flow, ref: ListRef): Step[] | undefined {
 function updateList(flow: Flow, ref: ListRef, fn: (list: Step[]) => Step[]): Flow {
   const process = processOfRef(ref);
   if (process === null) return { ...flow, steps: fn(flow.steps ?? []) };
-  if (process !== undefined) return withProcessSteps(flow, process, fn(processSteps(flow, process)));
+  if (process !== undefined)
+    return withProcessSteps(flow, process, fn(processSteps(flow, process)));
   return updateStep(flow, ref.parentId!, (parent) => ({
     ...parent,
     blocks: { ...parent.blocks, [ref.block]: fn(parent.blocks?.[ref.block] ?? []) },
@@ -294,7 +295,10 @@ export function setParam(flow: Flow, id: string, name: string, value: unknown): 
 
 /** Keep an AI fix from a test run: the step's changed settings and the element's new selectors. */
 export function applyRepairPatch(flow: Flow, patch: RepairPatch): Flow {
-  let next = updateStep(flow, patch.step_id, (step) => ({ ...step, params: { ...step.params, ...patch.params } }));
+  let next = updateStep(flow, patch.step_id, (step) => ({
+    ...step,
+    params: { ...step.params, ...patch.params },
+  }));
   const element = patch.element;
   if (element) {
     const elements = next.elements ?? [];
@@ -302,7 +306,11 @@ export function applyRepairPatch(flow: Flow, patch: RepairPatch): Flow {
     next = {
       ...next,
       elements: exists
-        ? elements.map((e) => (e.id === element.id ? { ...e, selectors: element.selectors, context: element.context } : e))
+        ? elements.map((e) =>
+            e.id === element.id
+              ? { ...e, selectors: element.selectors, context: element.context }
+              : e,
+          )
         : [...elements, element],
     };
   }
@@ -328,4 +336,188 @@ export function tidyChart(flow: Flow, keys?: Iterable<string>): Flow {
   const offsets = { ...flow.layout.offsets };
   for (const key of keys) delete offsets[key];
   return { ...flow, layout: { ...flow.layout, offsets } };
+}
+
+/**
+ * Change the list a step's per-item blocks come from (Switch cases) and keep every case's steps
+ * with it: renamed cases keep their place, others are matched by value, and the steps of a
+ * removed case move to the fixed block (e.g. "Otherwise") rather than being lost.
+ */
+export function setBlockList(
+  flow: Flow,
+  stepId: string,
+  def: { block_list?: { param: string; prefix: string } | null; blocks: { name: string }[] },
+  items: string[],
+): Flow {
+  const spec = def.block_list;
+  if (!spec) return flow;
+  return updateStep(flow, stepId, (step) => {
+    const before = Array.isArray(step.params?.[spec.param])
+      ? (step.params![spec.param] as unknown[]).map(String)
+      : [];
+    const blocks = { ...(step.blocks ?? {}) };
+    const old = before.map((_, i) => blocks[`${spec.prefix}${i + 1}`] ?? []);
+    for (let i = 1; i <= before.length; i++) delete blocks[`${spec.prefix}${i}`];
+    const used = new Set<number>();
+    const source = items.map((item, i) => {
+      if (items.length === before.length) return i; // renamed in place
+      const match = before.findIndex((b, j) => !used.has(j) && b === item);
+      if (match >= 0) used.add(match);
+      return match;
+    });
+    if (items.length === before.length) before.forEach((_, j) => used.add(j));
+    items.forEach((_, i) => {
+      const from = source[i]!;
+      if (from >= 0 && old[from]!.length) blocks[`${spec.prefix}${i + 1}`] = old[from]!;
+    });
+    const fallback = def.blocks[0]?.name;
+    const orphans = old.filter((_, j) => !used.has(j)).flat();
+    if (orphans.length && fallback) blocks[fallback] = [...(blocks[fallback] ?? []), ...orphans];
+    return { ...step, params: { ...step.params, [spec.param]: items }, blocks };
+  });
+}
+
+/** Fold or unfold a box (group, loop...) in both views. */
+export function toggleCollapsed(flow: Flow, stepId: string): Flow {
+  const current = flow.layout?.collapsed ?? [];
+  const collapsed = current.includes(stepId)
+    ? current.filter((id) => id !== stepId)
+    : [...current, stepId];
+  return { ...flow, layout: { ...flow.layout, collapsed } };
+}
+
+// -- several steps at once (copy, paste, group) ------------------------------------------------------
+
+/** The selected steps without those inside another selected step, in display order. */
+export function topLevelSteps(flow: Flow, ids: Iterable<string>): Step[] {
+  const wanted = new Set(ids);
+  const out: Step[] = [];
+  const visit = (steps: Step[]) => {
+    for (const s of steps) {
+      if (wanted.has(s.id)) out.push(s);
+      else for (const children of Object.values(s.blocks ?? {})) visit(children);
+    }
+  };
+  for (const { steps } of roots(flow)) visit(steps);
+  return out;
+}
+
+/** What Copy puts on the clipboard: the steps plus the screen elements they use. */
+export interface StepClipboard {
+  $autoflow: 'steps';
+  steps: Step[];
+  elements: NonNullable<Flow['elements']>;
+}
+
+export function copySteps(flow: Flow, ids: Iterable<string>): StepClipboard | null {
+  const steps = topLevelSteps(flow, ids);
+  if (!steps.length) return null;
+  const text = JSON.stringify(steps);
+  const elements = (flow.elements ?? []).filter((e) => text.includes(`"${e.id}"`));
+  return { $autoflow: 'steps', steps: structuredClone(steps), elements: structuredClone(elements) };
+}
+
+export function readClipboard(text: string): StepClipboard | null {
+  try {
+    const data = JSON.parse(text) as Partial<StepClipboard>;
+    return data?.$autoflow === 'steps' && Array.isArray(data.steps)
+      ? (data as StepClipboard)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Paste copied steps (with new ids) at a place; elements the flow lacks are added. Returns the new ids. */
+export function pasteSteps(
+  flow: Flow,
+  ref: ListRef,
+  index: number,
+  clip: StepClipboard,
+): { flow: Flow; ids: string[] } {
+  const copies = clip.steps.map(cloneStep);
+  const known = new Set((flow.elements ?? []).map((e) => e.id));
+  const elements = [...(flow.elements ?? []), ...clip.elements.filter((e) => !known.has(e.id))];
+  let next: Flow = { ...flow, elements };
+  copies.forEach((step, i) => {
+    next = insertStep(next, ref, index + i, step);
+  });
+  return { flow: next, ids: copies.map((s) => s.id) };
+}
+
+/** Remove several steps at once. */
+export function removeSteps(flow: Flow, ids: Iterable<string>): Flow {
+  let next = flow;
+  for (const step of topLevelSteps(flow, ids)) next = removeStep(next, step.id);
+  return next;
+}
+
+/**
+ * Put steps that share a list into a new box step (e.g. a Group) at the place of the first one.
+ * Returns null when they are not in the same list.
+ */
+export function wrapSteps(
+  flow: Flow,
+  ids: Iterable<string>,
+  box: Step,
+  block: string,
+): Flow | null {
+  const steps = topLevelSteps(flow, ids);
+  if (!steps.length) return null;
+  const places = steps.map((s) => locate(flow, s.id)!);
+  const key = listKey(places[0]!.ref);
+  if (places.some((p) => listKey(p.ref) !== key)) return null;
+  const first = Math.min(...places.map((p) => p.index));
+  const ordered = getList(flow, places[0]!.ref)!.filter((s) => steps.some((x) => x.id === s.id));
+  const wrapped: Step = { ...box, blocks: { ...box.blocks, [block]: ordered } };
+  return insertStep(removeSteps(flow, ids), places[0]!.ref, first, wrapped);
+}
+
+/**
+ * Turn a step into another kind of step, keeping what still applies: settings with the same
+ * name, results, name, skip and error handling. Steps it held move into the new kind's first
+ * list, or right after it when the new kind holds none - nothing is lost.
+ */
+export function changeActivity(
+  flow: Flow,
+  stepId: string,
+  def: {
+    id: string;
+    params: { properties?: Record<string, unknown> };
+    outputs: { name: string; default_variable: string }[];
+    blocks: { name: string }[];
+  },
+): Flow {
+  const step = findStep(flow, stepId);
+  const where = locate(flow, stepId);
+  if (!step || !where) return flow;
+  const keep = new Set(Object.keys(def.params.properties ?? {}));
+  const params = Object.fromEntries(Object.entries(step.params ?? {}).filter(([k]) => keep.has(k)));
+  const outputs = Object.fromEntries(
+    def.outputs.map((o) => [o.name, step.outputs?.[o.name] ?? o.default_variable ?? o.name]),
+  );
+  const inner = Object.values(step.blocks ?? {}).flat();
+  const changed: Step = { ...step, activity: def.id, params };
+  if (def.outputs.length) changed.outputs = outputs;
+  else delete changed.outputs;
+  if (def.blocks.length) {
+    const blocks: Record<string, Step[]> = Object.fromEntries(
+      def.blocks.map((b) => [b.name, step.blocks?.[b.name] ?? []]),
+    );
+    const placed = new Set(
+      Object.values(blocks)
+        .flat()
+        .map((s) => s.id),
+    );
+    const rest = inner.filter((s) => !placed.has(s.id));
+    blocks[def.blocks[0]!.name] = [...blocks[def.blocks[0]!.name]!, ...rest];
+    changed.blocks = blocks;
+    return updateStep(flow, stepId, () => changed);
+  }
+  delete changed.blocks;
+  let next = updateStep(flow, stepId, () => changed);
+  inner.forEach((s, i) => {
+    next = insertStep(next, where.ref, where.index + 1 + i, s);
+  });
+  return next;
 }

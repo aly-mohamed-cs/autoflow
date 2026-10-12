@@ -28,12 +28,20 @@ export function AddStepMenu({
     }
   }, [open]);
   useEffect(() => {
-    listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+    listRef.current
+      ?.querySelector(`[data-index="${active}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
   }, [active]);
 
   let running = -1;
   return (
-    <Popover open={open} onOpenChange={onOpenChange} trigger={trigger} className="w-[360px] p-0" align="center">
+    <Popover
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      className="w-[360px] p-0"
+      align="center"
+    >
       <div className="border-b border-border p-2">
         <Input
           autoFocus
@@ -60,10 +68,14 @@ export function AddStepMenu({
         />
       </div>
       <div ref={listRef} className="max-h-96 overflow-y-auto p-1" role="listbox" aria-label="Steps">
-        {results.length === 0 && <p className="p-4 text-center text-[13px] text-subtle">No step matches “{query}”.</p>}
+        {results.length === 0 && (
+          <p className="p-4 text-center text-[13px] text-subtle">No step matches “{query}”.</p>
+        )}
         {results.map((group) => (
           <div key={group.category} className="mb-1">
-            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">{group.category}</p>
+            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">
+              {group.category}
+            </p>
             {group.items.map((def) => {
               running += 1;
               const i = running;
@@ -76,12 +88,19 @@ export function AddStepMenu({
                   data-index={i}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => onPick(def)}
-                  className={cn('flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left', i === active && 'bg-primary-soft')}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left',
+                    i === active && 'bg-primary-soft',
+                  )}
                 >
                   <IconTile name={def.icon} category={def.category} size="sm" />
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium">{def.title}</span>
-                    {def.description && <span className="block truncate text-[11px] text-subtle">{def.description}</span>}
+                    {def.description && (
+                      <span className="block truncate text-[11px] text-subtle">
+                        {def.description}
+                      </span>
+                    )}
                   </span>
                 </button>
               );
@@ -107,12 +126,17 @@ const SYNONYMS: Record<string, string[]> = {
   'browser.download': ['save', 'export'],
 };
 
-export function searchActivities(activities: ActivityDef[], query: string): { category: string; items: ActivityDef[] }[] {
+export function searchActivities(
+  activities: ActivityDef[],
+  query: string,
+): { category: string; items: ActivityDef[] }[] {
   const q = query.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
   const matches = activities.filter((a) => {
     if (!q) return !a.advanced;
-    const hay = [a.title, a.description, a.category, a.id, ...(SYNONYMS[a.id] ?? [])].join(' ').toLowerCase();
+    const hay = [a.title, a.description, a.category, a.id, ...(SYNONYMS[a.id] ?? [])]
+      .join(' ')
+      .toLowerCase();
     return words.every((w) => hay.includes(w));
   });
   const groups = new Map<string, ActivityDef[]>();

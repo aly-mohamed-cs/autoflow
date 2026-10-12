@@ -106,6 +106,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -133,6 +134,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -162,6 +164,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -227,6 +230,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -298,6 +302,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -353,6 +358,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -405,6 +411,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -460,6 +467,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -513,6 +521,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -541,6 +550,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -596,6 +606,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -651,6 +662,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -712,6 +724,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": true,
       "requires": null
     },
@@ -772,6 +785,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -841,6 +855,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -896,6 +911,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -929,6 +945,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1003,6 +1020,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1046,6 +1064,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1081,6 +1100,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1109,6 +1129,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1145,6 +1166,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": true,
       "requires": null
     },
@@ -1171,6 +1193,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1209,6 +1232,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1241,6 +1265,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1273,6 +1298,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1304,6 +1330,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1417,6 +1444,7 @@
           "title": "Otherwise"
         }
       ],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1463,6 +1491,7 @@
           "title": "Do"
         }
       ],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1503,6 +1532,7 @@
           "title": "Do"
         }
       ],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1620,6 +1650,356 @@
           "title": "Do"
         }
       ],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.do_while",
+      "title": "Do … while",
+      "category": "Control",
+      "icon": "repeat-2",
+      "sentence": "Do, then repeat while {condition}",
+      "description": "Run steps once, then again as long as a condition stays true (checked after each round).",
+      "params": {
+        "$defs": {
+          "Condition": {
+            "additionalProperties": false,
+            "description": "All (or any) of the rules must hold. ``expression`` is an advanced alternative.",
+            "properties": {
+              "match": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "title": "Match",
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/Rule"
+                },
+                "title": "Rules",
+                "type": "array"
+              },
+              "expression": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Advanced: a {{formula}} that is true or false.",
+                "title": "Expression"
+              }
+            },
+            "title": "Condition",
+            "type": "object",
+            "x-ui": "condition"
+          },
+          "Rule": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "default": null,
+                "title": "Left"
+              },
+              "op": {
+                "default": "equals",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater",
+                  "greater_or_equal",
+                  "less",
+                  "less_or_equal",
+                  "contains",
+                  "not_contains",
+                  "starts_with",
+                  "ends_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "is_true",
+                  "is_false",
+                  "is_number",
+                  "matches"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "right": {
+                "default": null,
+                "title": "Right"
+              }
+            },
+            "title": "Rule",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "$ref": "#/$defs/Condition",
+            "title": "Repeat while"
+          },
+          "max_iterations": {
+            "default": 10000,
+            "description": "Stop with an error after this many rounds, so a mistake can't loop forever.",
+            "minimum": 1,
+            "title": "Safety limit",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "DoWhileParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Do"
+        }
+      ],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.retry",
+      "title": "Retry steps",
+      "category": "Control",
+      "icon": "rotate-ccw",
+      "sentence": "Try up to {times} times",
+      "description": "When one of these steps fails, wait and run them again from the first one (e.g. a log-in that sometimes times out). Fails only when the last try fails too.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "times": {
+            "default": 3,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Try up to (times)",
+            "type": "integer"
+          },
+          "wait": {
+            "default": 2,
+            "maximum": 3600,
+            "minimum": 0,
+            "title": "Wait between tries (seconds)",
+            "type": "number",
+            "x-ui": "duration"
+          }
+        },
+        "title": "RetryParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Try"
+        }
+      ],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.switch",
+      "title": "Switch / case",
+      "category": "Control",
+      "icon": "git-fork",
+      "sentence": "Depending on {value}",
+      "description": "Run different steps depending on a value, e.g. a status: one path per case.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Look at",
+            "x-placeholder": "{{row[\"Status\"]}}"
+          },
+          "cases": {
+            "description": "One value per case. The steps of the first case equal to the value run; when none is, the 'Otherwise' steps run.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "ignore_case": {
+            "default": true,
+            "title": "Ignore upper / lower case",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "SwitchParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "default",
+          "title": "Otherwise"
+        }
+      ],
+      "block_list": {
+        "param": "cases",
+        "prefix": "case_"
+      },
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.group",
+      "title": "Group",
+      "category": "Control",
+      "icon": "square-dashed",
+      "sentence": "{name}",
+      "description": "Keep related steps together in a named box you can fold away. It does nothing else.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "default": "",
+            "title": "Name of the group",
+            "type": "string",
+            "x-placeholder": "Log in to the portal"
+          }
+        },
+        "title": "GroupParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Steps"
+        }
+      ],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.check",
+      "title": "Make sure that",
+      "category": "Control",
+      "icon": "shield-check",
+      "sentence": "Make sure that {condition}",
+      "description": "Stop with a clear error when something is not as expected (e.g. a total is empty), instead of carrying on with wrong data.",
+      "params": {
+        "$defs": {
+          "Condition": {
+            "additionalProperties": false,
+            "description": "All (or any) of the rules must hold. ``expression`` is an advanced alternative.",
+            "properties": {
+              "match": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "title": "Match",
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/Rule"
+                },
+                "title": "Rules",
+                "type": "array"
+              },
+              "expression": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Advanced: a {{formula}} that is true or false.",
+                "title": "Expression"
+              }
+            },
+            "title": "Condition",
+            "type": "object",
+            "x-ui": "condition"
+          },
+          "Rule": {
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "default": null,
+                "title": "Left"
+              },
+              "op": {
+                "default": "equals",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater",
+                  "greater_or_equal",
+                  "less",
+                  "less_or_equal",
+                  "contains",
+                  "not_contains",
+                  "starts_with",
+                  "ends_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "is_true",
+                  "is_false",
+                  "is_number",
+                  "matches"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "right": {
+                "default": null,
+                "title": "Right"
+              }
+            },
+            "title": "Rule",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "$ref": "#/$defs/Condition",
+            "title": "Make sure that"
+          },
+          "message": {
+            "default": "",
+            "title": "Error message if not",
+            "type": "string",
+            "x-placeholder": "The invoice has no total"
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "CheckParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1638,6 +2018,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1656,6 +2037,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1695,6 +2077,7 @@
           "title": "Always"
         }
       ],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1722,6 +2105,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1755,6 +2139,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1790,6 +2175,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1819,6 +2205,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1854,6 +2241,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1892,6 +2280,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -1927,6 +2316,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2045,6 +2435,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2091,6 +2482,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2134,6 +2526,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2180,6 +2573,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2225,6 +2619,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2268,6 +2663,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2331,6 +2727,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2370,6 +2767,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2454,6 +2852,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2506,6 +2905,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2554,6 +2954,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2600,6 +3001,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2634,6 +3036,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2692,6 +3095,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2735,6 +3139,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2778,6 +3183,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2836,6 +3242,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -2925,6 +3332,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3004,6 +3412,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3052,6 +3461,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3108,6 +3518,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3154,6 +3565,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3240,6 +3652,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3297,6 +3710,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3344,6 +3758,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3389,6 +3804,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3437,6 +3853,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3465,6 +3882,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3524,6 +3942,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3572,6 +3991,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3610,6 +4030,107 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.message",
+      "title": "Show message",
+      "category": "Control",
+      "icon": "message-square",
+      "sentence": "Show message {message}",
+      "description": "Show a message to the person at the computer and wait for OK.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "x-placeholder": "All {{COUNT(rows)}} invoices were entered.",
+            "x-ui": "multiline"
+          },
+          "title": {
+            "default": "Autoflow",
+            "title": "Window title",
+            "type": "string",
+            "x-advanced": true
+          },
+          "close_after": {
+            "default": 0,
+            "description": "0 waits until someone answers. Use a time on robots nobody watches.",
+            "maximum": 86400,
+            "minimum": 0,
+            "title": "Close by itself after (seconds)",
+            "type": "number",
+            "x-ui": "duration"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "MessageParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "control.ask",
+      "title": "Ask for a value",
+      "category": "Control",
+      "icon": "message-square-text",
+      "sentence": "Ask {question}",
+      "description": "Ask the person at the computer to type a value (e.g. a month or a reference).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "title": "Question",
+            "type": "string",
+            "x-placeholder": "Which month should be processed?"
+          },
+          "default": {
+            "type": "string",
+            "default": "",
+            "title": "Answer when nobody types one"
+          },
+          "title": {
+            "default": "Autoflow",
+            "title": "Window title",
+            "type": "string",
+            "x-advanced": true
+          },
+          "close_after": {
+            "default": 0,
+            "description": "0 waits until someone answers. Use a time on robots nobody watches.",
+            "maximum": 86400,
+            "minimum": 0,
+            "title": "Close by itself after (seconds)",
+            "type": "number",
+            "x-ui": "duration"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "answer",
+          "title": "Answer",
+          "type": "text",
+          "description": "",
+          "default_variable": "answer"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3698,6 +4219,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3781,6 +4303,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3828,6 +4351,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3860,6 +4384,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3917,6 +4442,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -3968,6 +4494,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4015,6 +4542,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4078,6 +4606,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4123,6 +4652,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4182,6 +4712,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4221,6 +4752,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4277,6 +4809,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4323,6 +4856,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4369,6 +4903,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4415,6 +4950,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4447,6 +4983,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4482,6 +5019,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4539,6 +5077,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4574,6 +5113,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4629,6 +5169,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4664,6 +5205,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4712,6 +5254,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4756,6 +5299,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4812,6 +5356,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4864,6 +5409,7 @@
       },
       "outputs": [],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4908,6 +5454,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -4952,6 +5499,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5008,6 +5556,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5068,6 +5617,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5117,6 +5667,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5175,6 +5726,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5220,6 +5772,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5255,6 +5808,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5287,6 +5841,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5339,6 +5894,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5379,6 +5935,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5436,6 +5993,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5491,6 +6049,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5598,6 +6157,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5636,6 +6196,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5680,6 +6241,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5724,6 +6286,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5767,6 +6330,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5867,6 +6431,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5923,6 +6488,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": false,
       "requires": null
     },
@@ -5979,6 +6545,7 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
       "advanced": true,
       "requires": null
     }

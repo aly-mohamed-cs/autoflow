@@ -91,6 +91,27 @@ The preview shows the result using values from your last test run.
 * After saving something, **Wait for element in application** → *text contains* (e.g. “Saved”)
   before reading the result.
 
+### Work faster in the designer
+| Do this | How |
+|---|---|
+| Select several steps | **Ctrl+click** them, or hold **Shift** and drag a box on an empty spot. **Ctrl+A** selects all. |
+| Copy / cut / paste | **Ctrl+C**, **Ctrl+X**, **Ctrl+V** — also between automations (Studio windows or other PCs: it is plain text). |
+| Put steps in a named box | Select them, **Ctrl+G** (or **Group into a box**). Click **⌄** on any box to fold it away. |
+| Find a step | **Ctrl+F**, type what it does (e.g. *save*), **Enter**. |
+| Turn a step into another kind | The **⇄** button at the top of its settings. Settings that still apply are kept. |
+| Check a value while testing | Press **F9** on a step to pause there, start **Test run**, open **Console** and type a formula. |
+| Slow a run down | **Pause after every step** in the automation's settings (click an empty spot). |
+
+### Choose between several paths, retry, check
+* **Switch / case** — one path per value (e.g. *Paid*, *Overdue*) plus **Otherwise**. Add cases in its
+  settings; each gets its own lane.
+* **Do … while** — like *Repeat while*, but the steps always run at least once.
+* **Retry steps** — runs the steps inside again from the first one when one fails (e.g. a log-in
+  that sometimes times out).
+* **Make sure that** — stops with your own clear message when something is not as expected.
+* **Show message** / **Ask for a value** — for automations someone watches. Set **Close by itself
+  after** for robots nobody watches.
+
 ### Click at a position (X, Y)
 Some things have no button the recorder can see — drawings, maps, charts, remote desktops.
 * **Click at position** clicks a point measured from the top-left corner of a window (or of the

@@ -3,9 +3,18 @@ import { Badge, Button, Dialog, Field, Icon, IconTile, Input, Menu, Spinner, Too
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createStep } from '../lib/catalog';
-import { duplicateStep, findStep, flatIds, getList, insertStep, listKey, locate, moveStep, parseListKey, removeStep } from '../lib/flowOps';
+import { duplicateStep, findStep, flatIds, getList, insertStep, listKey, locate, moveStep, parseListKey } from '../lib/flowOps';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Canvas } from '../editor/Canvas';
+import { openFind } from '../editor/FindSteps';
+import {
+  copySelection,
+  cutSelection,
+  deleteSelection,
+  groupSelection,
+  pasteClipboard,
+  selectAll,
+} from '../editor/selectionActions';
 import { innermostUnderPointer, useDnd, type DragItem, type DropData, type DropTarget } from '../editor/dnd';
 import { FileAddon } from '../editor/fields/inputs';
 import { useFlowVariables } from '../editor/hooks';
@@ -141,11 +150,38 @@ function useShortcuts() {
         return;
       }
       if (typing || !flow) return;
-      if (!selectedId) return;
-      if (e.key === 'Delete') {
+      const key = e.key.toLowerCase();
+      // Brity-style shortcuts that work on the selection (or need none).
+      if (ctrl && key === 'v') {
         e.preventDefault();
-        change((f) => removeStep(f, selectedId));
-        select(null);
+        void pasteClipboard();
+        return;
+      }
+      if (ctrl && key === 'a') {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+      if (ctrl && key === 'f') {
+        e.preventDefault();
+        openFind();
+        return;
+      }
+      if (!selectedId) return;
+      if (ctrl && key === 'c') {
+        e.preventDefault();
+        void copySelection();
+      } else if (ctrl && key === 'x') {
+        e.preventDefault();
+        void cutSelection();
+      } else if (ctrl && key === 'g') {
+        e.preventDefault();
+        groupSelection();
+      } else if (e.key === 'Delete') {
+        e.preventDefault();
+        deleteSelection();
+      } else if (useEditor.getState().selectedIds.length > 1) {
+        if (e.key === 'Escape') select(null);
       } else if (ctrl && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         let newId: string | null = null;

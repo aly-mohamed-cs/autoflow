@@ -1,6 +1,11 @@
 import type { Element } from '@autoflow/flow-types';
 import { describe, expect, it } from 'vitest';
-import { firstBrowserUrl, hasBrowserOpen, stepsFromRecording, type RecordedAction } from './recording';
+import {
+  firstBrowserUrl,
+  hasBrowserOpen,
+  stepsFromRecording,
+  type RecordedAction,
+} from './recording';
 
 const el = (id: string, name: string, css: string): Element => ({
   id,
@@ -12,7 +17,13 @@ const el = (id: string, name: string, css: string): Element => ({
 describe('stepsFromRecording', () => {
   const actions: RecordedAction[] = [
     { action: 'type', value: 'robot', element: el('a', 'Username box', '#user') },
-    { action: 'type', value: null, password: true, press_enter: true, element: el('b', 'Password box', '#pass') },
+    {
+      action: 'type',
+      value: null,
+      password: true,
+      press_enter: true,
+      element: el('b', 'Password box', '#pass'),
+    },
     { action: 'select', option: 'US Dollar', element: el('c', 'Currency list', '#cur') },
     { action: 'check', checked: false, element: el('d', 'Urgent checkbox', '#urgent') },
     { action: 'click', element: el('e', 'Submit button', '#go') },
@@ -22,12 +33,28 @@ describe('stepsFromRecording', () => {
   ];
 
   it('makes one step per action and reuses identical elements', () => {
-    const { steps, elements } = stepsFromRecording(actions, { startUrl: 'https://portal', addOpenBrowser: true });
+    const { steps, elements } = stepsFromRecording(actions, {
+      startUrl: 'https://portal',
+      addOpenBrowser: true,
+    });
     expect(steps.map((s) => s.activity)).toEqual([
-      'browser.open', 'browser.type', 'browser.type', 'browser.select', 'browser.check',
-      'browser.click', 'browser.click', 'browser.switch_tab', 'browser.go_to',
+      'browser.open',
+      'browser.type',
+      'browser.type',
+      'browser.select',
+      'browser.check',
+      'browser.click',
+      'browser.click',
+      'browser.switch_tab',
+      'browser.go_to',
     ]);
-    expect(elements.map((e) => e.name)).toEqual(['Username box', 'Password box', 'Currency list', 'Urgent checkbox', 'Submit button']);
+    expect(elements.map((e) => e.name)).toEqual([
+      'Username box',
+      'Password box',
+      'Currency list',
+      'Urgent checkbox',
+      'Submit button',
+    ]);
     expect(steps[5]!.params!.element).toBe(steps[6]!.params!.element);
     expect(steps[3]!.params).toMatchObject({ option: 'US Dollar' });
     expect(steps[4]!.params).toMatchObject({ checked: false });
@@ -45,7 +72,13 @@ describe('stepsFromRecording', () => {
       name,
       kind: 'desktop',
       context: { window: 'Demo ERP - Invoices', process: 'DemoErp.exe' },
-      selectors: [{ strategy: 'uia', value: `Edit #${aid}`, options: { automation_id: aid, control_type: 'Edit' } }],
+      selectors: [
+        {
+          strategy: 'uia',
+          value: `Edit #${aid}`,
+          options: { automation_id: aid, control_type: 'Edit' },
+        },
+      ],
     });
     const { steps } = stepsFromRecording(
       [
@@ -84,7 +117,13 @@ describe('flow helpers', () => {
   const flow = {
     id: 'f',
     name: 'f',
-    steps: [{ id: '1', activity: 'control.if', blocks: { then: [{ id: '2', activity: 'browser.open', params: { url: 'portal.local' } }] } }],
+    steps: [
+      {
+        id: '1',
+        activity: 'control.if',
+        blocks: { then: [{ id: '2', activity: 'browser.open', params: { url: 'portal.local' } }] },
+      },
+    ],
   };
   it('finds the first browser address', () => {
     expect(firstBrowserUrl(flow)).toBe('portal.local');

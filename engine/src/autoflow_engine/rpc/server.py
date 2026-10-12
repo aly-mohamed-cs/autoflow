@@ -53,6 +53,7 @@ class EngineServer:
         self._write_lock = threading.Lock()
         self._run_thread: threading.Thread | None = None
         self._control: RunControl | None = None
+        self._runner: FlowRunner | None = None
         self._run_id: str | None = None
         self._design: DesignSession | None = None
         self._desktop_picker: DesktopPicker | None = None
@@ -75,6 +76,7 @@ class EngineServer:
             "catalog.get": lambda _p: catalog.export_catalog(),
             "flow.validate": self._validate,
             "expression.evaluate": self._evaluate,
+            "run.evaluate": self._run_evaluate,
             "run.start": self._run_start,
             "run.pause": lambda _p: self._with_control(lambda c: c.pause()),
             "run.resume": lambda _p: self._with_control(lambda c: c.resume()),
@@ -233,6 +235,17 @@ class EngineServer:
         except AutoflowError as exc:
             return {"ok": False, "error": exc.message, "hint": exc.hint}
 
+    def _run_evaluate(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Debug console: a formula with the variables of the run (paused or running) right now."""
+        runner = self._runner
+        if runner is None:
+            return {"ok": False, "error": "No test run has started yet.", "hint": None}
+        try:
+            value = evaluate(str(params.get("expression", "")), dict(runner.ctx.variables))
+            return {"ok": True, "value": to_jsonable(value)}
+        except AutoflowError as exc:
+            return {"ok": False, "error": exc.message, "hint": exc.hint}
+
     def _run_start(self, params: dict[str, Any]) -> dict[str, Any]:
         if self._run_thread and self._run_thread.is_alive():
             raise RpcError(APP_ERROR, "A flow is already running.")
@@ -260,6 +273,7 @@ class EngineServer:
             options.repair = lambda request: self.request_host("host.repair", request, control, timeout=660)
         runner = FlowRunner(flow, options, emit=lambda e: self.notify("run.event", e), control=self._control)
         self._run_id = runner.run_id
+        self._runner = runner
 
         self._run_thread = threading.Thread(target=runner.run, name=f"run-{runner.run_id}", daemon=True)
         self._run_thread.start()

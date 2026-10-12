@@ -4,7 +4,7 @@
 // Steps are added with the + on any connector or by dropping a step from the library onto a
 // connector. Dragging a card moves it on the chart; letting go of it on a + moves it to that
 // place in the run order instead.
-import type { Step } from '@autoflow/flow-types';
+import { walkSteps, type Step } from '@autoflow/flow-types';
 import {
   Badge,
   Button,
@@ -56,6 +56,8 @@ import {
   processSteps,
   rootRef,
   tidyChart,
+  toggleCollapsed,
+  topLevelSteps,
 } from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
@@ -104,10 +106,14 @@ export function FlowCanvas() {
 }
 
 interface Drag {
-  key: string;
+  /** Offsets keys of everything being moved (the grabbed step, or all selected ones). */
+  keys: string[];
   nodeId: string;
+  /** Set when one step is dragged: letting go of it on a + changes the order. */
   stepId?: string;
   moving: Set<string>;
+  /** The + under the pointer during the last move, if any. */
+  slot?: Slot | null;
   origin: { x: number; y: number };
   dx: number;
   dy: number;
@@ -134,6 +140,7 @@ function FlowChart() {
     setDragState(next);
   };
 
+  const collapsed = useEditor((s) => s.flow?.layout?.collapsed);
   const layout = useMemo(
     () =>
       layoutFlow(steps ?? [], (activity) => index.get(activity), {
@@ -141,8 +148,9 @@ function FlowChart() {
         root: rootRef(processId),
         offsets,
         terminalPrefix: terminalPrefix(processId),
+        collapsed,
       }),
-    [steps, index, direction, processId, offsets],
+    [steps, index, direction, processId, offsets, collapsed],
   );
 
   const { nodes, edges } = useMemo(
@@ -210,6 +218,43 @@ function FlowChart() {
   }, [flowId, processId, direction, fitView, setViewport]);
 
   useFollowRun(nodes);
+  useReveal(layout);
+
+  // Shift + drag on an empty spot draws a box: the steps it touches get selected.
+  const { screenToFlowPosition } = useReactFlow();
+  const [shiftHeld, setShiftHeld] = useState(false);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const boxJustDrawn = useRef(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => setShiftHeld(e.shiftKey);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
+    };
+  }, []);
+  const boxStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const onPane = target.closest('.react-flow__pane') && !target.closest('.react-flow__node');
+    if (!e.shiftKey || e.button !== 0 || !onPane) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setBox({ x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY });
+  };
+  const boxMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (box) setBox({ ...box, x1: e.clientX, y1: e.clientY });
+  };
+  const boxEnd = () => {
+    if (!box) return;
+    const a = screenToFlowPosition({ x: Math.min(box.x0, box.x1), y: Math.min(box.y0, box.y1) });
+    const b = screenToFlowPosition({ x: Math.max(box.x0, box.x1), y: Math.max(box.y0, box.y1) });
+    const ids = layout.nodes
+      .filter((n) => n.stepId && n.x < b.x && n.x + n.w > a.x && n.y < b.y && n.y + n.h > a.y)
+      .map((n) => n.stepId!);
+    boxJustDrawn.current = true;
+    setBox(null);
+    useEditor.getState().selectMany([...new Set(ids)]);
+  };
 
   /** The + (or empty lane) under the pointer, if any. */
   const slotAt = (e: MouseEvent | TouchEvent): Slot | null => {
@@ -228,10 +273,25 @@ function FlowChart() {
     <DirectionContext.Provider value={direction}>
       <div
         ref={wrapper}
-        className="min-h-0 flex-1 bg-bg"
+        className="relative min-h-0 flex-1 bg-bg"
         data-testid="flow-canvas"
         data-direction={direction}
+        onPointerDownCapture={boxStart}
+        onPointerMove={boxMove}
+        onPointerUp={boxEnd}
       >
+        {box && wrapper.current && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute z-50 rounded border border-primary bg-primary/10"
+            style={{
+              left: Math.min(box.x0, box.x1) - wrapper.current.getBoundingClientRect().left,
+              top: Math.min(box.y0, box.y1) - wrapper.current.getBoundingClientRect().top,
+              width: Math.abs(box.x1 - box.x0),
+              height: Math.abs(box.y1 - box.y0),
+            }}
+          />
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -249,11 +309,22 @@ function FlowChart() {
           onNodeDragStart={(_, node) => {
             const l = (node as CanvasNode).data.layout;
             if (!l.moveKey) return;
+            // Grabbing one of several selected steps moves them all (only the outermost ones get
+            // an offset: what is inside a box moves with it).
+            const { flow, selectedIds } = useEditor.getState();
+            const keys =
+              l.stepId && selectedIds.length > 1 && selectedIds.includes(l.stepId) && flow
+                ? topLevelSteps(flow, selectedIds).map((s) => s.id)
+                : [l.moveKey];
+            const moving = new Set<string>();
+            for (const key of keys) {
+              for (const id of nodesMovingWith(layoutRef.current, steps ?? [], key)) moving.add(id);
+            }
             setDrag({
-              key: l.moveKey,
+              keys,
               nodeId: node.id,
-              stepId: l.stepId,
-              moving: nodesMovingWith(layoutRef.current, steps ?? [], l.moveKey),
+              stepId: keys.length === 1 ? l.stepId : undefined,
+              moving,
               origin: { x: l.x, y: l.y },
               dx: 0,
               dy: 0,
@@ -263,13 +334,15 @@ function FlowChart() {
           onNodeDrag={(e, node) => {
             const d = dragRef.current;
             if (!d) return;
+            // The + under the pointer is highlighted, and is where the step goes when let go.
+            const slot = d.stepId ? slotAt(e) : null;
             setDrag({
               ...d,
               dx: Math.round((node.position.x - d.origin.x) / SNAP) * SNAP,
               dy: Math.round((node.position.y - d.origin.y) / SNAP) * SNAP,
+              slot,
             });
             if (d.stepId) {
-              const slot = slotAt(e);
               useDnd
                 .getState()
                 .setTarget(slot ? { listKey: slot.listKey, index: slot.index } : null);
@@ -281,7 +354,7 @@ function FlowChart() {
             useDnd.getState().setDragging(null);
             useDnd.getState().setTarget(null);
             if (!d) return;
-            const slot = d.stepId ? slotAt(e) : null;
+            const slot = d.stepId ? (slotAt(e) ?? d.slot ?? null) : null;
             if (slot && d.stepId) {
               // Let go on a +: the step moves to that place in the run order, tidily.
               const stepId = d.stepId;
@@ -292,14 +365,23 @@ function FlowChart() {
             }
             const dx = Math.round((node.position.x - d.origin.x) / SNAP) * SNAP;
             const dy = Math.round((node.position.y - d.origin.y) / SNAP) * SNAP;
-            if (dx || dy) change((f) => moveOnChart(f, d.key, dx, dy));
+            if (dx || dy)
+              change((f) => d.keys.reduce((acc, key) => moveOnChart(acc, key, dx, dy), f));
           }}
           // Also what makes React Flow pass clicks to nodes (they are not selectable).
-          onNodeClick={(_, node) => {
+          onNodeClick={(e, node) => {
             const stepId = (node as CanvasNode).data.layout.stepId;
-            if (stepId) select(stepId);
+            if (!stepId) return;
+            if (e.ctrlKey || e.metaKey) useEditor.getState().toggleSelect(stepId);
+            else select(stepId);
           }}
-          onPaneClick={() => select(null)}
+          onPaneClick={() => {
+            if (!boxJustDrawn.current) select(null);
+            boxJustDrawn.current = false;
+          }}
+          panOnDrag={!shiftHeld}
+          selectionKeyCode={null}
+          deleteKeyCode={null}
           proOptions={{ hideAttribution: true }}
           style={{ background: 'transparent' }}
         >
@@ -385,6 +467,28 @@ export function LayoutControls() {
   );
 }
 
+/** Find (and the problems list) ask for a step to be shown: centre it if it is out of view. */
+function useReveal(layout: { nodes: LayoutNode[] }) {
+  const reveal = useEditor((s) => s.reveal);
+  const { getViewport, setCenter } = useReactFlow();
+  const nodesRef = useRef(layout.nodes);
+  nodesRef.current = layout.nodes;
+  useEffect(() => {
+    if (!reveal) return;
+    const t = setTimeout(() => {
+      const node = nodesRef.current.find((n) => n.stepId === reveal.id);
+      if (!node) return;
+      const { zoom } = getViewport();
+      void setCenter(
+        node.x + Math.min(node.w, SIZES.node.w) / 2,
+        node.y + Math.min(node.h, SIZES.header) / 2,
+        { zoom: Math.max(zoom, READABLE_ZOOM), duration: 300 },
+      );
+    }, 80); // after a switch to another process has been drawn
+    return () => clearTimeout(t);
+  }, [reveal, getViewport, setCenter]);
+}
+
 /** During a test run, keep the running step in view (switching to its process if needed). */
 function useFollowRun(nodes: CanvasNode[]) {
   const current = useRun((s) => s.currentStepId);
@@ -439,19 +543,20 @@ const StepNode = memo(function StepNode({ data }: NodeProps<CanvasNode>) {
   const l = data.layout;
   const step = useStep(l.stepId);
   if (!step) return null;
-  return <StepCard step={step} width={l.w} height={l.h} branch={l.type === 'branch'} />;
+  return <StepCard step={step} width={l.w} height={l.h} handles={l.handles} />;
 });
 
 function StepCard({
   step,
   width,
   height,
-  branch,
+  handles,
 }: {
   step: Step;
   width: number;
   height: number;
-  branch: boolean;
+  /** Decisions: one outgoing connector per lane (otherwise a single "out"). */
+  handles?: string[];
 }) {
   const def = useApp((s) => s.index.get(step.activity));
   const select = useEditor((s) => s.select);
@@ -474,7 +579,8 @@ function StepCard({
       title={text}
       onClick={(e) => {
         e.stopPropagation();
-        select(step.id);
+        if (e.ctrlKey || e.metaKey) useEditor.getState().toggleSelect(step.id);
+        else select(step.id);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -551,25 +657,22 @@ function StepCard({
           )}
         />
       </Tooltip>
-      {branch ? (
-        <>
-          <Handle
-            type="source"
-            position={sides.out}
-            id="yes"
-            style={sides.vertical ? { left: '30%' } : { top: '30%' }}
-            className={hidden}
-            isConnectable={false}
-          />
-          <Handle
-            type="source"
-            position={sides.out}
-            id="no"
-            style={sides.vertical ? { left: '70%' } : { top: '70%' }}
-            className={hidden}
-            isConnectable={false}
-          />
-        </>
+      {handles?.length ? (
+        handles.map((id, i) => {
+          // Spread the lanes' connectors along the side (If: at 30% and 70%).
+          const at = `${handles.length === 2 ? (i === 0 ? 30 : 70) : Math.round(((i + 1) * 100) / (handles.length + 1))}%`;
+          return (
+            <Handle
+              key={id}
+              type="source"
+              position={sides.out}
+              id={id}
+              style={sides.vertical ? { left: at } : { top: at }}
+              className={hidden}
+              isConnectable={false}
+            />
+          );
+        })
       ) : (
         <Handle
           type="source"
@@ -593,8 +696,10 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
   const text = useSentenceText(step ?? { id: '', activity: '', params: {} }, def);
   const actions = useStepActions(step ?? { id: '', activity: '', params: {} });
   const sides = useSides();
+  const change = useEditor((s) => s.change);
   if (!step) return null;
   const color = categoryColor(def?.category);
+  const inside = [...walkSteps(Object.values(step.blocks ?? {}).flat())].length;
   // Connectors meet the box at its title (left to right) or at the middle of its top / bottom.
   const handleStyle = sides.vertical ? undefined : { top: SIZES.header / 2 };
 
@@ -633,7 +738,8 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
         title={text}
         onClick={(e) => {
           e.stopPropagation();
-          select(step.id);
+          if (e.ctrlKey || e.metaKey) useEditor.getState().toggleSelect(step.id);
+          else select(step.id);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -644,13 +750,27 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
         style={{ height: SIZES.header }}
         className="group flex cursor-grab items-center gap-2.5 rounded-t-2xl px-3 outline-none active:cursor-grabbing"
       >
+        <button
+          type="button"
+          className="nodrag nopan -mr-1 rounded p-0.5 text-subtle hover:bg-surface hover:text-fg"
+          aria-label={l.collapsed ? 'Unfold' : 'Fold'}
+          title={l.collapsed ? 'Show the steps inside' : 'Fold away the steps inside'}
+          onClick={(e) => {
+            e.stopPropagation();
+            change((f) => toggleCollapsed(f, step.id));
+          }}
+        >
+          <Icon name={l.collapsed ? 'chevron-right' : 'chevron-down'} size={15} />
+        </button>
         <IconTile name={def?.icon ?? 'repeat'} category={def?.category} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold">
             {l.loop && <Icon name="repeat" size={12} className="mr-1 inline text-muted" />}
             {step.label || def?.title}
           </p>
-          <p className="truncate text-[11.5px] text-muted">{text}</p>
+          <p className="truncate text-[11.5px] text-muted">
+            {l.collapsed ? `${inside} step${inside === 1 ? '' : 's'} inside · ${text}` : text}
+          </p>
         </div>
         <RunStatusIcon status={runStatus} paused={paused} />
         <span className="nodrag nopan" onClick={(e) => e.stopPropagation()}>
@@ -852,10 +972,16 @@ function FlowEdge(props: EdgeProps<CanvasEdge>) {
     curvature: 0.35,
   });
   const layout = data!.layout;
-  const yes = layout.label === 'Yes';
-  const labelAt = vertical
-    ? { x: sourceX + (yes ? -16 : 16), y: sourceY + 18 }
-    : { x: sourceX + 26, y: sourceY + (yes ? -11 : 11) };
+  const yes = layout.tone === 'yes';
+  // If: Yes / No next to the decision. Switch: each case at the start of its lane.
+  const labelAt =
+    layout.tone === 'case'
+      ? vertical
+        ? { x: targetX, y: targetY - 16 }
+        : { x: targetX - 46, y: targetY - 12 }
+      : vertical
+        ? { x: sourceX + (yes ? -16 : 16), y: sourceY + 18 }
+        : { x: sourceX + 26, y: sourceY + (yes ? -11 : 11) };
   return (
     <>
       <BaseEdge
@@ -867,8 +993,12 @@ function FlowEdge(props: EdgeProps<CanvasEdge>) {
         {layout.label && (
           <span
             className={cn(
-              'pointer-events-none absolute rounded-full px-1.5 text-[10.5px] leading-4 font-semibold',
-              yes ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
+              'pointer-events-none absolute max-w-32 truncate rounded-full px-1.5 text-[10.5px] leading-4 font-semibold',
+              layout.tone === 'case'
+                ? 'border border-border bg-surface text-muted'
+                : yes
+                  ? 'bg-success-soft text-success'
+                  : 'bg-danger-soft text-danger',
             )}
             style={{ transform: `translate(-50%, -50%) translate(${labelAt.x}px, ${labelAt.y}px)` }}
           >

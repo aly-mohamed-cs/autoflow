@@ -114,12 +114,16 @@ class Layout(Model):
         default_factory=dict,
         description="How far a step (or start / end) was moved from its tidy place, by its id.",
     )
+    collapsed: list[str] = Field(default_factory=list, description="Boxes (groups, loops...) shown folded.")
 
 
 class FlowSettings(Model):
     default_timeout: float = Field(30, ge=1, le=3600, description="Seconds to wait for elements.")
     screenshot_each_step: bool = False
     screenshot_on_error: bool = True
+    step_delay: float = Field(
+        0, ge=0, le=60, description="Seconds to wait after every step (to watch a run, or for slow programs)."
+    )
 
 
 class Flow(Model):

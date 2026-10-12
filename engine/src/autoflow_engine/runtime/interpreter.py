@@ -238,8 +238,11 @@ class FlowRunner:
                     )
                 result = self._execute(step, adef)
                 self._store_outputs(step, adef, result)
-                if self.flow.settings.screenshot_each_step and not adef.blocks:
+                runs_steps = bool(adef.blocks) or adef.uses_runner
+                if self.flow.settings.screenshot_each_step and not runs_steps:
                     self._capture_screenshot("step")
+                if self.flow.settings.step_delay and not runs_steps:
+                    ctx.sleep(self.flow.settings.step_delay)  # Brity "SetPlayOption": slow the run down
                 return {"status": "ok"}
             except (StepFailed, FlowControl, RunCancelled):
                 raise

@@ -77,6 +77,14 @@
           "default": true,
           "title": "Screenshot On Error",
           "type": "boolean"
+        },
+        "step_delay": {
+          "default": 0,
+          "description": "Seconds to wait after every step (to watch a run, or for slow programs).",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Step Delay",
+          "type": "number"
         }
       },
       "title": "FlowSettings",
@@ -102,6 +110,14 @@
           "description": "How far a step (or start / end) was moved from its tidy place, by its id.",
           "title": "Offsets",
           "type": "object"
+        },
+        "collapsed": {
+          "description": "Boxes (groups, loops...) shown folded.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Collapsed",
+          "type": "array"
         }
       },
       "title": "Layout",
