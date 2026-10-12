@@ -2,13 +2,14 @@ import type { ActivityDef, Step } from '@autoflow/flow-types';
 import { Badge, Button, categoryColor, cn, EmptyState, Icon, IconTile, Menu, Segmented, Tooltip } from '@autoflow/ui';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { memo, useState } from 'react';
-import { listKey, ROOT, type ListRef } from '../lib/flowOps';
+import { getList, listKey, NO_STEPS, processSteps, rootRef, type ListRef } from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun } from '../store/run';
 import { AddStepMenu } from './AddStepMenu';
 import { useDnd } from './dnd';
-import { FlowCanvas } from './FlowCanvas';
+import { FlowCanvas, LayoutControls } from './FlowCanvas';
+import { ProcessTabs } from './ProcessTabs';
 import { useStepIssues } from './hooks';
 import { RunStatusIcon, STATUS_STYLES, StepSentence, useAddStep, useStepActions } from './stepParts';
 
@@ -25,12 +26,16 @@ function savedView(): View {
   }
 }
 
-/** The steps of the open flow: a flowchart (default) or a compact list. */
+/** The steps of the open flow: a flowchart (default) or a compact list, one process at a time. */
 export function Canvas() {
   const [view, setView] = useState<View>(savedView);
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="absolute top-3 right-3 z-20">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface px-2">
+        <div className="min-w-0 flex-1">
+          <ProcessTabs />
+        </div>
+        {view === 'flow' && <LayoutControls />}
         <Segmented
           size="sm"
           value={view}
@@ -55,7 +60,8 @@ export function Canvas() {
 }
 
 function ListCanvas() {
-  const steps = useEditor((s) => s.flow?.steps ?? []);
+  const processId = useEditor((s) => s.processId);
+  const steps = useEditor((s) => (s.flow ? processSteps(s.flow, processId) : NO_STEPS));
   const select = useEditor((s) => s.select);
   return (
     <div
@@ -64,8 +70,8 @@ function ListCanvas() {
         if (e.target === e.currentTarget) select(null);
       }}
     >
-      <div className="mx-auto max-w-3xl px-6 pt-14 pb-40" onClick={(e) => e.target === e.currentTarget && select(null)}>
-        {steps.length === 0 ? <EmptyCanvas /> : <StepList steps={steps} listRef={ROOT} />}
+      <div className="mx-auto max-w-3xl px-6 pt-6 pb-40" onClick={(e) => e.target === e.currentTarget && select(null)}>
+        {steps.length === 0 ? <EmptyCanvas /> : <StepList steps={steps} listRef={rootRef(processId)} />}
       </div>
     </div>
   );
@@ -74,8 +80,9 @@ function ListCanvas() {
 function EmptyCanvas() {
   const [open, setOpen] = useState(false);
   const add = useAddStep();
+  const root = rootRef(useEditor((s) => s.processId));
   return (
-    <EndZone listRef={ROOT} big>
+    <EndZone listRef={root} big>
       <EmptyState
         icon={<Icon name="mouse-pointer-click" size={32} />}
         title="Add the first step"
@@ -85,7 +92,7 @@ function EmptyCanvas() {
             onOpenChange={setOpen}
             onPick={(def) => {
               setOpen(false);
-              add(def, ROOT, 0);
+              add(def, root, 0);
             }}
             trigger={
               <Button variant="primary" icon={<Icon name="plus" size={16} />}>
@@ -310,7 +317,7 @@ function EndZone({ listRef, big, children }: { listRef: ListRef; big?: boolean; 
   const dragging = useDnd((s) => s.dragging);
   const active = target && !target.stepId && target.listKey === key;
   const add = useAddStep();
-  const count = useEditor((s) => (s.flow ? (listRef.parentId === null ? s.flow.steps?.length ?? 0 : countIn(s.flow.steps ?? [], listRef)) : 0));
+  const count = useEditor((s) => (s.flow ? (getList(s.flow, listRef)?.length ?? 0) : 0));
   const [open, setOpen] = useState(false);
 
   return (
@@ -345,13 +352,3 @@ function EndZone({ listRef, big, children }: { listRef: ListRef; big?: boolean; 
   );
 }
 
-function countIn(steps: Step[], ref: ListRef): number {
-  for (const s of steps) {
-    if (s.id === ref.parentId) return s.blocks?.[ref.block]?.length ?? 0;
-    for (const children of Object.values(s.blocks ?? {})) {
-      const n = countIn(children, ref);
-      if (n >= 0) return n;
-    }
-  }
-  return -1;
-}

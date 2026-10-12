@@ -163,7 +163,7 @@ function useShortcuts() {
         });
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const ids = flatIds(flow);
+        const ids = flatIds(flow, useEditor.getState().processId);
         const i = ids.indexOf(selectedId);
         const next = ids[i + (e.key === 'ArrowDown' ? 1 : -1)];
         if (next) {

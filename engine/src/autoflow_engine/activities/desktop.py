@@ -16,7 +16,7 @@ from ..errors import ActivityError
 from ..flow import Element
 from ..runtime.context import Deadline, RunContext, wait
 from ..selectors.desktop import find, find_window, specific, uia
-from ..values import Table, to_text
+from ..values import Table, parse_point, to_text
 
 K = "Desktop"
 
@@ -157,8 +157,16 @@ def close_window(ctx: RunContext, p: WindowParams) -> None:
 # -- interacting -----------------------------------------------------------------------------------
 
 
+def _point_param(title: str = "Point inside the element") -> Any:
+    return Param(
+        "", title=title, ui="point", placeholder="Centre",
+        description="X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+    )
+
+
 class ClickParams(ElementParams):
     click: Literal["single", "double", "right"] = Param("single", title="Click type")
+    point: str = _point_param()
 
 
 @activity(
@@ -171,14 +179,199 @@ class ClickParams(ElementParams):
 )
 def click(ctx: RunContext, p: ClickParams) -> None:
     control = _locate(ctx, p)
-    if p.click == "single" and _invoke(control):
+    x, y = parse_point(p.point) if p.point else (None, None)
+    if x is None and p.click == "single" and _invoke(control):
         return
     if p.click == "double":
-        control.DoubleClick(simulateMove=False)
+        control.DoubleClick(x, y, simulateMove=False)
     elif p.click == "right":
-        control.RightClick(simulateMove=False)
+        control.RightClick(x, y, simulateMove=False)
     else:
-        control.Click(simulateMove=False)
+        control.Click(x, y, simulateMove=False)
+
+
+# -- the mouse at a position (Brity "MouseEvent") ------------------------------------------------
+
+
+class PositionParams(Params):
+    relative_to: Literal["window", "screen"] = Param(
+        "window", title="Position in", labels={"window": "A window", "screen": "The whole screen"},
+    )
+    window: str = Param(
+        "", title="Window title contains", placeholder="(the window in front)",
+        show_when={"relative_to": ["window"]},
+    )
+    process: str = Param(
+        "", title="Program", placeholder="EXCEL.EXE", advanced=True, show_when={"relative_to": ["window"]},
+        description="The program the window belongs to. Helps find it when its title changes.",
+    )
+    position: str = Param(
+        title="Position (X, Y)", ui="point", placeholder="120, 45",
+        description="Pixels from the top-left corner of the window (or of the screen).",
+    )
+    timeout: float = Param(
+        30, title="Wait for the window up to (seconds)", ge=0, le=600, advanced=True,
+        show_when={"relative_to": ["window"]},
+    )
+
+
+def _origin(ctx: RunContext, p: PositionParams) -> tuple[int, int]:
+    """Top-left corner positions are measured from: the window's (brought to the front) or the screen's."""
+    if p.relative_to == "screen":
+        return 0, 0
+    auto = _init(ctx)
+    if p.window or p.process:
+        window = find_window({"window": p.window, "process": p.process}, p.timeout, ctx.log)
+    else:
+        window = auto.GetForegroundControl()
+        if window is None:
+            raise ActivityError("No window is in front.", "Enter the title of the window to use.")
+        window = window.GetTopLevelControl() or window
+    with contextlib.suppress(Exception):
+        window.SetActive(waitTime=0.1)
+    rect = window.BoundingRectangle
+    return rect.left, rect.top
+
+
+def _screen_point(ctx: RunContext, p: PositionParams, position: str) -> tuple[int, int]:
+    x, y = parse_point(position)
+    left, top = _origin(ctx, p)
+    return left + x, top + y
+
+
+def _mouse_click(x: int, y: int, kind: str) -> None:
+    auto = uia()
+    if kind == "right":
+        auto.RightClick(x, y, waitTime=0.1)
+    elif kind == "double":
+        auto.Click(x, y, waitTime=0)
+        auto.Click(x, y, waitTime=0.1)
+    else:
+        auto.Click(x, y, waitTime=0.1)
+
+
+class ClickAtParams(PositionParams):
+    click: Literal["single", "double", "right"] = Param("single", title="Click type")
+
+
+@activity(
+    "desktop.click_at",
+    title="Click at position",
+    category=K,
+    icon="crosshair",
+    sentence="Click at {position}",
+    description="Click a point given as X, Y - in a window or on the screen. For controls the "
+    "recorder can't see (drawings, maps, remote desktops).",
+    params=ClickAtParams,
+)
+def click_at(ctx: RunContext, p: ClickAtParams) -> None:
+    x, y = _screen_point(ctx, p, p.position)
+    _mouse_click(x, y, p.click)
+
+
+@activity(
+    "desktop.move_mouse",
+    title="Move mouse to position",
+    category=K,
+    icon="move",
+    sentence="Move the mouse to {position}",
+    description="Move the mouse pointer to a point given as X, Y, e.g. to show a tooltip.",
+    params=PositionParams,
+)
+def move_mouse(ctx: RunContext, p: PositionParams) -> None:
+    x, y = _screen_point(ctx, p, p.position)
+    uia().MoveTo(x, y, moveSpeed=2, waitTime=0.1)
+
+
+class HoverParams(ElementParams):
+    point: str = _point_param()
+
+
+@activity(
+    "desktop.hover",
+    title="Point at element",
+    category=K,
+    icon="pointer",
+    sentence="Point at {element}",
+    description="Move the mouse over a control, e.g. to open a menu or show a tooltip.",
+    params=HoverParams,
+)
+def hover(ctx: RunContext, p: HoverParams) -> None:
+    x, y = _point_in(_locate(ctx, p), p.point)
+    uia().MoveTo(x, y, moveSpeed=2, waitTime=0.1)
+
+
+def _point_in(control: Any, point: str) -> tuple[int, int]:
+    rect = control.BoundingRectangle
+    if point:
+        dx, dy = parse_point(point)
+        return rect.left + dx, rect.top + dy
+    return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+
+
+class ScrollParams(ElementParams):
+    direction: Literal["down", "up"] = Param("down", title="Direction")
+    times: int = Param(3, title="How far (wheel turns)", ge=1, le=100)
+
+
+@activity(
+    "desktop.scroll",
+    title="Scroll",
+    category=K,
+    icon="mouse",
+    sentence="Scroll {direction} {times} times",
+    description="Turn the mouse wheel over a control (or wherever the mouse is when no element is chosen).",
+    params=ScrollParams,
+)
+def scroll(ctx: RunContext, p: ScrollParams) -> None:
+    auto = uia()
+    if p.element:
+        x, y = _point_in(_locate(ctx, p), "")
+        auto.MoveTo(x, y, moveSpeed=2, waitTime=0.05)
+    if p.direction == "up":
+        auto.WheelUp(p.times, waitTime=0.1)
+    else:
+        auto.WheelDown(p.times, waitTime=0.1)
+
+
+class DragDropParams(ElementParams):
+    element: str = Param("", title="Drag", ui="element")
+    target: str = Param("", title="Drop on", ui="element")
+
+
+@activity(
+    "desktop.drag_drop",
+    title="Drag and drop",
+    category=K,
+    icon="hand-grab",
+    sentence="Drag {element} onto {target}",
+    description="Hold the mouse button on one control, move to another and let go.",
+    params=DragDropParams,
+)
+def drag_drop(ctx: RunContext, p: DragDropParams) -> None:
+    x1, y1 = _point_in(_locate(ctx, p), "")
+    target = ElementParams(element=p.target, timeout=p.timeout)
+    x2, y2 = _point_in(_locate(ctx, target), "")
+    uia().DragDrop(x1, y1, x2, y2, moveSpeed=1.5, waitTime=0.2)
+
+
+class DragAtParams(PositionParams):
+    to_position: str = Param(title="Drop at (X, Y)", ui="point", placeholder="300, 45")
+
+
+@activity(
+    "desktop.drag_at",
+    title="Drag between positions",
+    category=K,
+    icon="hand-grab",
+    sentence="Drag from {position} to {to_position}",
+    description="Hold the mouse button at one point, move to another and let go (e.g. sliders, drawings).",
+    params=DragAtParams,
+)
+def drag_at(ctx: RunContext, p: DragAtParams) -> None:
+    (x1, y1), (x2, y2) = parse_point(p.position), parse_point(p.to_position)
+    left, top = _origin(ctx, p)
+    uia().DragDrop(left + x1, top + y1, left + x2, top + y2, moveSpeed=1.5, waitTime=0.2)
 
 
 def _invoke(control: Any) -> bool:

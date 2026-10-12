@@ -212,6 +212,14 @@
             ],
             "title": "Click type",
             "type": "string"
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the element",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
           }
         },
         "title": "ClickParams",
@@ -437,9 +445,70 @@
             "default": null,
             "title": "Wait up to (seconds)",
             "x-advanced": true
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the element",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
           }
         },
-        "title": "ElementParams",
+        "title": "HoverParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "browser.drag_drop",
+      "title": "Drag and drop",
+      "category": "Browser",
+      "icon": "hand-grab",
+      "sentence": "Drag {element} onto {target}",
+      "description": "Drag an element (a card, a file in a list, a slider handle) onto another one.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Drag",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "selector": {
+            "default": "",
+            "description": "CSS, //xpath, text=... or role=button:Name. Used when no element is picked.",
+            "title": "Selector (advanced)",
+            "type": "string",
+            "x-advanced": true
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "target": {
+            "default": "",
+            "title": "Drop on",
+            "type": "string",
+            "x-ui": "element"
+          }
+        },
+        "title": "DragDropParams",
         "type": "object"
       },
       "outputs": [],
@@ -1690,6 +1759,41 @@
       "requires": null
     },
     {
+      "id": "control.run_process",
+      "title": "Run sub-process",
+      "category": "Control",
+      "icon": "workflow",
+      "sentence": "Run sub-process {process}",
+      "description": "Run the steps of a sub-process of this automation, then carry on here. Sub-processes use the same variables as the rest of the automation.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "process": {
+            "title": "Sub-process",
+            "type": "string",
+            "x-ui": "process"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "description": "Values the sub-process starts with. Empty ones use the sub-process's own default.",
+            "title": "Inputs",
+            "type": "object",
+            "x-source": "process",
+            "x-ui": "process_inputs"
+          }
+        },
+        "required": [
+          "process"
+        ],
+        "title": "RunProcessParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
       "id": "control.wait",
       "title": "Wait",
       "category": "Control",
@@ -2717,9 +2821,421 @@
             ],
             "title": "Click type",
             "type": "string"
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the element",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
           }
         },
         "title": "ClickParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.click_at",
+      "title": "Click at position",
+      "category": "Desktop",
+      "icon": "crosshair",
+      "sentence": "Click at {position}",
+      "description": "Click a point given as X, Y - in a window or on the screen. For controls the recorder can't see (drawings, maps, remote desktops).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "relative_to": {
+            "default": "window",
+            "enum": [
+              "window",
+              "screen"
+            ],
+            "title": "Position in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "position": {
+            "description": "Pixels from the top-left corner of the window (or of the screen).",
+            "title": "Position (X, Y)",
+            "type": "string",
+            "x-placeholder": "120, 45",
+            "x-ui": "point"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait for the window up to (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "click": {
+            "default": "single",
+            "enum": [
+              "single",
+              "double",
+              "right"
+            ],
+            "title": "Click type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "title": "ClickAtParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.move_mouse",
+      "title": "Move mouse to position",
+      "category": "Desktop",
+      "icon": "move",
+      "sentence": "Move the mouse to {position}",
+      "description": "Move the mouse pointer to a point given as X, Y, e.g. to show a tooltip.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "relative_to": {
+            "default": "window",
+            "enum": [
+              "window",
+              "screen"
+            ],
+            "title": "Position in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "position": {
+            "description": "Pixels from the top-left corner of the window (or of the screen).",
+            "title": "Position (X, Y)",
+            "type": "string",
+            "x-placeholder": "120, 45",
+            "x-ui": "point"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait for the window up to (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "title": "PositionParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.hover",
+      "title": "Point at element",
+      "category": "Desktop",
+      "icon": "pointer",
+      "sentence": "Point at {element}",
+      "description": "Move the mouse over a control, e.g. to open a menu or show a tooltip.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the element",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
+          }
+        },
+        "title": "HoverParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.scroll",
+      "title": "Scroll",
+      "category": "Desktop",
+      "icon": "mouse",
+      "sentence": "Scroll {direction} {times} times",
+      "description": "Turn the mouse wheel over a control (or wherever the mouse is when no element is chosen).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "direction": {
+            "default": "down",
+            "enum": [
+              "down",
+              "up"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "times": {
+            "default": 3,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "How far (wheel turns)",
+            "type": "integer"
+          }
+        },
+        "title": "ScrollParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.drag_drop",
+      "title": "Drag and drop",
+      "category": "Desktop",
+      "icon": "hand-grab",
+      "sentence": "Drag {element} onto {target}",
+      "description": "Hold the mouse button on one control, move to another and let go.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Drag",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "target": {
+            "default": "",
+            "title": "Drop on",
+            "type": "string",
+            "x-ui": "element"
+          }
+        },
+        "title": "DragDropParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.drag_at",
+      "title": "Drag between positions",
+      "category": "Desktop",
+      "icon": "hand-grab",
+      "sentence": "Drag from {position} to {to_position}",
+      "description": "Hold the mouse button at one point, move to another and let go (e.g. sliders, drawings).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "relative_to": {
+            "default": "window",
+            "enum": [
+              "window",
+              "screen"
+            ],
+            "title": "Position in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "position": {
+            "description": "Pixels from the top-left corner of the window (or of the screen).",
+            "title": "Position (X, Y)",
+            "type": "string",
+            "x-placeholder": "120, 45",
+            "x-ui": "point"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait for the window up to (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-show-when": {
+              "relative_to": [
+                "window"
+              ]
+            }
+          },
+          "to_position": {
+            "title": "Drop at (X, Y)",
+            "type": "string",
+            "x-placeholder": "300, 45",
+            "x-ui": "point"
+          }
+        },
+        "required": [
+          "position",
+          "to_position"
+        ],
+        "title": "DragAtParams",
         "type": "object"
       },
       "outputs": [],

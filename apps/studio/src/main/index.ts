@@ -1,4 +1,5 @@
 import type { Flow, Step } from '@autoflow/flow-types';
+import { walkFlow } from '@autoflow/flow-types';
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -151,14 +152,10 @@ function registerFileProtocol(): void {
 /** Names of credentials used by "Get credential" steps (and any other credential setting). */
 function credentialNames(flow: Flow): string[] {
   const names = new Set<string>();
-  const visit = (steps: Step[] = []) => {
-    for (const s of steps) {
-      const value = s.params?.credential;
-      if (typeof value === 'string' && value && !value.includes('{{')) names.add(value);
-      for (const block of Object.values(s.blocks ?? {})) visit(block);
-    }
-  };
-  visit(flow.steps);
+  for (const { step } of walkFlow(flow)) {
+    const value = step.params?.credential;
+    if (typeof value === 'string' && value && !value.includes('{{')) names.add(value);
+  }
   return [...names];
 }
 

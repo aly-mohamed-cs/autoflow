@@ -126,3 +126,38 @@ def test_element_exists_and_wait_for_disappear(tmp_path, portal_url):
     assert variables["error_before"] is False
     assert variables["error_after"] is True
     assert variables["title"] == "Demo Vendor Portal"
+
+
+MOUSE_PAGE = """<!doctype html><html><body style="margin:0">
+<div id="pad" style="position:absolute;left:20px;top:20px;width:200px;height:100px;background:#ddd"></div>
+<p id="out" style="position:absolute;top:150px">none</p>
+<div id="card" style="position:absolute;left:20px;top:200px;width:60px;height:40px;background:#9cf">Card</div>
+<div id="bin" style="position:absolute;left:300px;top:200px;width:120px;height:80px;background:#fc9">Bin</div>
+<p id="dropped" style="position:absolute;top:320px">no</p>
+<script>
+  pad.addEventListener('click', (e) => { out.textContent = e.offsetX + ',' + e.offsetY; });
+  let dragging = false;
+  card.addEventListener('mousedown', () => { dragging = true; });
+  bin.addEventListener('mouseup', () => { if (dragging) dropped.textContent = 'yes'; dragging = false; });
+</script></body></html>"""
+
+
+def test_click_at_a_point_inside_an_element_and_drag_and_drop(tmp_path):
+    page = tmp_path / "mouse.html"
+    page.write_text(MOUSE_PAGE, encoding="utf-8")
+    css = lambda id_: {"id": id_, "name": id_, "kind": "web",  # noqa: E731
+                       "selectors": [{"strategy": "css", "value": f"#{id_}"}]}
+    steps = [
+        step("browser.open", {"url": page.as_uri(), "browser": BROWSER}),
+        step("browser.click", {"element": "pad", "point": "15, 25"}),
+        step("browser.get_text", {"element": "out"}, outputs={"text": "clicked"}),
+        step("browser.drag_drop", {"element": "card", "target": "bin"}),
+        step("browser.get_text", {"element": "dropped"}, outputs={"text": "dropped"}),
+    ]
+    flow = Flow.model_validate({"id": "m", "name": "m", "steps": steps,
+                                "elements": [css(i) for i in ("pad", "out", "card", "bin", "dropped")]})
+    runner = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run", headless=True), lambda e: None)
+    result = runner.run()
+    assert result.status == "succeeded", result.error
+    assert runner.ctx.variables["clicked"] == "15,25"
+    assert runner.ctx.variables["dropped"] == "yes"

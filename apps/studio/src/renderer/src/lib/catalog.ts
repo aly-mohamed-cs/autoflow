@@ -99,12 +99,28 @@ export function fieldsOf(params: ParamsSchema, root: ParamsSchema = params): Fie
       placeholder: schema['x-placeholder'],
       default: schema.default,
     };
-    if (schema.enum) info.options = schema.enum.map((v) => ({ value: String(v), label: humanize(String(v)) }));
+    if (schema.enum) {
+      const labels = schema['x-labels'] ?? {};
+      info.options = schema.enum.map((v) => ({ value: String(v), label: labels[String(v)] ?? humanize(String(v)) }));
+    }
     if (kind === 'object_list' && schema.items) {
       const item = resolveRef(root, schema.items) as unknown as ParamsSchema;
       info.itemFields = fieldsOf(item, root);
     }
     return info;
+  });
+}
+
+/**
+ * Whether a setting applies: settings with "x-show-when" only count while the other
+ * setting (or its default) has one of the listed values.
+ */
+export function isShown(field: FieldInfo, params: Record<string, unknown>, fields: FieldInfo[]): boolean {
+  const rule = field.schema['x-show-when'];
+  if (!rule) return true;
+  return Object.entries(rule).every(([other, values]) => {
+    const current = params[other] ?? fields.find((f) => f.name === other)?.default;
+    return values.map(String).includes(String(current));
   });
 }
 
@@ -224,6 +240,8 @@ export type SentencePart =
 export interface SentenceContext {
   index: CatalogIndex;
   elements: Map<string, Element>;
+  /** Sub-process names by id ("Run sub-process Log in to ERP"). */
+  processes?: Map<string, string>;
 }
 
 /** Turn "Type {text} into {element}" + params into displayable parts. */
@@ -253,6 +271,10 @@ function valuePart(field: FieldInfo, value: unknown, ctx: SentenceContext): Sent
     return element
       ? { ...base, empty: false, segments: [{ kind: 'text', text: element.name }], element }
       : empty();
+  }
+  if (field.kind === 'process' && typeof value === 'string') {
+    const name = ctx.processes?.get(value);
+    return { ...base, empty: false, segments: [{ kind: 'text', text: name ?? `${value} (missing)` }] };
   }
   if (field.kind === 'condition') {
     const text = conditionSummary(value as Condition, ctx.index);

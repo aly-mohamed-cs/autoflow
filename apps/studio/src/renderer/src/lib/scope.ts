@@ -72,7 +72,15 @@ export function collectVariables(flow: Flow, index: CatalogIndex): VariableInfo[
       for (const children of Object.values(step.blocks ?? {})) visit(children);
     }
   };
+  // Sub-processes share the automation's variables: what they set is usable everywhere, and
+  // their inputs are variables too.
+  for (const process of flow.processes ?? []) {
+    for (const input of process.inputs ?? []) {
+      add({ name: input.name, type: input.type ?? 'any', source: `Input of “${process.name}”` });
+    }
+  }
   visit(flow.steps ?? []);
+  for (const process of flow.processes ?? []) visit(process.steps ?? []);
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 

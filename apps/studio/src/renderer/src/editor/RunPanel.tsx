@@ -1,4 +1,5 @@
 import type { Flow, RepairPatch, Selector } from '@autoflow/flow-types';
+import { walkFlow } from '@autoflow/flow-types';
 import { Badge, Button, cn, Dialog, EmptyState, Icon, Tabs } from '@autoflow/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogIndex } from '../lib/catalog';
@@ -383,14 +384,10 @@ function ProblemsView() {
 
 export function flowCredentialNames(flow: Flow): string[] {
   const names: string[] = [];
-  const visit = (steps: Flow['steps']) => {
-    for (const s of steps ?? []) {
-      const c = s.params?.credential;
-      if (typeof c === 'string' && c) names.push(c);
-      for (const block of Object.values(s.blocks ?? {})) visit(block);
-    }
-  };
-  visit(flow.steps);
+  for (const { step } of walkFlow(flow)) {
+    const c = step.params?.credential;
+    if (typeof c === 'string' && c) names.push(c);
+  }
   return names;
 }
 

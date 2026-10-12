@@ -82,6 +82,48 @@
       "title": "FlowSettings",
       "type": "object"
     },
+    "Layout": {
+      "additionalProperties": false,
+      "description": "How the Flow view draws the flowchart. Never affects how a flow runs.",
+      "properties": {
+        "direction": {
+          "default": "horizontal",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "offsets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Offset"
+          },
+          "description": "How far a step (or start / end) was moved from its tidy place, by its id.",
+          "title": "Offsets",
+          "type": "object"
+        }
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "Offset": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "default": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "default": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "title": "Offset",
+      "type": "object"
+    },
     "OnError": {
       "additionalProperties": false,
       "properties": {
@@ -111,6 +153,48 @@
         }
       },
       "title": "OnError",
+      "type": "object"
+    },
+    "ProcessInput": {
+      "additionalProperties": false,
+      "description": "A value a sub-process is started with; it becomes a variable while the sub-process runs.",
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "default": "any",
+          "enum": [
+            "any",
+            "text",
+            "number",
+            "boolean",
+            "date",
+            "list",
+            "table",
+            "file",
+            "credential"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ProcessInput",
       "type": "object"
     },
     "Selector": {
@@ -211,6 +295,49 @@
         "activity"
       ],
       "title": "Step",
+      "type": "object"
+    },
+    "SubProcess": {
+      "additionalProperties": false,
+      "description": "A named part of a flow (Brity RPA calls them tasks), started by \"Run sub-process\" steps.\n\nSub-processes share the flow's variables; inputs let each \"Run sub-process\" hand it\ndifferent values.",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ProcessInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "SubProcess",
       "type": "object"
     },
     "Variable": {
@@ -314,8 +441,18 @@
       "title": "Steps",
       "type": "array"
     },
+    "processes": {
+      "items": {
+        "$ref": "#/$defs/SubProcess"
+      },
+      "title": "Processes",
+      "type": "array"
+    },
     "settings": {
       "$ref": "#/$defs/FlowSettings"
+    },
+    "layout": {
+      "$ref": "#/$defs/Layout"
     }
   },
   "required": [

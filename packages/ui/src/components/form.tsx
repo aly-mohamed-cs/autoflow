@@ -90,6 +90,7 @@ export function Select({
   id,
   className,
   disabled,
+  'aria-label': ariaLabel,
 }: {
   value: string | undefined;
   onChange: (value: string) => void;
@@ -98,6 +99,7 @@ export function Select({
   id?: string;
   className?: string;
   disabled?: boolean;
+  'aria-label'?: string;
 }) {
   // '' is a real option only if one is listed; otherwise Radix shows the placeholder for ''.
   const hasEmptyOption = options.some((o) => o.value === '');
@@ -109,6 +111,7 @@ export function Select({
     >
       <RadixSelect.Trigger
         id={id}
+        aria-label={ariaLabel}
         className={cn(FIELD, 'flex h-8 items-center justify-between gap-2 text-left', className)}
       >
         <RadixSelect.Value placeholder={<span className="text-subtle">{placeholder}</span>} />

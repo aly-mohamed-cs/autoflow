@@ -79,6 +79,43 @@ class Step(Model):
     disabled: bool = False
 
 
+class ProcessInput(Model):
+    """A value a sub-process is started with; it becomes a variable while the sub-process runs."""
+
+    name: str = Field(pattern=IDENTIFIER, max_length=64)
+    type: VariableType = "any"
+    default: Any = None
+    description: str = ""
+
+
+class SubProcess(Model):
+    """A named part of a flow (Brity RPA calls them tasks), started by "Run sub-process" steps.
+
+    Sub-processes share the flow's variables; inputs let each "Run sub-process" hand it
+    different values."""
+
+    id: str = Field(pattern=IDENTIFIER, max_length=64)
+    name: str = Field(min_length=1, max_length=120)
+    description: str = ""
+    inputs: list[ProcessInput] = Field(default_factory=list)
+    steps: list[Step] = Field(default_factory=list)
+
+
+class Offset(Model):
+    x: float = 0
+    y: float = 0
+
+
+class Layout(Model):
+    """How the Flow view draws the flowchart. Never affects how a flow runs."""
+
+    direction: Literal["horizontal", "vertical"] = "horizontal"
+    offsets: dict[str, Offset] = Field(
+        default_factory=dict,
+        description="How far a step (or start / end) was moved from its tidy place, by its id.",
+    )
+
+
 class FlowSettings(Model):
     default_timeout: float = Field(30, ge=1, le=3600, description="Seconds to wait for elements.")
     screenshot_each_step: bool = False
@@ -93,11 +130,18 @@ class Flow(Model):
     variables: list[Variable] = Field(default_factory=list)
     elements: list[Element] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
+    processes: list[SubProcess] = Field(default_factory=list)
     settings: FlowSettings = Field(default_factory=FlowSettings)
+    layout: Layout = Field(default_factory=Layout)
 
     def iter_steps(self):
-        """Yield every step in the tree, depth first."""
+        """Yield every step in the tree (main process, then sub-processes), depth first."""
         yield from _walk(self.steps)
+        for process in self.processes:
+            yield from _walk(process.steps)
+
+    def process(self, process_id: str) -> SubProcess | None:
+        return next((p for p in self.processes if p.id == process_id), None)
 
 
 def _walk(steps: list[Step]):

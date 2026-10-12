@@ -374,3 +374,98 @@ def test_windows_are_found_when_their_title_changed(h, demo_erp):
     assert runner.ctx.variables["typed"] == "Found it"
     warnings = [e["message"] for e in events if e["event"] == "log" and e.get("level") == "warning"]
     assert any("using 'Demo ERP - Invoices'" in w for w in warnings), warnings
+
+
+def test_clicks_and_the_mouse_at_positions(tmp_path, demo_erp):
+    import uiautomation as auto
+
+    from autoflow_engine.flow import Flow
+    from autoflow_engine.runtime.context import RunOptions
+    from autoflow_engine.runtime.interpreter import FlowRunner
+
+    process = subprocess.Popen([str(demo_erp)])
+    try:
+        window = auto.WindowControl(searchDepth=1, Name="Demo ERP - Invoices")
+        assert window.Exists(15)
+        window.SetActive()
+        frame = window.BoundingRectangle
+        save = window.ButtonControl(AutomationId="btnSave").BoundingRectangle
+        status = window.TextControl(AutomationId="lblStatus").BoundingRectangle
+        # The Save button's centre, measured from the window's top-left corner.
+        in_window = f"{(save.left + save.right) // 2 - frame.left}, {(save.top + save.bottom) // 2 - frame.top}"
+
+        def fill(invoice: str) -> list[dict]:
+            return [
+                step("desktop.type", {"element": "customer", "text": "Initech"}),
+                step("desktop.type", {"element": "invoice", "text": invoice}),
+                step("desktop.type", {"element": "amount", "text": "5"}),
+                step("desktop.select", {"element": "currency", "option": "USD"}),
+            ]
+
+        steps = [
+            *fill("INV-90"),
+            step("desktop.click_at", {"window": "Demo ERP", "position": in_window}),
+            step("desktop.wait_for", {"element": "status", "state": "text contains", "text": "INV-90", "timeout": 10}),
+            *fill("INV-91"),
+            step("desktop.click", {"element": "save", "point": "6, 6"}),  # near its top-left corner
+            step("desktop.wait_for", {"element": "status", "state": "text contains", "text": "INV-91", "timeout": 10}),
+            step("desktop.move_mouse", {"relative_to": "screen", "position": f"{save.left + 3}, {save.top + 3}"}),
+            step("desktop.move_mouse", {"position": "10, 10"}),  # in the window in front
+            step("desktop.scroll", {"element": "grid", "times": 1}),
+            step("desktop.hover", {"element": "status", "point": "2, 2"}),
+        ]
+        events: list[dict] = []
+        flow = Flow.model_validate({"id": "m", "name": "m", "elements": ELEMENTS, "steps": steps,
+                                    "settings": {"default_timeout": 10}})
+        result = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run"), events.append).run()
+        assert result.status == "succeeded", result.error
+        assert len([e for e in events if e["event"] == "step_finished"]) == len(steps)
+        assert auto.GetCursorPos() == (status.left + 2, status.top + 2)  # hovered 2 px inside the label
+    finally:
+        process.kill()
+
+
+def test_position_picker_reports_screen_window_and_element_points(demo_erp):
+    """Point somewhere and press Ctrl: the point on screen, in the window and inside an element."""
+    import ctypes
+    import threading
+    import time
+
+    from autoflow_engine.design.desktop_picker import DesktopPicker
+    from autoflow_engine.selectors.desktop import find_window, uia
+
+    app = subprocess.Popen([str(demo_erp)])
+    answer: dict = {}
+    done = threading.Event()
+    try:
+        auto = uia()
+        with auto.UIAutomationInitializerInThread():
+            window = find_window({"window": "Demo ERP"}, 15)
+            window.SetActive(waitTime=0.3)
+            frame = window.BoundingRectangle
+            save = auto.ButtonControl(searchFromControl=window, AutomationId="btnSave").BoundingRectangle
+        point = (save.left + 7, save.top + 5)
+
+        def respond(result=None, error=None):
+            answer.update(result=result, error=error)
+            done.set()
+
+        picker = DesktopPicker(lambda method, params: None, ignore_pids=set())
+        save_element = next(e for e in ELEMENTS if e["id"] == "save")
+        picker.pick_point(respond, save_element)
+        user32 = ctypes.windll.user32
+        user32.SetCursorPos(*point)
+        time.sleep(1.0)  # the picker finds the element, then follows the mouse
+        user32.keybd_event(0x11, 0, 0, 0)  # Ctrl down
+        time.sleep(0.15)
+        user32.keybd_event(0x11, 0, 2, 0)  # Ctrl up
+        assert done.wait(10), "no position was picked"
+        assert answer["error"] is None, answer["error"]
+        picked = answer["result"]
+        assert picked["screen"] == {"x": point[0], "y": point[1]}
+        assert picked["element"] == {"x": 7, "y": 5}
+        assert picked["window"]["title"] == "Demo ERP - Invoices"
+        assert picked["window"]["process"] == "DemoErp.exe"
+        assert (picked["window"]["x"], picked["window"]["y"]) == (point[0] - frame.left, point[1] - frame.top)
+    finally:
+        app.kill()

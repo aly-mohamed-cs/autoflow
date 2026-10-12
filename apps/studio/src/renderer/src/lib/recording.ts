@@ -1,5 +1,6 @@
 // Turn what the recorder captured into ordinary steps and elements.
 import type { Element, Flow, Step } from '@autoflow/flow-types';
+import { walkFlow } from '@autoflow/flow-types';
 import { newStepId } from './flowOps';
 
 export interface RecordedAction {
@@ -100,23 +101,14 @@ export function stepsFromRecording(
 
 /** The address of the flow's first "Open browser" step, if it's plain text. */
 export function firstBrowserUrl(flow: Flow): string | undefined {
-  const visit = (steps: Step[] = []): string | undefined => {
-    for (const s of steps) {
-      if (s.activity === 'browser.open' && typeof s.params?.url === 'string' && s.params.url && !s.params.url.includes('{{')) {
-        return s.params.url;
-      }
-      for (const block of Object.values(s.blocks ?? {})) {
-        const found = visit(block);
-        if (found) return found;
-      }
-    }
-    return undefined;
-  };
-  return visit(flow.steps);
+  for (const { step } of walkFlow(flow)) {
+    const url = step.params?.url;
+    if (step.activity === 'browser.open' && typeof url === 'string' && url && !url.includes('{{')) return url;
+  }
+  return undefined;
 }
 
 export function hasBrowserOpen(flow: Flow): boolean {
-  const visit = (steps: Step[] = []): boolean =>
-    steps.some((s) => s.activity === 'browser.open' || Object.values(s.blocks ?? {}).some(visit));
-  return visit(flow.steps);
+  for (const { step } of walkFlow(flow)) if (step.activity === 'browser.open') return true;
+  return false;
 }

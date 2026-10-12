@@ -1,10 +1,22 @@
-// The Flow view: the flow's steps as a left-to-right flowchart (n8n / Brity style).
-// Positions come from lib/flowLayout.ts; React Flow does the canvas work (pan, zoom, minimap).
-// Steps are added with the + on any connector, by dropping a step from the library onto a
-// connector, or moved by dragging a card's grip onto another connector.
+// The Flow view: a process's steps as a flowchart (n8n / Brity style), left to right or top
+// to bottom. Positions come from lib/flowLayout.ts; React Flow does the canvas work (pan,
+// zoom, minimap, dragging).
+// Steps are added with the + on any connector or by dropping a step from the library onto a
+// connector. Dragging a card moves it on the chart; letting go of it on a + moves it to that
+// place in the run order instead.
 import type { Step } from '@autoflow/flow-types';
-import { Badge, Button, categoryColor, cn, Icon, IconTile, Menu, Tooltip } from '@autoflow/ui';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
+import {
+  Badge,
+  Button,
+  categoryColor,
+  cn,
+  Icon,
+  IconTile,
+  Menu,
+  Segmented,
+  Tooltip,
+} from '@autoflow/ui';
+import { useDroppable } from '@dnd-kit/core';
 import {
   Background,
   BackgroundVariant,
@@ -24,9 +36,27 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { layoutFlow, SIZES, type LayoutEdge, type LayoutNode, type Slot } from '../lib/flowLayout';
-import { findStep, parseListKey } from '../lib/flowOps';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  layoutFlow,
+  nodesMovingWith,
+  SIZES,
+  type Direction,
+  type LayoutEdge,
+  type LayoutNode,
+  type Slot,
+} from '../lib/flowLayout';
+import {
+  findStep,
+  flatIds,
+  moveOnChart,
+  moveStep,
+  parseListKey,
+  processOfStep,
+  processSteps,
+  rootRef,
+  tidyChart,
+} from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun } from '../store/run';
@@ -44,6 +74,27 @@ import {
 type CanvasNode = Node<{ layout: LayoutNode }>;
 type CanvasEdge = Edge<{ layout: LayoutEdge }>;
 
+/** Moves snap to this grid (relative to the tidy place), so steps line up easily. */
+const SNAP = 12;
+const READABLE_ZOOM = 0.75;
+
+const DirectionContext = createContext<Direction>('horizontal');
+
+/** Where connectors enter and leave a node for the chart's direction. */
+function useSides() {
+  const vertical = useContext(DirectionContext) === 'vertical';
+  return {
+    vertical,
+    in: vertical ? Position.Top : Position.Left,
+    out: vertical ? Position.Bottom : Position.Right,
+  };
+}
+
+/** Offsets keys of a process's start and end (each sub-process has its own). */
+function terminalPrefix(processId: string | null): string {
+  return processId ? `@${processId}:` : '';
+}
+
 export function FlowCanvas() {
   return (
     <ReactFlowProvider>
@@ -52,32 +103,65 @@ export function FlowCanvas() {
   );
 }
 
+interface Drag {
+  key: string;
+  nodeId: string;
+  stepId?: string;
+  moving: Set<string>;
+  origin: { x: number; y: number };
+  dx: number;
+  dy: number;
+}
+
 function FlowChart() {
-  const steps = useEditor((s) => s.flow?.steps);
+  const processId = useEditor((s) => s.processId);
+  const steps = useEditor((s) => (s.flow ? processSteps(s.flow, s.processId) : undefined));
+  const offsets = useEditor((s) => s.flow?.layout?.offsets);
+  const direction: Direction = useEditor((s) => s.flow?.layout?.direction ?? 'horizontal');
   const flowId = useEditor((s) => s.flow?.id);
   const select = useEditor((s) => s.select);
+  const change = useEditor((s) => s.change);
   const index = useApp((s) => s.index);
   const theme = useApp((s) => s.theme);
   const { fitView, setViewport } = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
+  // The drag lives in a ref for the handlers (React Flow may call ones from an earlier render)
+  // and in state for drawing.
+  const [drag, setDragState] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (next: Drag | null) => {
+    dragRef.current = next;
+    setDragState(next);
+  };
 
-  const { nodes, edges, size } = useMemo(() => {
-    const layout = layoutFlow(steps ?? [], (activity) => index.get(activity));
-    const start = layout.nodes.find((n) => n.type === 'start')!;
-    return {
-      size: { w: layout.width, h: layout.height, startMid: start.y + start.h / 2 },
-      nodes: layout.nodes.map((n): CanvasNode => ({
-        id: n.id,
-        type: n.type,
-        position: { x: n.x, y: n.y },
-        width: n.w,
-        height: n.h,
-        data: { layout: n },
-        draggable: false,
-        selectable: false,
-        connectable: false,
-        zIndex: n.type === 'container' ? n.depth * 2 : n.depth * 2 + 1,
-      })),
+  const layout = useMemo(
+    () =>
+      layoutFlow(steps ?? [], (activity) => index.get(activity), {
+        direction,
+        root: rootRef(processId),
+        offsets,
+        terminalPrefix: terminalPrefix(processId),
+      }),
+    [steps, index, direction, processId, offsets],
+  );
+
+  const { nodes, edges } = useMemo(
+    () => ({
+      nodes: layout.nodes.map((n): CanvasNode => {
+        const moved = drag?.moving.has(n.id);
+        return {
+          id: n.id,
+          type: n.type,
+          position: { x: n.x + (moved ? drag!.dx : 0), y: n.y + (moved ? drag!.dy : 0) },
+          width: n.w,
+          height: n.h,
+          data: { layout: n },
+          draggable: !!n.moveKey,
+          selectable: false,
+          connectable: false,
+          zIndex: (n.type === 'container' ? n.depth * 2 : n.depth * 2 + 1) + (moved ? 1000 : 0),
+        };
+      }),
       edges: layout.edges.map((e): CanvasEdge => ({
         id: e.id,
         type: e.kind,
@@ -89,84 +173,232 @@ function FlowChart() {
         selectable: false,
         zIndex: e.depth * 2 + 1,
       })),
-    };
-  }, [steps, index]);
+    }),
+    [layout, drag],
+  );
 
-  // When a flow is opened (not on every edit: keep where the person is looking), show all of it
-  // if it fits at a readable size, otherwise its beginning, Start on the left.
-  const sizeRef = useRef(size);
-  sizeRef.current = size;
+  // When a flow or process is opened (not on every edit: keep where the person is looking),
+  // show all of it if it fits at a readable size, otherwise its beginning.
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
   useEffect(() => {
     const t = setTimeout(() => {
       const rect = wrapper.current?.getBoundingClientRect();
-      const { w, h, startMid } = sizeRef.current;
-      if (!rect) return;
-      const fit = Math.min((rect.width - 80) / w, (rect.height - 80) / h, 1);
+      const { bounds, nodes: all, direction: dir } = layoutRef.current;
+      const start = all.find((n) => n.type === 'start')!;
+      if (!rect || !start) return;
+      const fit = Math.min((rect.width - 80) / bounds.w, (rect.height - 80) / bounds.h, 1);
       if (fit >= READABLE_ZOOM) {
         void fitView({ padding: 0.12, maxZoom: 1 });
+      } else if (dir === 'vertical') {
+        const zoom = Math.max(READABLE_ZOOM, Math.min(1, (rect.width - 80) / bounds.w));
+        void setViewport({
+          x: rect.width / 2 - (start.x + start.w / 2) * zoom,
+          y: 40 - start.y * zoom,
+          zoom,
+        });
       } else {
-        const zoom = Math.max(READABLE_ZOOM, Math.min(1, (rect.height - 80) / h));
-        void setViewport({ x: 40, y: rect.height / 2 - startMid * zoom, zoom });
+        const zoom = Math.max(READABLE_ZOOM, Math.min(1, (rect.height - 80) / bounds.h));
+        void setViewport({
+          x: 40 - start.x * zoom,
+          y: rect.height / 2 - (start.y + start.h / 2) * zoom,
+          zoom,
+        });
       }
     }, 50);
     return () => clearTimeout(t);
-  }, [flowId, fitView, setViewport]);
+  }, [flowId, processId, direction, fitView, setViewport]);
 
   useFollowRun(nodes);
 
+  /** The + (or empty lane) under the pointer, if any. */
+  const slotAt = (e: MouseEvent | TouchEvent): Slot | null => {
+    const point = 'touches' in e ? (e.changedTouches[0] ?? e.touches[0]) : e;
+    if (!point) return null;
+    for (const el of document.elementsFromPoint(point.clientX, point.clientY)) {
+      const key = (el as HTMLElement).closest?.('[data-slot]')?.getAttribute('data-slot');
+      if (!key) continue;
+      const i = key.lastIndexOf(':');
+      return { listKey: key.slice(0, i), index: Number(key.slice(i + 1)) };
+    }
+    return null;
+  };
+
   return (
-    <div ref={wrapper} className="min-h-0 flex-1 bg-bg" data-testid="flow-canvas">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        colorMode={theme === 'system' ? 'system' : theme}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        panOnScroll
-        zoomOnScroll={false}
-        zoomActivationKeyCode={['Control', 'Meta']}
-        minZoom={0.15}
-        maxZoom={1.6}
-        // Also what makes React Flow pass clicks to nodes (they are neither draggable nor selectable).
-        onNodeClick={(_, node) => {
-          const stepId = (node as CanvasNode).data.layout.stepId;
-          if (stepId) select(stepId);
-        }}
-        onPaneClick={() => select(null)}
-        proOptions={{ hideAttribution: true }}
-        style={{ background: 'transparent' }}
+    <DirectionContext.Provider value={direction}>
+      <div
+        ref={wrapper}
+        className="min-h-0 flex-1 bg-bg"
+        data-testid="flow-canvas"
+        data-direction={direction}
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1.3} />
-        <Controls showInteractive={false} position="bottom-left" />
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          ariaLabel="Overview of the whole flow"
-          style={{ width: 168, height: 96, background: 'var(--af-surface)' }}
-          nodeColor={(n) => minimapColor(n as CanvasNode, index)}
-          nodeStrokeWidth={0}
-          maskColor="color-mix(in srgb, var(--af-bg) 70%, transparent)"
-        />
-      </ReactFlow>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          colorMode={theme === 'system' ? 'system' : theme}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          nodeDragThreshold={4}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomActivationKeyCode={['Control', 'Meta']}
+          minZoom={0.15}
+          maxZoom={1.6}
+          onNodeDragStart={(_, node) => {
+            const l = (node as CanvasNode).data.layout;
+            if (!l.moveKey) return;
+            setDrag({
+              key: l.moveKey,
+              nodeId: node.id,
+              stepId: l.stepId,
+              moving: nodesMovingWith(layoutRef.current, steps ?? [], l.moveKey),
+              origin: { x: l.x, y: l.y },
+              dx: 0,
+              dy: 0,
+            });
+            if (l.stepId) useDnd.getState().setDragging({ kind: 'step', stepId: l.stepId });
+          }}
+          onNodeDrag={(e, node) => {
+            const d = dragRef.current;
+            if (!d) return;
+            setDrag({
+              ...d,
+              dx: Math.round((node.position.x - d.origin.x) / SNAP) * SNAP,
+              dy: Math.round((node.position.y - d.origin.y) / SNAP) * SNAP,
+            });
+            if (d.stepId) {
+              const slot = slotAt(e);
+              useDnd
+                .getState()
+                .setTarget(slot ? { listKey: slot.listKey, index: slot.index } : null);
+            }
+          }}
+          onNodeDragStop={(e, node) => {
+            const d = dragRef.current;
+            setDrag(null);
+            useDnd.getState().setDragging(null);
+            useDnd.getState().setTarget(null);
+            if (!d) return;
+            const slot = d.stepId ? slotAt(e) : null;
+            if (slot && d.stepId) {
+              // Let go on a +: the step moves to that place in the run order, tidily.
+              const stepId = d.stepId;
+              change((f) =>
+                moveStep(tidyChart(f, [stepId]), stepId, parseListKey(slot.listKey), slot.index),
+              );
+              return;
+            }
+            const dx = Math.round((node.position.x - d.origin.x) / SNAP) * SNAP;
+            const dy = Math.round((node.position.y - d.origin.y) / SNAP) * SNAP;
+            if (dx || dy) change((f) => moveOnChart(f, d.key, dx, dy));
+          }}
+          // Also what makes React Flow pass clicks to nodes (they are not selectable).
+          onNodeClick={(_, node) => {
+            const stepId = (node as CanvasNode).data.layout.stepId;
+            if (stepId) select(stepId);
+          }}
+          onPaneClick={() => select(null)}
+          proOptions={{ hideAttribution: true }}
+          style={{ background: 'transparent' }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.3} />
+          <Controls showInteractive={false} position="bottom-left" />
+          <MiniMap
+            position="bottom-right"
+            pannable
+            zoomable
+            ariaLabel="Overview of the whole flow"
+            style={{ width: 168, height: 96, background: 'var(--af-surface)' }}
+            nodeColor={(n) => minimapColor(n as CanvasNode, index)}
+            nodeStrokeWidth={0}
+            maskColor="color-mix(in srgb, var(--af-bg) 70%, transparent)"
+          />
+        </ReactFlow>
+      </div>
+    </DirectionContext.Provider>
+  );
+}
+
+/** Left to right / top to bottom, and "Tidy up" (forget the moves made in this process). */
+export function LayoutControls() {
+  const flow = useEditor((s) => s.flow);
+  const processId = useEditor((s) => s.processId);
+  const change = useEditor((s) => s.change);
+  const direction = flow?.layout?.direction ?? 'horizontal';
+  const keys = useMemo(
+    () =>
+      flow
+        ? [
+            ...flatIds(flow, processId),
+            `${terminalPrefix(processId)}start`,
+            `${terminalPrefix(processId)}end`,
+          ]
+        : [],
+    [flow, processId],
+  );
+  const offsets = flow?.layout?.offsets;
+  const moved = !!offsets && keys.some((k) => k in offsets);
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <Tooltip content="Put the steps back in tidy rows (the order does not change)">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!moved}
+          icon={<Icon name="wand-sparkles" size={14} />}
+          onClick={() => change((f) => tidyChart(f, keys))}
+        >
+          Tidy up
+        </Button>
+      </Tooltip>
+      <Segmented
+        size="sm"
+        value={direction}
+        onChange={(v) =>
+          change((f) => ({ ...f, layout: { ...f.layout, direction: v as Direction, offsets: {} } }))
+        }
+        options={[
+          {
+            value: 'horizontal',
+            label: (
+              <span className="flex items-center" title="Left to right">
+                <Icon name="arrow-right" size={14} />
+                <span className="sr-only">Left to right</span>
+              </span>
+            ),
+          },
+          {
+            value: 'vertical',
+            label: (
+              <span className="flex items-center" title="Top to bottom">
+                <Icon name="arrow-down" size={14} />
+                <span className="sr-only">Top to bottom</span>
+              </span>
+            ),
+          },
+        ]}
+        aria-label="Direction of the flowchart"
+      />
     </div>
   );
 }
 
-/** During a test run, keep the running step in view. */
-const READABLE_ZOOM = 0.75;
-
+/** During a test run, keep the running step in view (switching to its process if needed). */
 function useFollowRun(nodes: CanvasNode[]) {
   const current = useRun((s) => s.currentStepId);
   const { getViewport, setCenter } = useReactFlow();
   const box = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!current) return;
-    const node = nodes.find((n) => n.data.layout.stepId === current && n.type !== 'anchor');
-    if (!node) return;
+    const node = nodes.find((n) => n.data.layout.stepId === current);
+    if (!node) {
+      const { flow, processId, showProcess } = useEditor.getState();
+      const home = flow ? processOfStep(flow, current) : undefined;
+      if (home !== undefined && home !== processId) showProcess(home);
+      return;
+    }
     box.current ??= document.querySelector('[data-testid="flow-canvas"]');
     const rect = box.current?.getBoundingClientRect();
     if (!rect) return;
@@ -228,13 +460,12 @@ function StepCard({
   const issues = useStepIssues(step.id);
   const text = useSentenceText(step, def);
   const { items, breakpoint, toggleBreak, selected } = useStepActions(step);
-  const drag = useDraggable({ id: `step:${step.id}`, data: { kind: 'step', stepId: step.id } });
+  const sides = useSides();
   const errors = issues.filter((i) => i.severity === 'error').length;
   const title = step.label || def?.title || step.activity;
 
   return (
     <div
-      ref={drag.setNodeRef}
       role="button"
       tabIndex={0}
       aria-pressed={selected}
@@ -253,7 +484,7 @@ function StepCard({
       }}
       style={{ width, height }}
       className={cn(
-        'group relative flex cursor-pointer items-center gap-2.5 rounded-xl border bg-surface pr-2 pl-2.5 text-left shadow-card transition-[box-shadow,border-color,opacity] outline-none',
+        'group relative flex cursor-grab items-center gap-2.5 rounded-xl border bg-surface pr-2 pl-2.5 text-left shadow-card transition-[box-shadow,border-color,opacity] outline-none active:cursor-grabbing',
         step.activity === 'control.comment' && 'border-dashed bg-warning-soft/40',
         selected
           ? 'border-primary ring-2 ring-primary/25'
@@ -261,16 +492,9 @@ function StepCard({
         runStatus && STATUS_STYLES[runStatus],
         paused && 'border-warning ring-2 ring-warning/30',
         step.disabled && 'opacity-55',
-        drag.isDragging && 'opacity-40',
       )}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className={hidden}
-        isConnectable={false}
-      />
+      <Handle type="target" position={sides.in} id="in" className={hidden} isConnectable={false} />
       {breakpoint && (
         <span
           className="absolute -top-1.5 -left-1.5 h-3 w-3 rounded-full border-2 border-surface bg-danger"
@@ -303,16 +527,6 @@ function StepCard({
         <span className="flex-1" />
         <RunStatusIcon status={runStatus} paused={paused} />
       </div>
-      <button
-        type="button"
-        aria-label="Drag to move"
-        className="nodrag nopan absolute -top-2.5 left-1/2 hidden -translate-x-1/2 cursor-grab rounded border border-border bg-surface px-1 text-subtle shadow-sm group-hover:block active:cursor-grabbing"
-        {...drag.listeners}
-        {...drag.attributes}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Icon name="grip-horizontal" size={12} />
-      </button>
       {(errors > 0 || step.disabled) && (
         <span className="absolute -bottom-2.5 left-3 flex gap-1">
           {errors > 0 && (
@@ -329,24 +543,29 @@ function StepCard({
             e.stopPropagation();
             toggleBreak();
           }}
-          className="nodrag nopan absolute -bottom-1.5 left-1/2 hidden h-3 w-3 -translate-x-1/2 rounded-full border-2 border-border-strong bg-surface group-hover:block"
+          className={cn(
+            'nodrag nopan absolute hidden h-3 w-3 rounded-full border-2 border-border-strong bg-surface group-hover:block',
+            sides.vertical
+              ? 'top-1/2 -right-1.5 -translate-y-1/2'
+              : '-bottom-1.5 left-1/2 -translate-x-1/2',
+          )}
         />
       </Tooltip>
       {branch ? (
         <>
           <Handle
             type="source"
-            position={Position.Right}
+            position={sides.out}
             id="yes"
-            style={{ top: '30%' }}
+            style={sides.vertical ? { left: '30%' } : { top: '30%' }}
             className={hidden}
             isConnectable={false}
           />
           <Handle
             type="source"
-            position={Position.Right}
+            position={sides.out}
             id="no"
-            style={{ top: '70%' }}
+            style={sides.vertical ? { left: '70%' } : { top: '70%' }}
             className={hidden}
             isConnectable={false}
           />
@@ -354,7 +573,7 @@ function StepCard({
       ) : (
         <Handle
           type="source"
-          position={Position.Right}
+          position={sides.out}
           id="out"
           className={hidden}
           isConnectable={false}
@@ -373,12 +592,11 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
   const paused = useRun((s) => !!step && s.pausedStepId === step.id);
   const text = useSentenceText(step ?? { id: '', activity: '', params: {} }, def);
   const actions = useStepActions(step ?? { id: '', activity: '', params: {} });
-  const drag = useDraggable({
-    id: `step:${step?.id ?? l.id}`,
-    data: { kind: 'step', stepId: step?.id ?? '' },
-  });
+  const sides = useSides();
   if (!step) return null;
   const color = categoryColor(def?.category);
+  // Connectors meet the box at its title (left to right) or at the middle of its top / bottom.
+  const handleStyle = sides.vertical ? undefined : { top: SIZES.header / 2 };
 
   return (
     <div
@@ -396,19 +614,17 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
         runStatus && STATUS_STYLES[runStatus],
         paused && 'border-warning',
         step.disabled && 'opacity-55',
-        drag.isDragging && 'opacity-40',
       )}
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={sides.in}
         id="in"
-        style={{ top: SIZES.header / 2 }}
+        style={handleStyle}
         className={hidden}
         isConnectable={false}
       />
       <div
-        ref={drag.setNodeRef}
         role="button"
         tabIndex={0}
         aria-pressed={actions.selected}
@@ -426,7 +642,7 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
           }
         }}
         style={{ height: SIZES.header }}
-        className="group flex cursor-pointer items-center gap-2.5 rounded-t-2xl px-3 outline-none"
+        className="group flex cursor-grab items-center gap-2.5 rounded-t-2xl px-3 outline-none active:cursor-grabbing"
       >
         <IconTile name={def?.icon ?? 'repeat'} category={def?.category} />
         <div className="min-w-0 flex-1">
@@ -437,16 +653,6 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
           <p className="truncate text-[11.5px] text-muted">{text}</p>
         </div>
         <RunStatusIcon status={runStatus} paused={paused} />
-        <button
-          type="button"
-          aria-label="Drag to move"
-          className="nodrag nopan hidden cursor-grab text-subtle group-hover:block active:cursor-grabbing"
-          {...drag.listeners}
-          {...drag.attributes}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Icon name="grip-vertical" size={14} />
-        </button>
         <span className="nodrag nopan" onClick={(e) => e.stopPropagation()}>
           <Menu
             trigger={
@@ -466,17 +672,17 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
       {l.lanes?.map((lane) => (
         <p
           key={lane.title}
-          className="absolute left-5 text-[11px] font-semibold tracking-wide text-subtle uppercase"
-          style={{ top: lane.y + 4 }}
+          className="absolute truncate text-[11px] font-semibold tracking-wide text-subtle uppercase"
+          style={{ left: lane.x, top: lane.y + 4, maxWidth: Math.max(lane.w, 120) }}
         >
           {lane.title}
         </p>
       ))}
       <Handle
         type="source"
-        position={Position.Right}
+        position={sides.out}
         id="out"
-        style={{ top: SIZES.header / 2 }}
+        style={handleStyle}
         className={hidden}
         isConnectable={false}
       />
@@ -486,8 +692,13 @@ const ContainerNode = memo(function ContainerNode({ data }: NodeProps<CanvasNode
 
 function TerminalNode({ data }: NodeProps<CanvasNode>) {
   const start = data.layout.type === 'start';
+  const sides = useSides();
+  const handleStyle = sides.vertical ? undefined : { top: SIZES.terminal / 2 };
   return (
-    <div className="flex flex-col items-center" style={{ width: SIZES.terminal }}>
+    <div
+      className="flex cursor-grab flex-col items-center active:cursor-grabbing"
+      style={{ width: SIZES.terminal }}
+    >
       <div
         className={cn(
           'flex items-center justify-center rounded-full border-2 shadow-card',
@@ -499,24 +710,29 @@ function TerminalNode({ data }: NodeProps<CanvasNode>) {
       >
         <Icon name={start ? 'play' : 'flag'} size={20} />
       </div>
-      <span className="mt-1 text-[11px] font-semibold tracking-wide text-subtle uppercase">
+      <span
+        className={cn(
+          'text-[11px] font-semibold tracking-wide text-subtle uppercase',
+          sides.vertical ? 'absolute top-1/2 left-full ml-2 -translate-y-1/2' : 'mt-1',
+        )}
+      >
         {start ? 'Start' : 'End'}
       </span>
       {start ? (
         <Handle
           type="source"
-          position={Position.Right}
+          position={sides.out}
           id="out"
-          style={{ top: SIZES.terminal / 2 }}
+          style={sides.vertical ? { top: SIZES.terminal } : handleStyle}
           className={hidden}
           isConnectable={false}
         />
       ) : (
         <Handle
           type="target"
-          position={Position.Left}
+          position={sides.in}
           id="in"
-          style={{ top: SIZES.terminal / 2 }}
+          style={handleStyle}
           className={hidden}
           isConnectable={false}
         />
@@ -526,18 +742,13 @@ function TerminalNode({ data }: NodeProps<CanvasNode>) {
 }
 
 function MergeNode() {
+  const sides = useSides();
   return (
     <div className="h-full w-full rounded-full border-2 border-border-strong bg-surface">
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className={hidden}
-        isConnectable={false}
-      />
+      <Handle type="target" position={sides.in} id="in" className={hidden} isConnectable={false} />
       <Handle
         type="source"
-        position={Position.Right}
+        position={sides.out}
         id="out"
         className={hidden}
         isConnectable={false}
@@ -547,18 +758,13 @@ function MergeNode() {
 }
 
 function AnchorNode() {
+  const sides = useSides();
   return (
     <div className="h-px w-px">
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className={hidden}
-        isConnectable={false}
-      />
+      <Handle type="target" position={sides.in} id="in" className={hidden} isConnectable={false} />
       <Handle
         type="source"
-        position={Position.Right}
+        position={sides.out}
         id="out"
         className={hidden}
         isConnectable={false}
@@ -571,21 +777,17 @@ function PlaceholderNode({ data }: NodeProps<CanvasNode>) {
   const slot = data.layout.slot!;
   const { active, setNodeRef, dragging } = useSlot(slot);
   const add = useAddStep();
+  const sides = useSides();
   const [open, setOpen] = useState(false);
-  const empty = slot.listKey === 'root:steps';
+  const empty = parseListKey(slot.listKey).block === 'steps';
   return (
     <div
       ref={setNodeRef}
+      data-slot={`${slot.listKey}:${slot.index}`}
       style={{ width: data.layout.w, height: data.layout.h }}
       className="nodrag nopan"
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className={hidden}
-        isConnectable={false}
-      />
+      <Handle type="target" position={sides.in} id="in" className={hidden} isConnectable={false} />
       <AddStepMenu
         open={open}
         onOpenChange={setOpen}
@@ -612,7 +814,7 @@ function PlaceholderNode({ data }: NodeProps<CanvasNode>) {
       />
       <Handle
         type="source"
-        position={Position.Right}
+        position={sides.out}
         id="out"
         className={hidden}
         isConnectable={false}
@@ -639,6 +841,7 @@ function useSlot(slot: Slot) {
 function FlowEdge(props: EdgeProps<CanvasEdge>) {
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd } =
     props;
+  const vertical = useContext(DirectionContext) === 'vertical';
   const [path, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -649,6 +852,10 @@ function FlowEdge(props: EdgeProps<CanvasEdge>) {
     curvature: 0.35,
   });
   const layout = data!.layout;
+  const yes = layout.label === 'Yes';
+  const labelAt = vertical
+    ? { x: sourceX + (yes ? -16 : 16), y: sourceY + 18 }
+    : { x: sourceX + 26, y: sourceY + (yes ? -11 : 11) };
   return (
     <>
       <BaseEdge
@@ -661,13 +868,9 @@ function FlowEdge(props: EdgeProps<CanvasEdge>) {
           <span
             className={cn(
               'pointer-events-none absolute rounded-full px-1.5 text-[10.5px] leading-4 font-semibold',
-              layout.label === 'Yes'
-                ? 'bg-success-soft text-success'
-                : 'bg-danger-soft text-danger',
+              yes ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
             )}
-            style={{
-              transform: `translate(-50%, -50%) translate(${sourceX + 26}px, ${sourceY + (layout.label === 'Yes' ? -11 : 11)}px)`,
-            }}
+            style={{ transform: `translate(-50%, -50%) translate(${labelAt.x}px, ${labelAt.y}px)` }}
           >
             {layout.label}
           </span>
@@ -723,17 +926,32 @@ function InsertButton({ slot, x, y }: { slot: Slot; x: number; y: number }) {
   );
 }
 
-/** Loops: an arrow running under the lane, back from its end to its start. */
+/** Loops: an arrow running beside the lane (under it, or right of it), back to its start. */
 function LoopEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<CanvasEdge>) {
+  const vertical = useContext(DirectionContext) === 'vertical';
   const drop = data?.layout.drop ?? 40;
-  const bottom = Math.max(sourceY, targetY) + drop;
   const r = 14;
-  const path = [
-    `M ${sourceX} ${sourceY}`,
-    `C ${sourceX + r * 1.6} ${sourceY}, ${sourceX + r * 1.6} ${bottom}, ${sourceX - r} ${bottom}`,
-    `L ${targetX + r} ${bottom}`,
-    `C ${targetX - r * 1.6} ${bottom}, ${targetX - r * 1.6} ${targetY}, ${targetX} ${targetY}`,
-  ].join(' ');
+  let path: string;
+  let label: { x: number; y: number };
+  if (vertical) {
+    const side = Math.max(sourceX, targetX) + drop;
+    path = [
+      `M ${sourceX} ${sourceY}`,
+      `C ${sourceX} ${sourceY + r * 1.6}, ${side} ${sourceY + r * 1.6}, ${side} ${sourceY - r}`,
+      `L ${side} ${targetY + r}`,
+      `C ${side} ${targetY - r * 1.6}, ${targetX} ${targetY - r * 1.6}, ${targetX} ${targetY}`,
+    ].join(' ');
+    label = { x: side, y: (sourceY + targetY) / 2 };
+  } else {
+    const bottom = Math.max(sourceY, targetY) + drop;
+    path = [
+      `M ${sourceX} ${sourceY}`,
+      `C ${sourceX + r * 1.6} ${sourceY}, ${sourceX + r * 1.6} ${bottom}, ${sourceX - r} ${bottom}`,
+      `L ${targetX + r} ${bottom}`,
+      `C ${targetX - r * 1.6} ${bottom}, ${targetX - r * 1.6} ${targetY}, ${targetX} ${targetY}`,
+    ].join(' ');
+    label = { x: (sourceX + targetX) / 2, y: bottom };
+  }
   return (
     <>
       <BaseEdge
@@ -743,9 +961,7 @@ function LoopEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<Canvas
       <EdgeLabelRenderer>
         <span
           className="pointer-events-none absolute flex items-center gap-1 rounded-full bg-surface px-1.5 text-[10.5px] text-subtle"
-          style={{
-            transform: `translate(-50%, -50%) translate(${(sourceX + targetX) / 2}px, ${bottom}px)`,
-          }}
+          style={{ transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)` }}
         >
           <Icon name="repeat" size={11} /> next
         </span>

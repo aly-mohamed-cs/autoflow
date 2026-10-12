@@ -1,5 +1,5 @@
 // Read-only view of an automation's steps, optionally with what happened in a run.
-import { normalizeCondition, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
+import { findStep, normalizeCondition, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { cn, Icon, IconTile, Tooltip } from '@autoflow/ui';
 import type { ReactNode } from 'react';
@@ -21,9 +21,31 @@ interface Props {
   details?: (stepId: string) => ReactNode;
 }
 
+/** Names shown in sentences: elements by id, sub-processes by "process:<id>". */
+function namesOf(flow: Flow): Map<string, string> {
+  return new Map([
+    ...(flow.elements ?? []).map((e): [string, string] => [e.id, e.name]),
+    ...(flow.processes ?? []).map((p): [string, string] => [`process:${p.id}`, p.name]),
+  ]);
+}
+
 export function StepTree({ flow, runs, details }: Props) {
-  const elements = new Map((flow.elements ?? []).map((e) => [e.id, e.name]));
-  return <List steps={flow.steps ?? []} elements={elements} runs={runs} details={details} />;
+  const elements = namesOf(flow);
+  const processes = flow.processes ?? [];
+  if (!processes.length) return <List steps={flow.steps ?? []} elements={elements} runs={runs} details={details} />;
+  return (
+    <div className="space-y-4">
+      <List steps={flow.steps ?? []} elements={elements} runs={runs} details={details} />
+      {processes.map((p) => (
+        <section key={p.id} aria-label={`Sub-process ${p.name}`}>
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold">
+            <Icon name="workflow" size={14} className="text-primary" /> Sub-process: {p.name}
+          </h3>
+          <List steps={p.steps ?? []} elements={elements} runs={runs} details={details} />
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function List({ steps, elements, runs, details }: { steps: Step[]; elements: Map<string, string> } & Pick<Props, 'runs' | 'details'>) {
@@ -104,6 +126,7 @@ function sentenceText(step: Step, sentence: string, elements: Map<string, string
     const value = step.params?.[name];
     if (value === undefined || value === null || value === '') return '…';
     if (name === 'element' && typeof value === 'string') return elements.get(value) ?? '…';
+    if (name === 'process' && typeof value === 'string') return elements.get(`process:${value}`) ?? value;
     if (name === 'condition' || typeof value === 'object') {
       const cond = name === 'condition' ? normalizeCondition(value) : (value as { rules?: { left?: unknown; op?: string; right?: unknown }[]; expression?: string | null });
       if (cond.expression) return cond.expression;
@@ -123,18 +146,8 @@ function pretty(text: string): string {
 
 /** What people see for a step: its label, or its sentence ("Click Sign in button"). */
 export function stepTitle(flow: Flow, stepId: string): string {
-  const elements = new Map((flow.elements ?? []).map((e) => [e.id, e.name]));
-  const find = (steps: Step[] = []): Step | undefined => {
-    for (const s of steps) {
-      if (s.id === stepId) return s;
-      for (const block of Object.values(s.blocks ?? {})) {
-        const found = find(block);
-        if (found) return found;
-      }
-    }
-    return undefined;
-  };
-  const step = find(flow.steps);
+  const elements = namesOf(flow);
+  const step = findStep(flow, stepId);
   if (!step) return 'a step that no longer exists';
   return step.label || sentenceText(step, DEFS.get(step.activity)?.sentence ?? step.activity, elements);
 }
@@ -146,13 +159,5 @@ export function settingTitle(activity: string | undefined, name: string): string
 }
 
 export function stepActivity(flow: Flow, stepId: string): string | undefined {
-  let found: string | undefined;
-  const visit = (steps: Step[] = []) => {
-    for (const s of steps) {
-      if (s.id === stepId) found = s.activity;
-      for (const block of Object.values(s.blocks ?? {})) visit(block);
-    }
-  };
-  visit(flow.steps);
-  return found;
+  return findStep(flow, stepId)?.activity;
 }

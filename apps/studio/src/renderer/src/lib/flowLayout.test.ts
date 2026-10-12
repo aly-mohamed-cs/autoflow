@@ -1,6 +1,6 @@
 import type { ActivityDef, Step } from '@autoflow/flow-types';
 import { describe, expect, it } from 'vitest';
-import { layoutFlow, type LayoutNode } from './flowLayout';
+import { layoutFlow, SIZES, type LayoutNode } from './flowLayout';
 
 const BLOCKS: Record<string, { name: string; title: string }[]> = {
   'control.if': [
@@ -118,5 +118,105 @@ describe('layoutFlow', () => {
       expect(n.x >= 0 && n.y >= 0 && n.x + n.w <= width + 1 && n.y + n.h <= height + 1, n.id).toBe(
         true,
       );
+  });
+});
+
+describe('top to bottom', () => {
+  const flow = [
+    s('a'),
+    s('if', 'control.if', { then: [s('t1'), s('t2')], else: [s('e1')] }),
+    s('loop', 'control.for_each', { body: [s('x'), s('y')] }),
+    s('z'),
+  ];
+  const { nodes, edges } = layoutFlow(flow, defOf, { direction: 'vertical' });
+  const middleX = (n: LayoutNode) => n.x + n.w / 2;
+
+  it('runs downwards on one centre line, with If lanes side by side', () => {
+    const [start, a, decision, box, z, end] = ['start', 's:a', 's:if', 'c:loop', 's:z', 'end'].map(
+      (id) => byId(nodes, id),
+    );
+    for (const [upper, lower] of [
+      [start, a],
+      [a, decision],
+      [decision, box],
+      [box, z],
+      [z, end],
+    ] as const)
+      expect(upper!.y + upper!.h).toBeLessThan(lower!.y);
+    expect(new Set([start, a, z, end].map((n) => middleX(n!))).size).toBe(1);
+    expect(byId(nodes, 's:t1').x).toBeLessThan(byId(nodes, 's:e1').x); // Yes left of No
+    expect(byId(nodes, 's:t1').y).toBeLessThan(byId(nodes, 's:t2').y);
+    expect(byId(nodes, 'm:if').y).toBeGreaterThan(byId(nodes, 's:t2').y);
+  });
+
+  it('keeps a box title on top and its steps inside', () => {
+    const box = byId(nodes, 'c:loop');
+    for (const id of ['s:x', 's:y']) {
+      const n = byId(nodes, id);
+      expect(n.y).toBeGreaterThanOrEqual(box.y + SIZES.header);
+      expect(n.x > box.x && n.x + n.w < box.x + box.w && n.y + n.h < box.y + box.h).toBe(true);
+    }
+    expect(byId(nodes, 'a:loop:body:l').y).toBeLessThan(byId(nodes, 's:x').y);
+    expect(byId(nodes, 'a:loop:body:r').y).toBeGreaterThan(byId(nodes, 's:y').y);
+    expect(edges.find((e) => e.kind === 'loop')!.drop).toBeGreaterThan(0);
+  });
+
+  it('never overlaps steps', () => {
+    const boxes = nodes.filter((n) =>
+      ['step', 'branch', 'placeholder', 'start', 'end'].includes(n.type),
+    );
+    for (const a of boxes)
+      for (const b of boxes) if (a !== b) expect(overlap(a, b), `${a.id} / ${b.id}`).toBe(false);
+  });
+});
+
+describe('moved steps', () => {
+  const flow = [
+    s('a'),
+    s('if', 'control.if', { then: [s('t1')], else: [] }),
+    s('loop', 'control.for_each', { body: [s('x')] }),
+  ];
+  const tidy = layoutFlow(flow, defOf);
+  const at = (layout: ReturnType<typeof layoutFlow>, id: string) => byId(layout.nodes, id);
+
+  it('moves a step by its offset and leaves the others in place', () => {
+    const moved = layoutFlow(flow, defOf, { offsets: { a: { x: 10, y: 120 } } });
+    expect(at(moved, 's:a').x).toBe(at(tidy, 's:a').x + 10);
+    expect(at(moved, 's:a').y).toBe(at(tidy, 's:a').y + 120);
+    expect(at(moved, 's:if').x).toBe(at(tidy, 's:if').x);
+    expect(at(moved, 's:a').moveKey).toBe('a');
+    expect(at(moved, 'm:if').moveKey).toBeUndefined();
+  });
+
+  it('moves what belongs to an If or a box along with it', () => {
+    const moved = layoutFlow(flow, defOf, {
+      offsets: { if: { x: 0, y: 200 }, loop: { x: 40, y: 0 } },
+    });
+    for (const id of ['s:if', 's:t1', 'm:if', 'p:if:else'])
+      expect(at(moved, id).y - at(tidy, id).y, id).toBe(200);
+    for (const id of ['c:loop', 's:x', 'a:loop:body:l', 'a:loop:body:r'])
+      expect(at(moved, id).x - at(tidy, id).x, id).toBe(40);
+  });
+
+  it('grows a box around a step dragged out of it and keeps the joining dot after its lanes', () => {
+    const moved = layoutFlow(flow, defOf, {
+      offsets: { x: { x: 300, y: 150 }, t1: { x: 500, y: 0 } },
+    });
+    const box = at(moved, 'c:loop');
+    const x = at(moved, 's:x');
+    expect(box.x + box.w).toBeGreaterThanOrEqual(x.x + x.w + SIZES.pad);
+    expect(box.y + box.h).toBeGreaterThanOrEqual(x.y + x.h + SIZES.pad);
+    expect(at(moved, 'a:loop:body:r').x).toBe(box.x + box.w - SIZES.pad); // the exit stays on the wall
+    expect(at(moved, 'm:if').x).toBeGreaterThan(at(moved, 's:t1').x + SIZES.node.w);
+  });
+
+  it('moves start and end by their own keys', () => {
+    const moved = layoutFlow(flow, defOf, {
+      offsets: { '@p:start': { x: -30, y: 0 } },
+      terminalPrefix: '@p:',
+    });
+    expect(at(moved, 'start').x).toBe(-30);
+    expect(at(moved, 'start').moveKey).toBe('@p:start');
+    expect(moved.bounds.x).toBe(-30);
   });
 });

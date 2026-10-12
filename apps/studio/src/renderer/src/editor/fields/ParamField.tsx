@@ -7,6 +7,8 @@ import type { FieldInfo } from '../../lib/catalog';
 import type { VariableInfo } from '../../lib/scope';
 import { ConditionEditor } from './ConditionEditor';
 import { ElementInput } from './ElementInput';
+import { PointInput } from './PointInput';
+import { ProcessInputsInput, ProcessSelect } from './ProcessFields';
 import {
   ColumnInput,
   FileAddon,
@@ -24,6 +26,8 @@ export interface ParamFieldProps {
   /** All current settings of the step (some widgets look at siblings, e.g. column pickers). */
   params: Record<string, unknown>;
   onChange: (value: unknown) => void;
+  /** Change other settings of the step too (e.g. the window a picked position is in). */
+  onParams?: (patch: Record<string, unknown>) => void;
   variables: VariableInfo[];
   columnsFor: (name: string) => string[];
   elementKind: 'web' | 'desktop';
@@ -55,6 +59,7 @@ function Widget({
   value,
   params,
   onChange,
+  onParams,
   variables,
   columnsFor,
   elementKind,
@@ -170,6 +175,38 @@ function Widget({
           variables={variables}
           columnsFor={columnsFor}
           keySuggestions={guessColumns(params, columnsFor)}
+        />
+      );
+
+    case 'process':
+      return <ProcessSelect id={id} value={value} onChange={onChange} />;
+
+    case 'process_inputs':
+      return (
+        <ProcessInputsInput
+          value={value}
+          onChange={onChange}
+          processId={params[field.schema['x-source'] ?? 'process']}
+          variables={variables}
+          columnsFor={columnsFor}
+        />
+      );
+
+    case 'point':
+      return (
+        <PointInput
+          id={id}
+          value={value}
+          onChange={onChange}
+          mode={field.name === 'point' ? 'element' : params.relative_to === 'screen' ? 'screen' : 'window'}
+          params={params}
+          onParams={(patch) => onParams?.(patch)}
+          canPick={elementKind === 'desktop'}
+          ariaLabel={field.title}
+          placeholder={field.placeholder}
+          variables={variables}
+          columnsFor={columnsFor}
+          invalid={!!error}
         />
       );
 

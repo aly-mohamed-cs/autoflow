@@ -19,7 +19,11 @@ No programming is needed. If you can describe the task step by step, you can aut
    from **Start** to **End**: an *If* splits into **Yes** / **No** paths that join again, and a
    loop is a box around the steps it repeats. Each step reads like a sentence:
    *Type **Invoice No** into **Invoice number box***. Scroll to move around, Ctrl+scroll to zoom.
-   Prefer a plain list (handy for long recordings)? Switch **Flow / List** at the top right.
+   **Drag a step** to place it anywhere (it snaps to a grid; moving a loop or an *If* moves
+   what is in it). The order stays the one the arrows show — to change the order, let go of
+   the step on a **＋**. The arrows **→ / ↓** at the top switch between left to right and top
+   to bottom; **Tidy up** puts everything back in neat rows. Prefer a plain list (handy for
+   long recordings)? Switch **Flow / List**.
 4. Click a step to fill in its settings on the right. Red settings still need a value.
 5. Press **Test run**. Watch each step turn green, see the log at the bottom, and check the
    **Variables** tab to see what the automation read.
@@ -52,6 +56,7 @@ No programming is needed. If you can describe the task step by step, you can aut
 | **Variable** | A named value the automation remembers, e.g. the table read from Excel. Blue chips like **row › Invoice No** are variables. |
 | **Start value** | A variable filled in when the automation starts, such as *which Excel file to process*. |
 | **Credential** | A saved username and password. Robots get it only while they run an automation that needs it, and it never appears in logs. |
+| **Sub-process** | A named part of an automation in its own tab (like Brity RPA *tasks*), e.g. “Log in to ERP”. A **Run sub-process** step runs it — from as many places as you like. |
 
 ### Using values from earlier steps
 
@@ -85,6 +90,24 @@ The preview shows the result using values from your last test run.
   A red outline shows what will be picked.
 * After saving something, **Wait for element in application** → *text contains* (e.g. “Saved”)
   before reading the result.
+
+### Click at a position (X, Y)
+Some things have no button the recorder can see — drawings, maps, charts, remote desktops.
+* **Click at position** clicks a point measured from the top-left corner of a window (or of the
+  whole screen). Press **Pick position**, point at the spot and press **Ctrl**: the position and
+  the window are filled in for you.
+* A normal **Click** can also aim at a **Point inside the element** (e.g. the arrow at the right
+  end of a box) instead of its centre.
+* Also: **Point at element** (hover), **Move mouse to position**, **Scroll**, **Drag and drop**
+  and **Drag between positions** (sliders, drawings).
+* Positions depend on window size and screen scaling: prefer picked elements where you can.
+
+### Split a big automation into sub-processes
+1. Click **＋ Sub-process** above the steps and name it, e.g. *Log in to ERP*.
+2. Build its steps in its tab. Need a different value each time (which user, which file)?
+   Click an empty spot and add **Inputs**.
+3. In the main process (or another sub-process), add **Run sub-process**, choose it and fill
+   in its inputs. Sub-processes use the same variables as the rest of the automation.
 
 ### Read invoices and other PDFs
 * **Get fields from PDF**: for each field, enter the label printed before it

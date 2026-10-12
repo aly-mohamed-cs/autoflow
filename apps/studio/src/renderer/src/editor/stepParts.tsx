@@ -1,12 +1,14 @@
 // Pieces shared by the Flow view (FlowCanvas) and the List view (Canvas) of a flow's steps.
 import type { ActivityDef, Step } from '@autoflow/flow-types';
 import { cn, Icon, Spinner, Tooltip } from '@autoflow/ui';
+import { useMemo } from 'react';
 import { createStep, exprLabel, sentence, type SentencePart } from '../lib/catalog';
 import {
   duplicateStep,
   insertStep,
   locate,
   moveStep,
+  NO_PROCESSES,
   removeStep,
   updateStep,
   type ListRef,
@@ -138,9 +140,16 @@ export function RunStatusIcon({ status, paused }: { status?: StepRunStatus; paus
 }
 
 /** The step as a sentence: "Type [row › Name] into [Name box]". */
+/** Sub-process names by id, for sentences. */
+function useProcessNames(): Map<string, string> {
+  const processes = useEditor((s) => s.flow?.processes ?? NO_PROCESSES);
+  return useMemo(() => new Map(processes.map((p) => [p.id, p.name])), [processes]);
+}
+
 export function StepSentence({ step, def }: { step: Step; def: ActivityDef }) {
   const index = useApp((s) => s.index);
   const elements = useElements();
+  const processes = useProcessNames();
   if (step.label) {
     return (
       <p className="leading-6">
@@ -149,7 +158,7 @@ export function StepSentence({ step, def }: { step: Step; def: ActivityDef }) {
       </p>
     );
   }
-  const parts = sentence(step, def, { index, elements });
+  const parts = sentence(step, def, { index, elements, processes });
   return (
     <p className="leading-6 text-fg">
       {parts.map((p, i) =>
@@ -163,8 +172,9 @@ export function StepSentence({ step, def }: { step: Step; def: ActivityDef }) {
 export function useSentenceText(step: Step, def: ActivityDef | undefined): string {
   const index = useApp((s) => s.index);
   const elements = useElements();
+  const processes = useProcessNames();
   if (!def) return step.activity;
-  return sentence(step, def, { index, elements })
+  return sentence(step, def, { index, elements, processes })
     .map((p) => {
       if (p.kind === 'text') return p.text;
       if (p.empty) return p.fallback && !p.required ? p.fallback : `[${p.title.toLowerCase()}]`;

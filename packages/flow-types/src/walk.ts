@@ -19,8 +19,29 @@ export function* walkSteps(steps: Step[] = [], parent: Step | null = null, depth
   }
 }
 
+/** The main step list and each sub-process's, with the sub-process id (null for the main one). */
+export function stepLists(flow: Flow): { processId: string | null; steps: Step[] }[] {
+  return [
+    { processId: null, steps: flow.steps ?? [] },
+    ...(flow.processes ?? []).map((p) => ({ processId: p.id, steps: p.steps ?? [] })),
+  ];
+}
+
+/** Every step of the flow: main process first, then each sub-process. */
+export function* walkFlow(flow: Flow): Generator<StepEntry & { processId: string | null }> {
+  for (const { processId, steps } of stepLists(flow)) {
+    for (const entry of walkSteps(steps)) yield { ...entry, processId };
+  }
+}
+
 export function findStep(flow: Flow, id: string): Step | undefined {
-  for (const { step } of walkSteps(flow.steps)) if (step.id === id) return step;
+  for (const { step } of walkFlow(flow)) if (step.id === id) return step;
+  return undefined;
+}
+
+/** Which process a step belongs to: a sub-process id, null for the main one, undefined if absent. */
+export function processOf(flow: Flow, id: string): string | null | undefined {
+  for (const { step, processId } of walkFlow(flow)) if (step.id === id) return processId;
   return undefined;
 }
 
@@ -36,6 +57,6 @@ export function stepPath(flow: Flow, id: string): string[] {
     }
     return false;
   };
-  visit(flow.steps ?? []);
+  for (const { steps } of stepLists(flow)) if (visit(steps)) break;
   return path;
 }

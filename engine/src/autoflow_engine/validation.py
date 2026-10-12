@@ -29,6 +29,21 @@ def _ui(field_info: Any) -> str | None:
     return extra.get("x-ui") if isinstance(extra, dict) else None
 
 
+def shown(field_info: Any, params: dict[str, Any], fields: dict[str, Any]) -> bool:
+    """Settings with ``show_when`` only count while the other setting has one of those values."""
+    extra = field_info.json_schema_extra
+    rule = extra.get("x-show-when") if isinstance(extra, dict) else None
+    if not rule:
+        return True
+    for other, values in rule.items():
+        current = params.get(other)
+        if current is None and other in fields:
+            current = fields[other].default
+        if str(current) not in [str(v) for v in values]:
+            return False
+    return True
+
+
 def validate_flow(document: Flow | dict[str, Any]) -> list[Issue]:
     catalog.load_activities()
     if isinstance(document, Flow):
@@ -44,6 +59,15 @@ def validate_flow(document: Flow | dict[str, Any]) -> list[Issue]:
 
     issues: list[Issue] = []
     steps = list(flow.iter_steps())
+
+    process_ids: set[str] = set()
+    for process in flow.processes:
+        if process.id in process_ids:
+            issues.append(Issue("error", f"Two sub-processes share the id '{process.id}'."))
+        process_ids.add(process.id)
+        names = [i.name for i in process.inputs]
+        for name in sorted({n for n in names if names.count(n) > 1}):
+            issues.append(Issue("error", f"Sub-process '{process.name}' has two inputs called '{name}'."))
 
     seen: set[str] = set()
     for step in steps:
@@ -69,12 +93,14 @@ def validate_flow(document: Flow | dict[str, Any]) -> list[Issue]:
         for name in step.outputs:
             if name not in output_names:
                 issues.append(Issue("warning", f"'{adef.title}' has no result called '{name}'.", step.id))
-        issues.extend(_check_params(step, adef, known_vars, element_ids))
+        issues.extend(_check_params(step, adef, known_vars, element_ids, process_ids))
     return issues
 
 
 def _known_variables(flow: Flow, steps: list[Step]) -> set[str]:
     known = {v.name for v in flow.variables}
+    for process in flow.processes:
+        known.update(i.name for i in process.inputs)
     for step in steps:
         known.update(v for v in step.outputs.values() if v)
         adef = catalog.get(step.activity)
@@ -88,7 +114,13 @@ def _known_variables(flow: Flow, steps: list[Step]) -> set[str]:
     return known
 
 
-def _check_params(step: Step, adef: catalog.ActivityDef, known_vars: set[str], element_ids: set[str]) -> list[Issue]:
+def _check_params(
+    step: Step,
+    adef: catalog.ActivityDef,
+    known_vars: set[str],
+    element_ids: set[str],
+    process_ids: set[str],
+) -> list[Issue]:
     issues: list[Issue] = []
     model = adef.params
     fields = model.model_fields
@@ -98,6 +130,8 @@ def _check_params(step: Step, adef: catalog.ActivityDef, known_vars: set[str], e
 
     probe = model.model_construct()
     for name, field_info in fields.items():
+        if not shown(field_info, step.params, fields):
+            continue  # hidden by another setting: its value is not used
         label = field_info.title or name
         present = name in step.params
         value = step.params.get(name)
@@ -119,6 +153,8 @@ def _check_params(step: Step, adef: catalog.ActivityDef, known_vars: set[str], e
 
         if _ui(field_info) == "element" and isinstance(value, str) and value and value not in element_ids:
             issues.append(Issue("error", f"'{label}' points to a UI element that no longer exists.", step.id, name))
+        if _ui(field_info) == "process" and isinstance(value, str) and value and value not in process_ids:
+            issues.append(Issue("error", f"'{label}' points to a sub-process that no longer exists.", step.id, name))
 
         if has_template(value) and not lazy:
             continue  # real value only known at run time

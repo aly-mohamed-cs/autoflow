@@ -2,12 +2,13 @@ import type { ActivityDef, Step } from '@autoflow/flow-types';
 import { Button, Field, Icon, IconTile, Input, Segmented, Select, Switch } from '@autoflow/ui';
 import { useMemo, useState } from 'react';
 import { useAiEnabled } from '../lib/ai';
-import type { FieldInfo } from '../lib/catalog';
+import { isShown, type FieldInfo } from '../lib/catalog';
 import { findStep, setParam, updateStep } from '../lib/flowOps';
 import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun } from '../store/run';
 import { FlowPanel } from './FlowPanel';
+import { ProcessPanel } from './ProcessTabs';
 import { ParamField } from './fields/ParamField';
 import { VariableNameInput } from './fields/inputs';
 import { useColumns, useScopeVariables, useStepIssues } from './hooks';
@@ -15,13 +16,20 @@ import { useColumns, useScopeVariables, useStepIssues } from './hooks';
 export function Inspector() {
   const flow = useEditor((s) => s.flow);
   const selectedId = useEditor((s) => s.selectedId);
+  const processId = useEditor((s) => s.processId);
   const index = useApp((s) => s.index);
   const step = flow && selectedId ? findStep(flow, selectedId) : undefined;
   const def = step ? index.get(step.activity) : undefined;
 
   return (
     <aside className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-surface" aria-label="Properties">
-      {step && def ? <StepInspector key={step.id} step={step} def={def} /> : <FlowPanel />}
+      {step && def ? (
+        <StepInspector key={step.id} step={step} def={def} />
+      ) : processId ? (
+        <ProcessPanel key={processId} processId={processId} />
+      ) : (
+        <FlowPanel />
+      )}
     </aside>
   );
 }
@@ -34,11 +42,12 @@ function StepInspector({ step, def }: { step: Step; def: ActivityDef }) {
   const issues = useStepIssues(step.id);
   const runError = useRun((s) => s.stepErrors[step.id]);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const fields = index.fields(def);
+  const params = step.params ?? {};
+  const all = index.fields(def);
+  const fields = all.filter((f) => isShown(f, params, all));
   const basic = fields.filter((f) => !f.advanced);
   const advanced = fields.filter((f) => f.advanced);
   const elementKind = def.category === 'Desktop' ? 'desktop' : 'web';
-  const params = step.params ?? {};
   const issueFor = useMemo(() => {
     const map = new Map<string, { error?: string; warning?: string }>();
     for (const i of issues) {
@@ -59,6 +68,9 @@ function StepInspector({ step, def }: { step: Step; def: ActivityDef }) {
       value={params[field.name]}
       params={params}
       onChange={(v) => change((f) => setParam(f, step.id, field.name, v), `${step.id}:${field.name}`)}
+      onParams={(patch) =>
+        change((f) => Object.entries(patch).reduce((acc, [name, v]) => setParam(acc, step.id, name, v), f))
+      }
       variables={variables}
       columnsFor={columnsFor}
       elementKind={elementKind}

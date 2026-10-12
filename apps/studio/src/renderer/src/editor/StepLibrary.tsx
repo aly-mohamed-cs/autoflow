@@ -2,7 +2,7 @@ import type { ActivityDef } from '@autoflow/flow-types';
 import { cn, Icon, IconTile, Input, Tooltip } from '@autoflow/ui';
 import { useDraggable } from '@dnd-kit/core';
 import { useMemo, useState } from 'react';
-import { locate, ROOT } from '../lib/flowOps';
+import { locate, processSteps, rootRef } from '../lib/flowOps';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { searchActivities } from './AddStepMenu';
@@ -30,11 +30,11 @@ export function StepLibrary() {
 
   /** Click = add after the selected step (or at the end). */
   const addByClick = (def: ActivityDef) => {
-    const { flow, selectedId } = useEditor.getState();
+    const { flow, selectedId, processId } = useEditor.getState();
     if (!flow) return;
     const where = selectedId ? locate(flow, selectedId) : null;
     if (where) add(def, where.ref, where.index + 1);
-    else add(def, ROOT, flow.steps?.length ?? 0);
+    else add(def, rootRef(processId), processSteps(flow, processId).length);
   };
 
   return (

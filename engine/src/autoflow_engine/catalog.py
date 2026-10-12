@@ -30,6 +30,7 @@ UI_KINDS = {
     "text", "multiline", "number", "boolean", "choice", "file", "folder", "save_file",
     "variable", "variable_name", "condition", "element", "credential", "column", "keys",
     "url", "key_values", "list", "code", "duration", "password",
+    "process", "process_inputs", "point",
 }
 
 
@@ -44,6 +45,8 @@ def Param(  # noqa: N802 - reads like a type in model definitions
     lazy: bool = False,
     source: str | None = None,
     file_types: list[str] | None = None,
+    labels: dict[str, str] | None = None,
+    show_when: dict[str, list[str]] | None = None,
     **kwargs: Any,
 ) -> Any:
     """Describe one activity setting.
@@ -53,6 +56,9 @@ def Param(  # noqa: N802 - reads like a type in model definitions
     lazy: not resolved before the activity runs (e.g. per-row formulas).
     source: for ui="column", the setting holding the table whose columns to offer.
     file_types: for file pickers, e.g. ["xlsx", "xls"].
+    labels: for choices, the words Studio shows for each value.
+    show_when: only show this setting while other settings have one of these values,
+        e.g. {"target": ["window", "screen"]}.
     """
     if ui is not None and ui not in UI_KINDS:
         raise ValueError(f"Unknown ui kind {ui!r}")
@@ -63,6 +69,8 @@ def Param(  # noqa: N802 - reads like a type in model definitions
         "x-lazy": lazy or None,
         "x-source": source,
         "x-file-types": file_types,
+        "x-labels": labels,
+        "x-show-when": show_when,
     }
     return Field(
         default,
@@ -114,6 +122,7 @@ class ActivityDef:
     requires: str | None = None
     lazy_fields: frozenset[str] = field(default_factory=frozenset)
     text_fields: frozenset[str] = field(default_factory=frozenset)
+    uses_runner: bool = False
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -172,10 +181,12 @@ def activity(
     blocks: tuple[BlockDef, ...] | list[BlockDef] = (),
     advanced: bool = False,
     requires: str | None = None,
+    uses_runner: bool = False,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Register an activity. The function receives ``(ctx, params)``, plus a
-    ``BlockRunner`` when the activity has blocks, and returns its outputs: a dict
-    keyed by output name, or a single value when it has exactly one output."""
+    ``BlockRunner`` when the activity has blocks or ``uses_runner`` (it runs other
+    steps, e.g. a sub-process), and returns its outputs: a dict keyed by output name,
+    or a single value when it has exactly one output."""
 
     if category not in _CATEGORY_IDS:
         raise ValueError(f"Unknown category {category!r} for {activity_id}")
@@ -205,6 +216,7 @@ def activity(
             requires=requires,
             lazy_fields=lazy,
             text_fields=text,
+            uses_runner=uses_runner,
         )
         return func
 

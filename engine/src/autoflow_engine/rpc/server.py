@@ -65,6 +65,7 @@ class EngineServer:
             "recorder.start": lambda p, respond: self.design.record_start(p.get("url"), respond),
             "recorder.stop": lambda _p, respond: self.design.record_stop(respond),
             "picker.desktop": lambda _p, respond: self.desktop_picker.pick(respond),
+            "picker.point": lambda p, respond: self.desktop_picker.pick_point(respond, p.get("element")),
             # Recording anything on the PC (any program), not just the design browser.
             "recorder.desktop_start": lambda _p, respond: self.desktop_recorder.start(respond),
             "recorder.desktop_stop": lambda _p, respond: self.desktop_recorder.stop(respond),

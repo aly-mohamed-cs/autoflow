@@ -339,6 +339,34 @@ def stop(ctx: RunContext, p: StopParams) -> None:
 # -- Waiting -----------------------------------------------------------------
 
 
+# -- Sub-processes -----------------------------------------------------------
+
+
+class RunProcessParams(Params):
+    process: str = Param(title="Sub-process", ui="process")
+    inputs: dict[str, Any] = Param(
+        default_factory=dict, title="Inputs", ui="process_inputs", source="process",
+        description="Values the sub-process starts with. Empty ones use the sub-process's own default.",
+    )
+
+
+@activity(
+    "control.run_process",
+    title="Run sub-process",
+    category=C,
+    icon="workflow",
+    sentence="Run sub-process {process}",
+    description="Run the steps of a sub-process of this automation, then carry on here. "
+    "Sub-processes use the same variables as the rest of the automation.",
+    params=RunProcessParams,
+    uses_runner=True,
+)
+def run_process(ctx: RunContext, p: RunProcessParams, runner: BlockRunner) -> None:
+    if not p.process:
+        raise ActivityError("No sub-process was chosen.", "Choose a sub-process in this step's settings.")
+    runner.run_process(p.process, p.inputs)
+
+
 class WaitParams(Params):
     seconds: float = Param(title="Seconds", ge=0, le=86_400, ui="duration")
 

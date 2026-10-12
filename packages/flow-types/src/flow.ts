@@ -48,6 +48,35 @@ export interface Step {
   disabled?: boolean;
 }
 
+/** A value a sub-process is started with; it becomes a variable while it runs. */
+export interface ProcessInput {
+  name: string;
+  type?: VariableType;
+  default?: unknown;
+  description?: string;
+}
+
+/** A named part of a flow (Brity "task"), started by "Run sub-process" steps. */
+export interface SubProcess {
+  id: string;
+  name: string;
+  description?: string;
+  inputs?: ProcessInput[];
+  steps?: Step[];
+}
+
+export interface Offset {
+  x?: number;
+  y?: number;
+}
+
+/** How the Flow view draws the chart; never affects a run. */
+export interface Layout {
+  direction?: 'horizontal' | 'vertical';
+  /** How far a step (or start / end) was moved from its tidy place, by id. */
+  offsets?: Record<string, Offset>;
+}
+
 export interface FlowSettings {
   default_timeout?: number;
   screenshot_each_step?: boolean;
@@ -62,16 +91,25 @@ export interface Flow {
   variables?: Variable[];
   elements?: Element[];
   steps?: Step[];
+  processes?: SubProcess[];
   settings?: FlowSettings;
+  layout?: Layout;
 }
 
 /** Property names per model, checked against the engine's JSON Schema in tests. */
 export const MODEL_KEYS = {
-  Flow: ['schema_version', 'id', 'name', 'description', 'variables', 'elements', 'steps', 'settings'],
+  Flow: [
+    'schema_version', 'id', 'name', 'description', 'variables', 'elements', 'steps', 'processes',
+    'settings', 'layout',
+  ],
   Variable: ['name', 'type', 'default', 'description', 'is_input', 'is_output', 'sensitive'],
   Selector: ['strategy', 'value', 'options'],
   Element: ['id', 'name', 'kind', 'selectors', 'screenshot', 'context'],
   OnError: ['retries', 'retry_delay', 'action'],
   Step: ['id', 'activity', 'label', 'params', 'outputs', 'blocks', 'on_error', 'disabled'],
   FlowSettings: ['default_timeout', 'screenshot_each_step', 'screenshot_on_error'],
+  ProcessInput: ['name', 'type', 'default', 'description'],
+  SubProcess: ['id', 'name', 'description', 'inputs', 'steps'],
+  Offset: ['x', 'y'],
+  Layout: ['direction', 'offsets'],
 } as const satisfies Record<string, readonly string[]>;

@@ -43,6 +43,14 @@ def test_activity_contract(adef):
         assert extra.get("x-ui") in (None, *UI_KINDS)
         if extra.get("x-ui") == "column":
             assert extra.get("x-source") in fields, f"column picker {name} needs a valid source"
+        schema = adef.params.model_json_schema()["properties"]
+        for other, values in (extra.get("x-show-when") or {}).items():
+            assert other in fields, f"{name} is shown depending on unknown setting {other}"
+            choices = schema[other].get("enum") or (["True", "False"] if schema[other].get("type") == "boolean" else None)
+            if choices:
+                assert set(map(str, values)) <= set(map(str, choices)), f"{name}: show_when uses unknown values"
+        if extra.get("x-labels"):
+            assert set(extra["x-labels"]) == set(schema[name]["enum"]), f"{name}: labels must match the choices"
     for out in adef.outputs:
         assert re.fullmatch(IDENTIFIER, out.default_variable or out.name)
     adef.params.model_json_schema()  # must not raise
@@ -76,6 +84,25 @@ def test_validation_reports_problems():
     assert ("unknown", "error") in by_step
     assert ("dup", "error") in by_step
     assert not any(i.step_id == "templated" for i in issues)
+
+
+def test_validation_checks_sub_processes():
+    issues = validate_flow({
+        "id": "f", "name": "f",
+        "steps": [
+            step("control.run_process", {"process": "login", "inputs": {"user": "x"}}, id="ok"),
+            step("control.run_process", {"process": "gone"}, id="missing"),
+        ],
+        "processes": [
+            {"id": "login", "name": "Log in", "inputs": [{"name": "user"}, {"name": "user"}],
+             "steps": [step("control.log", {"message": "{{user}}"}, id="uses_input")]},
+            {"id": "login", "name": "Copy"},
+        ],
+    })
+    messages = [i.message for i in issues]
+    assert {(i.step_id, i.severity) for i in issues if i.step_id} == {("missing", "error")}
+    assert "Two sub-processes share the id 'login'." in messages
+    assert "Sub-process 'Log in' has two inputs called 'user'." in messages
 
 
 def test_validation_knows_loop_and_output_variables():

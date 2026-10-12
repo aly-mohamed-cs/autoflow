@@ -1,7 +1,7 @@
 import type { Element, Flow } from '@autoflow/flow-types';
 import { Button, cn, Dialog, Field, Icon, Input, Spinner } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
-import { insertStep, locate, ROOT } from '../lib/flowOps';
+import { insertStep, locate, processSteps, rootRef } from '../lib/flowOps';
 import { firstBrowserUrl, hasBrowserOpen, stepsFromRecording, type RecordedAction } from '../lib/recording';
 import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
@@ -115,7 +115,7 @@ export function Recorder() {
       if (keep) toast('Nothing was recorded.', 'info');
       return;
     }
-    const { flow, selectedId, change, select } = useEditor.getState();
+    const { flow, selectedId, processId, change, select } = useEditor.getState();
     if (!flow) return;
     const { steps, elements } = stepsFromRecording(recorded, {
       startUrl: useRecorder.getState().startUrl,
@@ -125,8 +125,8 @@ export function Recorder() {
     const where = selectedId ? locate(flow, selectedId) : null;
     change((f) => {
       let next: Flow = { ...f, elements: [...(f.elements ?? []), ...elements] };
-      const ref = where?.ref ?? ROOT;
-      let at = where ? where.index + 1 : (f.steps?.length ?? 0);
+      const ref = where?.ref ?? rootRef(processId);
+      let at = where ? where.index + 1 : processSteps(f, processId).length;
       for (const s of steps) next = insertStep(next, ref, at++, s);
       return next;
     });
@@ -234,7 +234,7 @@ export function Recorder() {
 }
 
 /** Full-window hint while the user picks an element (in a browser, or in a desktop application). */
-export function PickingOverlay({ onCancel, kind = 'web' }: { onCancel: () => void; kind?: 'web' | 'desktop' }) {
+export function PickingOverlay({ onCancel, kind = 'web' }: { onCancel: () => void; kind?: 'web' | 'desktop' | 'point' }) {
   const [hover, setHover] = useState<{ name: string; window: string } | null>(null);
   useEffect(
     () => window.autoflow.engine.onNotification('picker.hover', (h) => setHover(h as { name: string; window: string })),
@@ -244,7 +244,16 @@ export function PickingOverlay({ onCancel, kind = 'web' }: { onCancel: () => voi
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 animate-fade-in" role="dialog" aria-label="Picking an element">
       <div className="flex max-w-md flex-col items-center gap-3 rounded-xl bg-surface p-6 text-center shadow-pop">
         <Spinner className="h-6 w-6 text-primary" />
-        {kind === 'desktop' ? (
+        {kind === 'point' ? (
+          <>
+            <p className="text-base font-semibold">Point at the spot and press Ctrl</p>
+            <p className="text-[13px] text-muted">
+              Switch to the application and move the mouse to the exact point — a label next to the mouse shows its
+              position on the screen, in the window and inside the element — then press{' '}
+              <kbd className="rounded border border-border px-1">Ctrl</kbd>. Press Esc to cancel.
+            </p>
+          </>
+        ) : kind === 'desktop' ? (
           <>
             <p className="text-base font-semibold">Point at the element and press Ctrl</p>
             <p className="text-[13px] text-muted">

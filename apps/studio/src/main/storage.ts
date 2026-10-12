@@ -1,4 +1,5 @@
 import type { Flow } from '@autoflow/flow-types';
+import { walkFlow } from '@autoflow/flow-types';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
@@ -97,14 +98,7 @@ export function newFlowId(): string {
 }
 
 function summarize(flow: Flow, modified: number, lastRun?: { status: string; at: number }): FlowSummary {
-  let stepCount = 0;
-  const count = (steps: Flow['steps']) => {
-    for (const s of steps ?? []) {
-      stepCount++;
-      for (const block of Object.values(s.blocks ?? {})) count(block);
-    }
-  };
-  count(flow.steps);
+  const stepCount = [...walkFlow(flow)].length;
   return { id: flow.id, name: flow.name, description: flow.description ?? '', modified, stepCount, lastRun };
 }
 

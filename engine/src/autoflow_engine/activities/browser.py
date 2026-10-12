@@ -15,7 +15,7 @@ from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
 from ..runtime.context import Deadline, RunContext, wait
 from ..selectors.web import find, selector_from_text
-from ..values import Table, to_text
+from ..values import Table, parse_point, to_text
 
 B = "Browser"
 _SESSION = "browser"
@@ -214,8 +214,23 @@ def navigate(ctx: RunContext, p: NavigateParams) -> None:
 # -- interacting ------------------------------------------------------------------
 
 
+def _point_param() -> Any:
+    return Param(
+        "", title="Point inside the element", ui="point", placeholder="Centre",
+        description="X, Y in pixels from the element's top-left corner. Leave empty for its centre.",
+    )
+
+
+def _position(point: str) -> dict[str, int] | None:
+    if not point:
+        return None
+    x, y = parse_point(point)
+    return {"x": x, "y": y}
+
+
 class ClickParams(ElementParams):
     click: Literal["single", "double", "right"] = Param("single", title="Click type")
+    point: str = _point_param()
 
 
 @activity(
@@ -229,12 +244,13 @@ class ClickParams(ElementParams):
 )
 def click(ctx: RunContext, p: ClickParams) -> None:
     target = _locate(ctx, p)
+    where = {"position": pos} if (pos := _position(p.point)) else {}
     if p.click == "double":
-        target.dblclick()
+        target.dblclick(**where)
     elif p.click == "right":
-        target.click(button="right")
+        target.click(button="right", **where)
     else:
-        target.click()
+        target.click(**where)
 
 
 class TypeParams(ElementParams):
@@ -311,6 +327,10 @@ def check(ctx: RunContext, p: CheckParams) -> None:
     target.set_checked(p.checked)
 
 
+class HoverParams(ElementParams):
+    point: str = _point_param()
+
+
 @activity(
     "browser.hover",
     title="Hover over element",
@@ -318,10 +338,31 @@ def check(ctx: RunContext, p: CheckParams) -> None:
     icon="pointer",
     sentence="Hover over {element}",
     description="Move the mouse over an element, e.g. to open a menu.",
-    params=ElementParams,
+    params=HoverParams,
 )
-def hover(ctx: RunContext, p: ElementParams) -> None:
-    _locate(ctx, p).hover()
+def hover(ctx: RunContext, p: HoverParams) -> None:
+    where = {"position": pos} if (pos := _position(p.point)) else {}
+    _locate(ctx, p).hover(**where)
+
+
+class DragDropParams(ElementParams):
+    element: str = Param("", title="Drag", ui="element")
+    target: str = Param("", title="Drop on", ui="element")
+
+
+@activity(
+    "browser.drag_drop",
+    title="Drag and drop",
+    category=B,
+    icon="hand-grab",
+    sentence="Drag {element} onto {target}",
+    description="Drag an element (a card, a file in a list, a slider handle) onto another one.",
+    params=DragDropParams,
+)
+def drag_drop(ctx: RunContext, p: DragDropParams) -> None:
+    source = _locate(ctx, p)
+    target = _locate(ctx, ElementParams(element=p.target, timeout=p.timeout))
+    source.drag_to(target)
 
 
 class PressKeyParams(Params):

@@ -172,3 +172,18 @@ def test_text_activities(h):
     assert h.vars["parts"] == ["a", "b", "c"]
     assert h.vars["nice"] == "09 Mar 2026"
     assert h.vars["next"] == dt.datetime(2026, 2, 28)
+
+
+def test_positions_are_read_from_friendly_text():
+    import pytest as _pytest
+
+    from autoflow_engine.errors import ActivityError
+    from autoflow_engine.values import parse_point
+
+    assert parse_point("120, 45") == (120, 45)
+    assert parse_point(" 120 45 ") == (120, 45)
+    assert parse_point("(7;8)") == (7, 8)
+    assert parse_point([1.6, 2]) == (2, 2)
+    assert parse_point({"x": 3, "y": 4}) == (3, 4)
+    with _pytest.raises(ActivityError, match="is not a position"):
+        parse_point("left side")

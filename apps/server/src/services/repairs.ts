@@ -1,6 +1,6 @@
 // Fixes the AI assistant made during robot runs. A fix only ever changed that one run;
 // it becomes part of the automation when a builder approves it (a new version).
-import type { Element, Flow, Step } from '@autoflow/flow-types';
+import { findStep, type Element, type Flow } from '@autoflow/flow-types';
 import { json, now, type Db } from '../db.js';
 import { newId } from '../security.js';
 import { changeableParams } from './ai.js';
@@ -114,7 +114,7 @@ export class Repairs {
 export function applyPatches(flow: Flow, patches: RepairPatch[]): Flow {
   const copy = structuredClone(flow);
   for (const patch of patches) {
-    const step = findStep(copy.steps ?? [], patch.step_id);
+    const step = findStep(copy, patch.step_id);
     if (!step) {
       throw new HttpError(409, 'The automation was changed after this run, so the fix no longer fits. Make the change in Studio instead.');
     }
@@ -129,16 +129,6 @@ export function applyPatches(flow: Flow, patches: RepairPatch[]): Flow {
   return copy;
 }
 
-function findStep(steps: Step[], id: string): Step | undefined {
-  for (const step of steps) {
-    if (step.id === id) return step;
-    for (const block of Object.values(step.blocks ?? {})) {
-      const found = findStep(block, id);
-      if (found) return found;
-    }
-  }
-  return undefined;
-}
 
 const WEB_STRATEGIES = new Set(['role', 'text', 'label', 'placeholder', 'testid', 'css', 'xpath']);
 
@@ -150,7 +140,7 @@ const WEB_STRATEGIES = new Set(['role', 'text', 'label', 'placeholder', 'testid'
 function toPatch(event: Record<string, unknown>, flow: Flow): RepairPatch | null {
   const patch = event.patch as Partial<RepairPatch> | undefined;
   if (!patch || typeof patch.step_id !== 'string' || typeof patch.params !== 'object' || patch.params === null) return null;
-  const step = findStep(flow.steps ?? [], patch.step_id);
+  const step = findStep(flow, patch.step_id);
   if (!step) return null;
   const changeable = changeableParams(step.activity);
   const newElementId = `el_ai_${step.id}`;

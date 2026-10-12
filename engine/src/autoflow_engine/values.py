@@ -183,3 +183,26 @@ def type_name(value: Any) -> str:
     if isinstance(value, Credential):
         return "credential"
     return type(value).__name__
+
+
+def parse_point(value: Any) -> tuple[int, int]:
+    """A position written as "120, 45" (also "120 45", [120, 45] or {"x": 120, "y": 45})."""
+    if isinstance(value, dict) and "x" in value and "y" in value:
+        parts: list[Any] = [value["x"], value["y"]]
+    elif isinstance(value, (list, tuple)):
+        parts = list(value)
+    else:
+        text = to_text(value).strip().strip("()[]")
+        parts = [p for p in text.replace(";", ",").replace(" ", ",").split(",") if p.strip()]
+    try:
+        if len(parts) != 2:
+            raise ValueError
+        x, y = (round(float(str(p).strip())) for p in parts)
+    except ValueError:
+        from .errors import ActivityError
+
+        raise ActivityError(
+            f"'{to_text(value)}' is not a position.",
+            "Write it as X, Y in pixels, for example 120, 45, or use 'Pick position'.",
+        ) from None
+    return x, y

@@ -1,4 +1,4 @@
-import type { Flow, Step } from '@autoflow/flow-types';
+import { walkFlow, type Flow } from '@autoflow/flow-types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/sessions.js';
@@ -47,14 +47,10 @@ interface FlowRow {
 /** Names of saved credentials a flow uses (robots may only fetch these). */
 export function credentialNames(flow: Flow): string[] {
   const names = new Set<string>();
-  const visit = (steps: Step[] = []) => {
-    for (const s of steps) {
-      const c = s.params?.credential;
-      if (typeof c === 'string' && c.trim() && !c.includes('{{')) names.add(c.trim());
-      for (const block of Object.values(s.blocks ?? {})) visit(block);
-    }
-  };
-  visit(flow.steps);
+  for (const { step } of walkFlow(flow)) {
+    const c = step.params?.credential;
+    if (typeof c === 'string' && c.trim() && !c.includes('{{')) names.add(c.trim());
+  }
   return [...names];
 }
 

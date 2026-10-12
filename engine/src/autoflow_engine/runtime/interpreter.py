@@ -40,6 +40,8 @@ from .context import Emit, RunContext, RunControl, RunOptions, log, set_active_c
 from .expressions import to_date, to_number, truthy
 from .templates import resolve
 
+MAX_PROCESS_DEPTH = 20
+
 
 @dataclass
 class RunResult:
@@ -72,6 +74,9 @@ class BlockRunner:
     def run(self, name: str) -> None:
         self._runner.run_steps(self._step.blocks.get(name, []))
 
+    def run_process(self, process_id: str, inputs: dict[str, Any]) -> None:
+        self._runner.run_process(process_id, inputs)
+
 
 class FlowRunner:
     def __init__(
@@ -89,6 +94,7 @@ class FlowRunner:
         self.ctx = RunContext(flow, options, emit, self.control)
         self._repair_calls = 0
         self._repair_given_up: set[str] = set()
+        self._process_depth = 0
 
     # ------------------------------------------------------------------
     def run(self) -> RunResult:
@@ -157,6 +163,36 @@ class FlowRunner:
     def run_steps(self, steps: list[Step]) -> None:
         for step in steps:
             self.run_step(step)
+
+    def run_process(self, process_id: str, inputs: dict[str, Any]) -> None:
+        """Run a sub-process: its inputs become variables, then its steps run."""
+        ctx = self.ctx
+        process = self.flow.process(process_id)
+        if process is None:
+            raise ActivityError("The sub-process to run no longer exists.",
+                                "Choose a sub-process in this step's settings.")
+        if self._process_depth >= MAX_PROCESS_DEPTH:
+            raise ActivityError(
+                f"Sub-processes started each other {MAX_PROCESS_DEPTH} levels deep while running '{process.name}'.",
+                "A sub-process probably runs itself. Check its 'Run sub-process' steps.",
+            )
+        known = {i.name for i in process.inputs}
+        for name in inputs:
+            if name not in known:
+                ctx.log(f"'{process.name}' has no input called '{name}'; it was ignored.", "warning")
+        for spec in process.inputs:
+            given = inputs.get(spec.name)
+            value = spec.default if given is None or given == "" else given
+            variable = Variable(name=spec.name, type=spec.type)
+            ctx.set(spec.name, coerce_variable(variable, value))
+        ctx.log(f"Running sub-process '{process.name}'")
+        self._process_depth += 1
+        try:
+            self.run_steps(process.steps)
+        except (BreakLoop, ContinueLoop):
+            pass  # "Exit loop" outside a loop ends the sub-process, not the caller's loop
+        finally:
+            self._process_depth -= 1
 
     def run_step(self, step: Step) -> None:
         if step.disabled:
@@ -294,7 +330,7 @@ class FlowRunner:
                 value = to_text(value)  # e.g. a number read from Excel typed into a text box
             resolved[key] = value
         params = adef.params.model_validate(resolved)
-        if adef.blocks:
+        if adef.blocks or adef.uses_runner:
             return adef.func(self.ctx, params, BlockRunner(self, step))
         return adef.func(self.ctx, params)
 

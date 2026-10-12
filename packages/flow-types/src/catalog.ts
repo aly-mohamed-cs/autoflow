@@ -5,7 +5,8 @@ import type { VariableType } from './flow';
 export type UiKind =
   | 'text' | 'multiline' | 'number' | 'boolean' | 'choice' | 'file' | 'folder' | 'save_file'
   | 'variable' | 'variable_name' | 'condition' | 'element' | 'credential' | 'column' | 'keys'
-  | 'url' | 'key_values' | 'list' | 'code' | 'duration' | 'password';
+  | 'url' | 'key_values' | 'list' | 'code' | 'duration' | 'password'
+  | 'process' | 'process_inputs' | 'point';
 
 /** A JSON Schema property as exported by pydantic, plus Autoflow's x- hints. */
 export interface ParamSchema {
@@ -28,6 +29,10 @@ export interface ParamSchema {
   'x-lazy'?: boolean;
   'x-source'?: string;
   'x-file-types'?: string[];
+  /** For choices: the words shown for each value. */
+  'x-labels'?: Record<string, string>;
+  /** Only show the setting while other settings have one of these values. */
+  'x-show-when'?: Record<string, string[]>;
 }
 
 export interface ParamsSchema {

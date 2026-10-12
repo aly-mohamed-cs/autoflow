@@ -273,3 +273,49 @@ def test_pause_happens_inside_a_wait_and_paused_time_does_not_count(h, tmp_path)
     (tmp_path / "late.txt").write_text("here")  # within the limit once the paused time is left out
     thread.join(10)
     assert box["result"].status == "succeeded", box["result"].error
+
+
+# -- sub-processes ---------------------------------------------------------------------------------
+
+GREET = {
+    "id": "greet",
+    "name": "Greet someone",
+    "inputs": [{"name": "who", "type": "text", "default": "nobody"}],
+    "steps": [step("control.add_to_list", {"variable": "seen", "value": "Hello {{who}}"}, id="inner")],
+}
+
+
+def test_sub_process_runs_with_inputs_and_shares_variables(h):
+    result = h.run(
+        [
+            step("control.run_process", {"process": "greet", "inputs": {"who": "Ann"}}),
+            step("control.run_process", {"process": "greet"}),
+            step("control.run_process", {"process": "greet", "inputs": {"who": "{{name}}", "age": 3}}),
+        ],
+        variables=[{"name": "seen", "type": "list"}, {"name": "name", "default": "Bo"}],
+        processes=[GREET],
+    )
+    assert result.status == "succeeded"
+    assert h.vars["seen"] == ["Hello Ann", "Hello nobody", "Hello Bo"]
+    assert [e["step_id"] for e in h.of("step_started")].count("inner") == 3  # Studio highlights its steps
+    assert any("no input called 'age'" in m for m in h.logs())
+
+
+def test_a_failing_sub_process_step_fails_the_run_at_that_step(h):
+    failing = {"id": "broken", "name": "Broken", "steps": [step("control.fail", {"message": "Nope"}, id="boom")]}
+    result = h.run([step("control.run_process", {"process": "broken"})], processes=[failing])
+    assert result.status == "failed"
+    assert result.error["step_id"] == "boom"
+
+
+def test_a_sub_process_that_runs_itself_is_stopped(h):
+    loop = {"id": "again", "name": "Again", "steps": [step("control.run_process", {"process": "again"})]}
+    result = h.run([step("control.run_process", {"process": "again"})], processes=[loop])
+    assert result.status == "failed"
+    assert "levels deep" in result.error["message"]
+
+
+def test_running_a_missing_sub_process_fails_clearly(h):
+    result = h.run([step("control.run_process", {"process": "gone"})])
+    assert result.status == "failed"
+    assert "no longer exists" in result.error["message"]
