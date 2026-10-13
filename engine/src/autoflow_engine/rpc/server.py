@@ -23,14 +23,17 @@ from typing import IO, Any
 from pydantic import ValidationError
 
 from .. import __version__, catalog
+from ..design import inspector
 from ..design.desktop_picker import DesktopPicker
 from ..design.desktop_recorder import DesktopRecorder
 from ..design.session import DesignSession
+from ..design.snip import Snipper
 from ..errors import AutoflowError, RunCancelled
 from ..flow import Flow
 from ..runtime.context import RunControl, RunOptions
 from ..runtime.expressions import evaluate
 from ..runtime.interpreter import FlowRunner
+from ..selectors.screen import load_image, to_png_data_uri
 from ..validation import validate_flow
 from ..values import Credential, to_jsonable
 
@@ -54,6 +57,7 @@ class EngineServer:
         self._run_thread: threading.Thread | None = None
         self._control: RunControl | None = None
         self._runner: FlowRunner | None = None
+        self._snipper = Snipper()
         self._run_id: str | None = None
         self._design: DesignSession | None = None
         self._desktop_picker: DesktopPicker | None = None
@@ -67,6 +71,7 @@ class EngineServer:
             "recorder.stop": lambda _p, respond: self.design.record_stop(respond),
             "picker.desktop": lambda _p, respond: self.desktop_picker.pick(respond),
             "picker.point": lambda p, respond: self.desktop_picker.pick_point(respond, p.get("element")),
+            "picker.snip": lambda _p, respond: self._snipper.snip(respond),
             # Recording anything on the PC (any program), not just the design browser.
             "recorder.desktop_start": lambda _p, respond: self.desktop_recorder.start(respond),
             "recorder.desktop_stop": lambda _p, respond: self.desktop_recorder.stop(respond),
@@ -85,6 +90,11 @@ class EngineServer:
             "run.set_breakpoints": lambda p: self._with_control(lambda c: c.set_breakpoints(set(p.get("step_ids", [])))),
             "picker.cancel": lambda _p: self._cancel_pickers(),
             "design.close": lambda _p: self._close_design(),
+            "image.from_file": lambda p: {"image": to_png_data_uri(load_image(str(p.get("path", ""))))},
+            "inspector.windows": lambda _p: {"windows": inspector.windows()},
+            "inspector.children": lambda p: {"children": inspector.children(p["handle"], p.get("path") or [])},
+            "inspector.element": lambda p: inspector.element(p["handle"], p.get("path") or []),
+            "inspector.highlight": lambda p: inspector.highlight(p["handle"], p.get("path") or []),
         }
 
     @property
@@ -116,6 +126,7 @@ class EngineServer:
             self._design.cancel()
         if self._desktop_picker is not None:
             self._desktop_picker.cancel()
+        self._snipper.cancel()
 
     # -- transport ---------------------------------------------------------
     def serve(self) -> None:

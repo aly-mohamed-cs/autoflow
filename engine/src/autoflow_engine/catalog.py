@@ -30,7 +30,7 @@ UI_KINDS = {
     "text", "multiline", "number", "boolean", "choice", "file", "folder", "save_file",
     "variable", "variable_name", "condition", "element", "credential", "column", "keys",
     "url", "key_values", "list", "code", "duration", "password",
-    "process", "process_inputs", "point",
+    "process", "process_inputs", "point", "image", "region",
 }
 
 
@@ -161,6 +161,7 @@ CATEGORIES: list[dict[str, str]] = [
     {"id": "Control", "icon": "workflow", "description": "Decisions, loops, waits and error handling"},
     {"id": "Browser", "icon": "globe", "description": "Websites and web applications"},
     {"id": "Desktop", "icon": "app-window", "description": "Windows desktop applications"},
+    {"id": "Screen", "icon": "scan-eye", "description": "Pictures and text on the screen (remote desktops, Citrix)"},
     {"id": "Excel", "icon": "sheet", "description": "Excel workbooks"},
     {"id": "Files", "icon": "folder", "description": "Files, folders, CSV and ZIP"},
     {"id": "Data", "icon": "table", "description": "Tables and lists"},

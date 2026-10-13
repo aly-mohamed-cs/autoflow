@@ -17,6 +17,11 @@
       "description": "Windows desktop applications"
     },
     {
+      "id": "Screen",
+      "icon": "scan-eye",
+      "description": "Pictures and text on the screen (remote desktops, Citrix)"
+    },
+    {
       "id": "Excel",
       "icon": "sheet",
       "description": "Excel workbooks"
@@ -4035,6 +4040,239 @@
       "requires": null
     },
     {
+      "id": "desktop.element_info",
+      "title": "Get element details",
+      "category": "Desktop",
+      "icon": "info",
+      "sentence": "Get the details of {element}",
+      "description": "Read where a control is and its state: position, size, visible, enabled, ticked, value.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "details",
+          "title": "Details",
+          "type": "any",
+          "description": "",
+          "default_variable": "element"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.element_exists",
+      "title": "Does element exist",
+      "category": "Desktop",
+      "icon": "search-check",
+      "sentence": "Does {element} exist",
+      "description": "Check whether a control is there (yes / no), without failing when it is not.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 2,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ExistsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "found",
+          "title": "Found",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "element_found"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.select_menu",
+      "title": "Choose menu item",
+      "category": "Desktop",
+      "icon": "menu",
+      "sentence": "Choose {menu} in {window}",
+      "description": "Open a program's menu and choose an item, e.g. File > Save as.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "window": {
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes (document names...).",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE"
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-advanced": true
+          },
+          "menu": {
+            "description": "The menu, then each item in it, separated by >.",
+            "title": "Menu item",
+            "type": "string",
+            "x-placeholder": "File > Save as"
+          }
+        },
+        "required": [
+          "window",
+          "menu"
+        ],
+        "title": "MenuParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.read_list",
+      "title": "Read list items",
+      "category": "Desktop",
+      "icon": "list",
+      "sentence": "Read the items of {element}",
+      "description": "Get the entries of a list, drop-down or tree as a list (Brity GetListItems).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "element": {
+            "default": "",
+            "title": "Element",
+            "type": "string",
+            "x-ui": "element"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          }
+        },
+        "title": "ElementParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "items",
+          "title": "Items",
+          "type": "list",
+          "description": "",
+          "default_variable": "items"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "desktop.close_program",
+      "title": "Close program",
+      "category": "Desktop",
+      "icon": "power",
+      "sentence": "Close all windows of {program}",
+      "description": "Close every window of a program (Brity CloseAll), e.g. to start from a clean state.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "program": {
+            "description": "The program's file name, as in Task Manager's Details tab.",
+            "title": "Program",
+            "type": "string",
+            "x-placeholder": "EXCEL.EXE"
+          },
+          "force": {
+            "default": false,
+            "description": "Unsaved work in it is lost.",
+            "title": "Force it to close if it does not within 10 seconds",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "title": "CloseProgramParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
       "id": "control.message",
       "title": "Show message",
       "category": "Control",
@@ -6327,6 +6565,814 @@
           "type": "text",
           "description": "",
           "default_variable": "image_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.click_image",
+      "title": "Click image",
+      "category": "Screen",
+      "icon": "image",
+      "sentence": "Click the picture",
+      "description": "Find a picture on the screen and click it - for buttons in remote desktops, charts or programs without controls.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "image": {
+            "description": "What to look for. Press 'Capture' and draw a box around it on the screen.",
+            "title": "Picture",
+            "type": "string",
+            "x-ui": "image"
+          },
+          "confidence": {
+            "default": 0.85,
+            "description": "1 = exactly the same pixels. Lower it when colours or edges differ a little.",
+            "maximum": 1,
+            "minimum": 0.5,
+            "title": "How exact",
+            "type": "number",
+            "x-advanced": true
+          },
+          "click": {
+            "default": "single",
+            "enum": [
+              "single",
+              "double",
+              "right"
+            ],
+            "title": "Click type",
+            "type": "string"
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the picture's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the picture",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "ClickImageParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.hover_image",
+      "title": "Point at image",
+      "category": "Screen",
+      "icon": "pointer",
+      "sentence": "Point at the picture",
+      "description": "Move the mouse over a picture on the screen (e.g. to open a menu or show a tooltip).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "image": {
+            "description": "What to look for. Press 'Capture' and draw a box around it on the screen.",
+            "title": "Picture",
+            "type": "string",
+            "x-ui": "image"
+          },
+          "confidence": {
+            "default": 0.85,
+            "description": "1 = exactly the same pixels. Lower it when colours or edges differ a little.",
+            "maximum": 1,
+            "minimum": 0.5,
+            "title": "How exact",
+            "type": "number",
+            "x-advanced": true
+          },
+          "point": {
+            "default": "",
+            "description": "X, Y in pixels from the picture's top-left corner. Leave empty for its centre.",
+            "title": "Point inside the picture",
+            "type": "string",
+            "x-placeholder": "Centre",
+            "x-ui": "point"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "HoverImageParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.wait_image",
+      "title": "Wait for image",
+      "category": "Screen",
+      "icon": "image-play",
+      "sentence": "Wait until the picture {state}",
+      "description": "Wait until a picture shows up on the screen, or goes away (e.g. a 'Loading' sign).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "image": {
+            "description": "What to look for. Press 'Capture' and draw a box around it on the screen.",
+            "title": "Picture",
+            "type": "string",
+            "x-ui": "image"
+          },
+          "confidence": {
+            "default": 0.85,
+            "description": "1 = exactly the same pixels. Lower it when colours or edges differ a little.",
+            "maximum": 1,
+            "minimum": 0.5,
+            "title": "How exact",
+            "type": "number",
+            "x-advanced": true
+          },
+          "state": {
+            "default": "appears",
+            "enum": [
+              "appears",
+              "disappears"
+            ],
+            "title": "Wait until it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "WaitImageParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.image_exists",
+      "title": "Is image on screen",
+      "category": "Screen",
+      "icon": "image",
+      "sentence": "Is the picture on screen",
+      "description": "Check whether a picture is on the screen (yes / no), without failing when it is not.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 2,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "image": {
+            "description": "What to look for. Press 'Capture' and draw a box around it on the screen.",
+            "title": "Picture",
+            "type": "string",
+            "x-ui": "image"
+          },
+          "confidence": {
+            "default": 0.85,
+            "description": "1 = exactly the same pixels. Lower it when colours or edges differ a little.",
+            "maximum": 1,
+            "minimum": 0.5,
+            "title": "How exact",
+            "type": "number",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "ImageExistsParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "found",
+          "title": "Found",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "picture_found"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.read_text",
+      "title": "Read text on screen",
+      "category": "Screen",
+      "icon": "scan-text",
+      "sentence": "Read the text on the screen",
+      "description": "Read what is written on the screen with text recognition (OCR), e.g. from a remote desktop.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "region": {
+            "default": "",
+            "description": "X, Y, width, height in pixels from the top-left corner of the window (or screen).",
+            "title": "Only this part",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "All of it",
+            "x-ui": "region"
+          }
+        },
+        "title": "RegionParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "screen_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.click_text",
+      "title": "Click text on screen",
+      "category": "Screen",
+      "icon": "text-cursor",
+      "sentence": "Click the text {text}",
+      "description": "Find a word or phrase on the screen with text recognition (OCR) and click it.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "region": {
+            "default": "",
+            "description": "X, Y, width, height in pixels from the top-left corner of the window (or screen).",
+            "title": "Only this part",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "All of it",
+            "x-ui": "region"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-placeholder": "Save"
+          },
+          "occurrence": {
+            "default": 1,
+            "description": "When the text is on the screen more than once: 1 = the first (reading order).",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Which one",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "click": {
+            "default": "single",
+            "enum": [
+              "single",
+              "double",
+              "right"
+            ],
+            "title": "Click type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ClickTextParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.wait_text",
+      "title": "Wait for text on screen",
+      "category": "Screen",
+      "icon": "scan-search",
+      "sentence": "Wait until {text} {state}",
+      "description": "Wait until a word or phrase shows up on the screen, or goes away (read with OCR).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "region": {
+            "default": "",
+            "description": "X, Y, width, height in pixels from the top-left corner of the window (or screen).",
+            "title": "Only this part",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "All of it",
+            "x-ui": "region"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-placeholder": "Save"
+          },
+          "occurrence": {
+            "default": 1,
+            "description": "When the text is on the screen more than once: 1 = the first (reading order).",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Which one",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "state": {
+            "default": "appears",
+            "enum": [
+              "appears",
+              "disappears"
+            ],
+            "title": "Wait until it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "WaitTextParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "screen.capture",
+      "title": "Take screenshot",
+      "category": "Screen",
+      "icon": "camera",
+      "sentence": "Take a screenshot to {file}",
+      "description": "Save a picture of the screen, a window or part of it.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "look_in": {
+            "default": "screen",
+            "enum": [
+              "screen",
+              "window"
+            ],
+            "title": "Look in",
+            "type": "string",
+            "x-labels": {
+              "screen": "The whole screen",
+              "window": "A window"
+            }
+          },
+          "window": {
+            "default": "",
+            "title": "Window title contains",
+            "type": "string",
+            "x-placeholder": "(the window in front)",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "process": {
+            "default": "",
+            "description": "The program the window belongs to. Helps find it when its title changes.",
+            "title": "Program",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "EXCEL.EXE",
+            "x-show-when": {
+              "look_in": [
+                "window"
+              ]
+            }
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "maximum": 3600,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Wait up to (seconds)",
+            "x-advanced": true
+          },
+          "region": {
+            "default": "",
+            "description": "X, Y, width, height in pixels from the top-left corner of the window (or screen).",
+            "title": "Only this part",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "All of it",
+            "x-ui": "region"
+          },
+          "file": {
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "png"
+            ],
+            "x-placeholder": "C:\\Reports\\screen.png",
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "CaptureParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Screenshot",
+          "type": "file",
+          "description": "",
+          "default_variable": "screenshot"
         }
       ],
       "blocks": [],

@@ -23,13 +23,30 @@ sealed class InvoiceForm : Form
     readonly Button save = new() { Name = "btnSave", Text = "Save invoice", AutoSize = true };
     readonly Label status = new() { Name = "lblStatus", AutoSize = true, Text = "Ready" };
     readonly DataGridView grid = new() { Name = "gridInvoices", AccessibleName = "Saved invoices", Width = 520, Height = 180, ReadOnly = true, AllowUserToAddRows = false, RowHeadersVisible = false };
+    readonly ListBox customers = new() { Name = "lstCustomers", AccessibleName = "Known customers", Width = 240, Height = 60 };
     int next = 1001;
 
     public InvoiceForm()
     {
         Text = "Demo ERP - Invoices";
         Width = 600;
-        Height = 520;
+        Height = 640;
+        customers.Items.AddRange(["Acme", "Globex", "Initech"]);
+
+        // A classic menu bar, for "Choose menu item".
+        var menu = new MenuStrip { Name = "mainMenu" };
+        var file = new ToolStripMenuItem("File");
+        file.DropDownItems.Add(new ToolStripMenuItem("Clear form", null, (_, _) =>
+        {
+            customer.Clear();
+            invoice.Clear();
+            amount.Clear();
+            status.Text = "Form cleared";
+        }));
+        var help = new ToolStripMenuItem("Help");
+        help.DropDownItems.Add(new ToolStripMenuItem("About", null, (_, _) => status.Text = "Demo ERP 1.0"));
+        menu.Items.AddRange([file, help]);
+        MainMenuStrip = menu;
         StartPosition = FormStartPosition.CenterScreen;
         currency.Items.AddRange(["EGP", "USD", "EUR"]);
         grid.Columns.Add("Document", "Document");
@@ -51,9 +68,11 @@ sealed class InvoiceForm : Form
         Row("", urgent);
         Row("", save);
         Row("Status", status);
+        Row("Known customers", customers);
         layout.Controls.Add(grid);
         layout.SetColumnSpan(grid, 2);
         Controls.Add(layout);
+        Controls.Add(menu); // added last so it docks above the form
 
         save.Click += async (_, _) =>
         {

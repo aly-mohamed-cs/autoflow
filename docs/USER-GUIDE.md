@@ -123,6 +123,20 @@ Some things have no button the recorder can see — drawings, maps, charts, remo
   and **Drag between positions** (sliders, drawings).
 * Positions depend on window size and screen scaling: prefer picked elements where you can.
 
+### Programs without controls (remote desktops, Citrix, charts)
+When **Pick on screen** can't see a button, work with what is drawn on the screen (**Screen** steps):
+* **Click image** / **Point at image** / **Wait for image** / **Is image on screen** — press
+  **Capture**: Studio steps aside, the screen freezes and you draw a box around the button or icon.
+  It is found even when the other PC scales its screen a little differently.
+* **Read text on screen**, **Click text on screen**, **Wait for text on screen** — text
+  recognition (OCR), fully offline. **Only this part** → **Pick area** limits it to a box.
+* **Take screenshot** saves the screen, a window or part of it as a picture.
+
+More for Windows programs: **Choose menu item** (*File > Save as*), **Read list items**,
+**Get element details** (position, size, enabled, ticked, value), **Does element exist** and
+**Close program**. Hard to point at a control? In its element box choose
+**Browse a program's controls…** and pick it from the window's tree.
+
 ### Split a big automation into sub-processes
 1. Click **＋ Sub-process** above the steps and name it, e.g. *Log in to ERP*.
 2. Build its steps in its tab. Need a different value each time (which user, which file)?

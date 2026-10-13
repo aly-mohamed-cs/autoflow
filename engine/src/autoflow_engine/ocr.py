@@ -7,6 +7,7 @@ CPU without internet access or a GPU.
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from typing import Any
 
 from .errors import ActivityError
@@ -62,3 +63,35 @@ def _to_lines(items: list[tuple[Any, str]]) -> str:
         else:
             lines.append([word])
     return "\n".join(" ".join(w["text"] for w in sorted(line, key=lambda w: w["left"])) for line in lines)
+
+
+@dataclass(frozen=True)
+class Word:
+    """A piece of recognised text (often a whole phrase) and its box in the image, in pixels."""
+
+    text: str
+    left: float
+    top: float
+    right: float
+    bottom: float
+    score: float
+
+
+def read_words(image: Any) -> list[Word]:
+    """Recognised text pieces of a PIL image with their positions."""
+    import numpy as np
+
+    array = np.array(image.convert("RGB"))
+    result = _get_engine()(array)
+    boxes = getattr(result, "boxes", None)
+    texts = getattr(result, "txts", None)
+    scores = getattr(result, "scores", None)
+    if boxes is None or texts is None:
+        return []
+    words = []
+    for i, (box, text) in enumerate(zip(boxes, texts, strict=False)):
+        xs = [float(p[0]) for p in box]
+        ys = [float(p[1]) for p in box]
+        score = float(scores[i]) if scores is not None and i < len(scores) else 1.0
+        words.append(Word(str(text), min(xs), min(ys), max(xs), max(ys), score))
+    return words

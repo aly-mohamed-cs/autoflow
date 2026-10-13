@@ -673,3 +673,187 @@ def screenshot(ctx: RunContext, p: ScreenshotParams) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     _screen_capture(path)
     return str(path)
+
+
+# -- more about elements, menus, lists, programs (Brity "App" library) ------------------------------
+
+
+@activity(
+    "desktop.element_info",
+    title="Get element details",
+    category=K,
+    icon="info",
+    sentence="Get the details of {element}",
+    description="Read where a control is and its state: position, size, visible, enabled, ticked, value.",
+    params=ElementParams,
+    outputs=[OutputDef("details", "Details", "any", default_variable="element")],
+)
+def element_info(ctx: RunContext, p: ElementParams) -> dict[str, Any]:
+    control = _locate(ctx, p)
+    rect = control.BoundingRectangle
+    checked = None
+    with contextlib.suppress(Exception):
+        toggle = control.GetTogglePattern()
+        if toggle:
+            checked = toggle.ToggleState == 1
+    value = ""
+    with contextlib.suppress(Exception):
+        pattern = control.GetValuePattern()
+        value = pattern.Value if pattern else ""
+    return {
+        "x": rect.left, "y": rect.top, "width": rect.width(), "height": rect.height(),
+        "visible": not control.IsOffscreen, "enabled": bool(control.IsEnabled),
+        "checked": checked, "value": value or control.Name or "",
+    }
+
+
+class ExistsParams(ElementParams):
+    timeout: float | None = Param(2, title="Wait up to (seconds)", ge=0, le=3600, advanced=True)
+
+
+@activity(
+    "desktop.element_exists",
+    title="Does element exist",
+    category=K,
+    icon="search-check",
+    sentence="Does {element} exist",
+    description="Check whether a control is there (yes / no), without failing when it is not.",
+    params=ExistsParams,
+    outputs=[OutputDef("found", "Found", "boolean", default_variable="element_found")],
+)
+def element_exists(ctx: RunContext, p: ExistsParams) -> bool:
+    try:
+        _locate(ctx, p)
+    except ActivityError:
+        return False
+    return True
+
+
+class MenuParams(WindowParams):
+    menu: str = Param(title="Menu item", placeholder="File > Save as",
+                      description="The menu, then each item in it, separated by >.")
+
+
+@activity(
+    "desktop.select_menu",
+    title="Choose menu item",
+    category=K,
+    icon="menu",
+    sentence="Choose {menu} in {window}",
+    description="Open a program's menu and choose an item, e.g. File > Save as.",
+    params=MenuParams,
+)
+def select_menu(ctx: RunContext, p: MenuParams) -> None:
+    auto = _init(ctx)
+    parts = [part.strip() for part in to_text(p.menu).split(">") if part.strip()]
+    if not parts:
+        raise ActivityError("No menu item was given.", "Write the menu path, e.g. File > Save as.")
+    window = find_window({"window": p.window, "process": p.process}, p.timeout, ctx.log)
+    window.SetActive(waitTime=0.2)
+    scope = window
+    for depth, name in enumerate(parts):
+        item = auto.MenuItemControl(searchFromControl=scope, Name=name, searchDepth=6 if depth == 0 else 12)
+        if not item.Exists(5, 0.2):
+            raise ActivityError(f"The menu item '{name}' was not found.", "Check the spelling, as shown in the program.")
+        last = depth == len(parts) - 1
+        expand = None if last else item.GetExpandCollapsePattern()
+        if expand:
+            expand.Expand()
+        elif last and _invoke(item):
+            pass
+        else:
+            item.Click(simulateMove=False)
+        wait(0.3)
+        scope = auto.GetRootControl()  # sub-menus open as separate pop-up windows
+
+
+@activity(
+    "desktop.read_list",
+    title="Read list items",
+    category=K,
+    icon="list",
+    sentence="Read the items of {element}",
+    description="Get the entries of a list, drop-down or tree as a list (Brity GetListItems).",
+    params=ElementParams,
+    outputs=[OutputDef("items", "Items", "list", default_variable="items")],
+)
+def read_list(ctx: RunContext, p: ElementParams) -> list[str]:
+    auto = uia()
+    control = _locate(ctx, p)
+    expand = None
+    with contextlib.suppress(Exception):
+        expand = control.GetExpandCollapsePattern()
+    if expand and control.ControlTypeName == "ComboBoxControl":
+        with contextlib.suppress(Exception):
+            expand.Expand()
+            wait(0.2)
+    items = [
+        item.Name
+        for item, _depth in auto.WalkControl(control, maxDepth=3)
+        if item.ControlTypeName in ("ListItemControl", "TreeItemControl", "DataItemControl") and item.Name
+    ]
+    if expand and control.ControlTypeName == "ComboBoxControl":
+        with contextlib.suppress(Exception):
+            expand.Collapse()
+    return items
+
+
+class CloseProgramParams(Params):
+    program: str = Param(title="Program", placeholder="EXCEL.EXE",
+                         description="The program's file name, as in Task Manager's Details tab.")
+    force: bool = Param(False, title="Force it to close if it does not within 10 seconds",
+                        description="Unsaved work in it is lost.")
+
+
+@activity(
+    "desktop.close_program",
+    title="Close program",
+    category=K,
+    icon="power",
+    sentence="Close all windows of {program}",
+    description="Close every window of a program (Brity CloseAll), e.g. to start from a clean state.",
+    params=CloseProgramParams,
+)
+def close_program(ctx: RunContext, p: CloseProgramParams) -> None:
+    from ..selectors.desktop import process_name
+
+    auto = _init(ctx)
+    name = to_text(p.program).strip().lower()
+    if not name:
+        raise ActivityError("No program was given.", "Enter its file name, e.g. EXCEL.EXE.")
+    pids = set()
+    for window in auto.GetRootControl().GetChildren():
+        if process_name(window.ProcessId).lower() == name:
+            pids.add(window.ProcessId)
+            with contextlib.suppress(Exception):
+                pattern = window.GetWindowPattern()
+                if pattern:
+                    pattern.Close()
+    if not pids:
+        ctx.log(f"No window of {p.program} was open.")
+        return
+    deadline = Deadline(10)
+    while not deadline.passed and any(_running(pid) for pid in pids):
+        wait(0.3)
+    left = [pid for pid in pids if _running(pid)]
+    if left and p.force:
+        for pid in left:
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, check=False)
+        ctx.log(f"{p.program} did not close by itself and was stopped.", "warning")
+    elif left:
+        raise ActivityError(f"{p.program} is still open (maybe it asks to save something).",
+                            "Handle its question first, or tick 'Force it to close'.")
+
+
+def _running(pid: int) -> bool:
+    import ctypes
+
+    handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        return code.value == 259  # STILL_ACTIVE
+    finally:
+        ctypes.windll.kernel32.CloseHandle(handle)

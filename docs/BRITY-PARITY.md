@@ -30,12 +30,12 @@ gaps.
 - [x] Message box and input box for attended use
 
 ## Release C - screen recognition
-- [ ] Image recognition: click / double / right-click / hover / type on an image, wait for an image
+- [x] Image recognition: click / double / right-click / hover / type on an image, wait for an image
       to appear or disappear, check an image exists, capture screen / window / region
-- [ ] Screen OCR: read text in an area, click / hover on a text, wait for a text (works over Citrix/VDI)
-- [ ] Desktop elements: get position and size, is visible, get checked state, select a menu item,
+- [x] Screen OCR: read text in an area, click / hover on a text, wait for a text (works over Citrix/VDI)
+- [x] Desktop elements: get position and size, is visible, get checked state, select a menu item,
       invoke an element's default action, read list / grid items, close all windows of a program
-- [ ] Element inspector: browse a window's element tree and pick from it
+- [x] Element inspector: browse a window's element tree and pick from it
 
 ## Release D - Excel, Word, PowerPoint, PDF depth
 - [ ] Excel (live workbook): open / save / close / activate, sheets (add, rename, copy, move, delete),

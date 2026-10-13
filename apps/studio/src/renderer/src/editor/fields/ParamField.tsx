@@ -9,6 +9,7 @@ import { ConditionEditor } from './ConditionEditor';
 import { ElementInput } from './ElementInput';
 import { PointInput } from './PointInput';
 import { ProcessInputsInput, ProcessSelect } from './ProcessFields';
+import { ImageInput, RegionInput } from './ScreenInputs';
 import {
   ColumnInput,
   FileAddon,
@@ -187,6 +188,24 @@ function Widget({
           value={value}
           onChange={onChange}
           processId={params[field.schema['x-source'] ?? 'process']}
+          variables={variables}
+          columnsFor={columnsFor}
+        />
+      );
+
+    case 'image':
+      return <ImageInput value={value} onChange={onChange} />;
+
+    case 'region':
+      return (
+        <RegionInput
+          id={id}
+          value={value}
+          onChange={onChange}
+          params={params}
+          onParams={(patch) => onParams?.(patch)}
+          ariaLabel={field.title}
+          placeholder={field.placeholder}
           variables={variables}
           columnsFor={columnsFor}
         />

@@ -469,3 +469,140 @@ def test_position_picker_reports_screen_window_and_element_points(demo_erp):
         assert (picked["window"]["x"], picked["window"]["y"]) == (point[0] - frame.left, point[1] - frame.top)
     finally:
         app.kill()
+
+
+def test_menus_lists_details_pictures_and_text_on_screen(tmp_path, demo_erp):
+    """Release C: Brity's App, ImageRecognition and OCR steps against the demo ERP."""
+    import uiautomation as auto
+
+    from autoflow_engine.flow import Flow
+    from autoflow_engine.runtime.context import RunOptions
+    from autoflow_engine.runtime.interpreter import FlowRunner
+    from autoflow_engine.selectors import screen
+
+    elements = [*ELEMENTS, el("customers", "Known customers", "lstCustomers", "List")]
+    process = subprocess.Popen([str(demo_erp)])
+    try:
+        window = auto.WindowControl(searchDepth=1, Name="Demo ERP - Invoices")
+        assert window.Exists(15)
+        window.SetActive()
+        save = window.ButtonControl(AutomationId="btnSave").BoundingRectangle
+        # A picture of the Save button, as if captured in Studio.
+        button = screen.to_png_data_uri(screen.grab((save.left, save.top, save.right, save.bottom)))
+
+        def fill(invoice: str) -> list[dict]:
+            return [
+                step("desktop.type", {"element": "invoice", "text": invoice}),
+                step("desktop.type", {"element": "amount", "text": "5"}),
+                step("desktop.select", {"element": "currency", "option": "EUR"}),
+            ]
+
+        status = {"element": "status", "state": "text contains", "timeout": 10}
+        steps = [
+            step("desktop.select_menu", {"window": "Demo ERP", "menu": "Help > About"}),
+            step("desktop.wait_for", {**status, "text": "Demo ERP 1.0"}),
+            step("desktop.read_list", {"element": "customers"}, outputs={"items": "known"}),
+            step("desktop.element_info", {"element": "save"}, outputs={"details": "save_info"}),
+            step("desktop.element_exists", {"element": "save"}, outputs={"found": "has_save"}),
+            *fill("INV-301"),
+            step("screen.image_exists", {"image": button}, outputs={"found": "seen"}),
+            step("screen.click_image", {"image": button}),
+            step("desktop.wait_for", {**status, "text": "INV-301"}),
+            step("screen.read_text", {"look_in": "window", "window": "Demo ERP"}, outputs={"text": "words"}),
+            *fill("INV-302"),
+            step("screen.click_text", {"text": "Save invoice", "look_in": "window", "window": "Demo ERP"}),
+            step("screen.wait_text", {"text": "INV-302", "look_in": "window", "window": "Demo ERP", "timeout": 15}),
+            step("screen.capture", {"look_in": "window", "window": "Demo ERP", "file": str(tmp_path / "erp")},
+                 outputs={"file": "shot"}),
+            step("desktop.select_menu", {"window": "Demo ERP", "menu": "File > Clear form"}),
+            step("desktop.wait_for", {**status, "text": "Form cleared"}),
+            step("desktop.close_program", {"program": "DemoErp.exe"}),
+        ]
+        flow = Flow.model_validate({"id": "c", "name": "c", "elements": elements, "steps": steps,
+                                    "settings": {"default_timeout": 10}})
+        runner = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run"), lambda e: None)
+        result = runner.run()
+        assert result.status == "succeeded", result.error
+        v = runner.ctx.variables
+        assert v["known"] == ["Acme", "Globex", "Initech"]
+        assert v["save_info"]["enabled"] is True and v["save_info"]["visible"] is True
+        assert (v["save_info"]["x"], v["save_info"]["width"]) == (save.left, save.width())
+        assert v["has_save"] is True and v["seen"] is True
+        assert "Customer" in v["words"] and "Invoice number" in v["words"]
+        assert Path(v["shot"]).suffix == ".png" and Path(v["shot"]).stat().st_size > 1000
+        process.wait(15)  # "Close program" closed it
+    finally:
+        if process.poll() is None:
+            process.kill()
+
+
+def test_missing_pictures_fail_clearly(h):
+    from autoflow_engine.selectors import screen
+    from PIL import Image
+
+    noise = Image.effect_noise((40, 30), 120).convert("RGB")  # nothing on screen looks like this
+    picture = screen.to_png_data_uri(noise)
+    result = h.run([
+        step("screen.image_exists", {"image": picture, "timeout": 0}, outputs={"found": "seen"}),
+        step("screen.click_image", {"image": picture, "timeout": 0.5}),
+    ])
+    assert h.vars["seen"] is False
+    assert result.status == "failed"
+    assert "not found on the screen" in result.error["message"]
+
+
+def test_inspector_browses_a_window_and_capture_draws_a_box(demo_erp):
+    import threading
+    import time
+
+    import uiautomation as auto
+
+    from autoflow_engine.design import inspector
+    from autoflow_engine.design.snip import Snipper
+
+    process = subprocess.Popen([str(demo_erp)])
+    try:
+        window = auto.WindowControl(searchDepth=1, Name="Demo ERP - Invoices")
+        assert window.Exists(15)
+        window.SetActive()
+        listed = next(w for w in inspector.windows() if w["title"] == "Demo ERP - Invoices")
+        assert listed["process"] == "DemoErp.exe"
+
+        # Walk the tree like the inspector dialog does, down to the Save button.
+        def search(path: list[int], depth: int = 0) -> list[int] | None:
+            for child in inspector.children(listed["handle"], path):
+                if child["automation_id"] == "btnSave":
+                    return [*path, child["index"]]
+                if child["has_children"] and depth < 4:
+                    found = search([*path, child["index"]], depth + 1)
+                    if found:
+                        return found
+            return None
+
+        path = search([])
+        assert path is not None
+        element = inspector.element(listed["handle"], path)
+        assert element["name"] == "Save invoice button"
+        assert element["selectors"][0]["options"]["automation_id"] == "btnSave"
+        assert inspector.highlight(listed["handle"], path)["width"] > 10
+
+        # Capture: the screen freezes and a box is drawn with the mouse.
+        frame = window.BoundingRectangle
+        answer: dict = {}
+        done = threading.Event()
+        snipper = Snipper()
+        snipper.snip(lambda result=None, error=None: (answer.update(result=result, error=error), done.set()))
+        time.sleep(1.5)
+        x0, y0 = frame.left + 20, frame.top + 60
+        auto.PressMouse(x0, y0, waitTime=0.1)
+        auto.MoveTo(x0 + 120, y0 + 50, moveSpeed=1, waitTime=0.1)
+        auto.ReleaseMouse(waitTime=0.1)
+        assert done.wait(10), "the capture never finished"
+        assert answer["error"] is None, answer["error"]
+        shot = answer["result"]
+        assert shot["image"].startswith("data:image/png;base64,")
+        assert abs(shot["width"] - 120) <= 2 and abs(shot["height"] - 50) <= 2
+        assert (shot["x"], shot["y"]) == (x0, y0)
+        assert shot["window"]["title"] == "Demo ERP - Invoices"
+    finally:
+        process.kill()

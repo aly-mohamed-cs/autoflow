@@ -1,5 +1,11 @@
 // Release B: Brity-style designer conveniences.
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,12 +17,19 @@ let userData: string;
 
 test.beforeEach(async () => {
   userData = mkdtempSync(join(tmpdir(), 'autoflow-e2e-'));
-  app = await electron.launch({ ...launchTarget(), env: { ...process.env, AUTOFLOW_USER_DATA: userData } });
+  app = await electron.launch({
+    ...launchTarget(),
+    env: { ...process.env, AUTOFLOW_USER_DATA: userData },
+  });
   win = await app.firstWindow();
   await win.setViewportSize({ width: 1440, height: 900 });
-  await win.waitForFunction(() => window.autoflow.engine.status().then((s) => s.state === 'ready'), null, {
-    timeout: 30_000,
-  });
+  await win.waitForFunction(
+    () => window.autoflow.engine.status().then((s) => s.state === 'ready'),
+    null,
+    {
+      timeout: 30_000,
+    },
+  );
 });
 
 test.afterEach(async () => {
@@ -42,16 +55,19 @@ const step = (id: string) => win.getByTestId('flow-canvas').locator(`[data-step-
 const inspector = () => win.getByRole('complementary', { name: 'Properties' });
 
 test('select several steps, group them, copy and paste, fold the group', async () => {
-  await open({ id: 'flow_tools', name: 'Tools', steps: [log('a', 'A'), log('b', 'B'), log('c', 'C')] });
+  await open({
+    id: 'flow_tools',
+    name: 'Tools',
+    steps: [log('a', 'A'), log('b', 'B'), log('c', 'C')],
+  });
   await step('a').click();
   await step('b').click({ modifiers: ['Control'] });
   await expect(inspector().getByRole('heading', { name: '2 steps selected' })).toBeVisible();
 
   await win.keyboard.press('Control+G');
-  await expect.poll(async () => (await saved('flow_tools'))!.steps!.map((s) => s.activity)).toEqual([
-    'control.group',
-    'control.log',
-  ]);
+  await expect
+    .poll(async () => (await saved('flow_tools'))!.steps!.map((s) => s.activity))
+    .toEqual(['control.group', 'control.log']);
   const group = (await saved('flow_tools'))!.steps![0]!;
   expect(group.blocks!.body!.map((s) => s.id)).toEqual(['a', 'b']);
 
@@ -129,7 +145,11 @@ test('find a step, change its kind, Switch / case lanes', async () => {
   await expect(inspector().getByRole('heading', { name: 'Show message' })).toBeVisible();
   await expect
     .poll(async () => (await saved('flow_find'))!.steps![2])
-    .toMatchObject({ id: 'z', activity: 'control.message', params: { message: 'Invoice archived' } });
+    .toMatchObject({
+      id: 'z',
+      activity: 'control.message',
+      params: { message: 'Invoice archived' },
+    });
 
   // A message nobody answers in a test closes by itself.
   await inspector().locator('#param-close_after').fill('0.5');
@@ -137,7 +157,9 @@ test('find a step, change its kind, Switch / case lanes', async () => {
   // The test run takes the Paid lane.
   await win.getByRole('button', { name: 'Test run' }).click();
   await expect(win.getByText('Finished successfully')).toBeVisible({ timeout: 30_000 });
-  await expect(win.getByRole('region', { name: 'Run and problems' }).getByText('Paid one')).toBeVisible();
+  await expect(
+    win.getByRole('region', { name: 'Run and problems' }).getByText('Paid one'),
+  ).toBeVisible();
 });
 
 test('the debug console works out formulas with the values of a paused run', async () => {
@@ -152,7 +174,9 @@ test('the debug console works out formulas with the values of a paused run', asy
   await win.getByRole('button', { name: 'Test run' }).click();
   await expect(step('b')).toContainText('Amount');
   await win.getByRole('tab', { name: /Console/ }).click();
-  await expect.poll(async () => win.evaluate(() => document.body.innerText.includes('Paused'))).toBe(true);
+  await expect
+    .poll(async () => win.evaluate(() => document.body.innerText.includes('Paused')))
+    .toBe(true);
   await win.getByRole('textbox', { name: 'Formula to work out' }).fill('amount * 2');
   await win.keyboard.press('Enter');
   await expect(win.getByText('42', { exact: true })).toBeVisible();

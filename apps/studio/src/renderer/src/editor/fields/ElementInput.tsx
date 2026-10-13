@@ -7,6 +7,7 @@ import { useEditor } from '../../store/editor';
 import { firstBrowserUrl } from '../../lib/recording';
 import { useElements } from '../hooks';
 import { PickingOverlay } from '../Recorder';
+import { InspectorDialog } from './InspectorDialog';
 
 export const STRATEGY_LABELS: Record<SelectorStrategy, string> = {
   role: 'Role and name (most reliable)',
@@ -48,6 +49,7 @@ export function ElementInput({
   const toast = useApp((s) => s.toast);
   const [editing, setEditing] = useState<Element | null>(null);
   const [picking, setPicking] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
   const element = typeof value === 'string' ? elements.get(value) : undefined;
   const sameKind = [...elements.values()].filter((e) => e.kind === kind);
 
@@ -112,6 +114,15 @@ export function ElementInput({
             items={[
               ...sameKind.map((e) => ({ label: e.name, icon: <Icon name="mouse-pointer-2" size={14} />, onSelect: () => onChange(e.id) })),
               ...(sameKind.length ? (['separator'] as const) : []),
+              ...(kind === 'desktop'
+                ? [
+                    {
+                      label: "Browse a program's controls…",
+                      icon: <Icon name="list-tree" size={14} />,
+                      onSelect: () => setInspecting(true),
+                    },
+                  ]
+                : []),
               {
                 label: 'Type selectors (advanced)',
                 icon: <Icon name="code" size={14} />,
@@ -128,6 +139,14 @@ export function ElementInput({
         </div>
       )}
       {picking && <PickingOverlay kind={kind} onCancel={() => void window.autoflow.engine.call('picker.cancel')} />}
+      <InspectorDialog
+        open={inspecting}
+        onClose={() => setInspecting(false)}
+        onPick={(el) => {
+          addOrReplaceElement(el);
+          onChange(el.id);
+        }}
+      />
       <ElementDialog
         element={editing}
         onClose={() => setEditing(null)}
