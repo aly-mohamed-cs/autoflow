@@ -26,6 +26,7 @@ export function SettingsPage() {
         <Downloads />
         {can(me.role, 'admin') && <Directory />}
         {can(me.role, 'admin') && <AiAssistant />}
+        {can(me.role, 'admin') && <Security />}
       </div>
     </>
   );
@@ -158,6 +159,35 @@ interface Ai {
   model: string;
   apiKey: string;
   timeoutS: number;
+}
+
+/** Who may publish automations with steps that can run anything (commands, scripts, SSH, registry). */
+function Security() {
+  const { data, reload } = useApi<{ security: { builderScripts: boolean } }>('/api/settings/security');
+  if (!data) return null;
+  const toggle = async (builderScripts: boolean) => {
+    await api('/api/settings/security', { method: 'PUT', body: { builderScripts } });
+    reload();
+  };
+  return (
+    <Card title="Security">
+      <div className="flex max-w-3xl items-start gap-4">
+        <div className="flex-1 text-[13px]">
+          <p className="font-medium">Builders may publish automations that run commands or scripts</p>
+          <p className="mt-1 text-muted">
+            Steps like <em>Run command</em>, <em>Run Python script</em>, <em>Run command over SSH</em> and <em>Write registry value</em> can do
+            anything the robot account may do. When this is off, only administrators can publish automations that use them. Every such
+            publish is recorded in the audit log.
+          </p>
+        </div>
+        <Switch
+          checked={data.security.builderScripts}
+          onChange={(v) => void toggle(v)}
+          label="Builders may publish automations that run commands or scripts"
+        />
+      </div>
+    </Card>
+  );
 }
 
 function AiAssistant() {

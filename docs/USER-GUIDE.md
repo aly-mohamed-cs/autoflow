@@ -167,6 +167,42 @@ More for Windows programs: **Choose menu item** (*File > Save as*), **Read list 
 * **Send email** through the company mail server, with attachments such as a report.
 * **Read emails** gets messages from a mailbox as a table; **Save email attachments**
   stores e.g. PDF invoices for the next steps.
+* **Reply to email** and **Forward email** answer a message you got from **Read emails**
+  (keep the conversation, add attachments). **Mark or delete email** marks it read or unread,
+  or moves it to Deleted Items.
+
+### Tell people in Teams or Slack
+**Send Teams or Slack message** posts to a channel. Ask your Teams or Slack administrator for
+the channel's *incoming webhook* address and save it as a **credential** (the address goes in
+the password box) - whoever has the address can post to the channel, so it never goes in a
+step.
+
+### Files on other servers (FTP, SFTP, SSH)
+* **List files on server**, **Download from server**, **Upload to server** and **Delete file on
+  server** work with FTP, FTPS (encrypted FTP) and SFTP. The user name and password come from a
+  credential.
+* **Run command over SSH** runs a command on a Linux or Unix server and gives back what it
+  printed.
+
+### Windows, clipboard and data from other systems
+* **Get special folder** gives the path of Desktop, Documents, Downloads or Temp for the user
+  the automation runs as - better than typing `C:\Users\...` into steps.
+* **Get clipboard text** / **Set clipboard text**, **Open file with its program** (like
+  double-clicking it), **Read registry value**.
+* **Wait until file is free** waits until another program has finished writing a file (or
+  until the file is gone) before the next step uses it.
+* **Read JSON** takes a value out of an API answer by its path, e.g. `order.items[0].price`; a
+  list of records becomes a table. **Make JSON** turns values or a table into JSON text.
+  **Read XML** finds values with an XPath such as `//invoice/total`.
+* **Encrypt text** / **Decrypt text** protect a text with a key kept in a credential;
+  **Base64** converts to and from Base64.
+
+### Commands and scripts (administrators decide)
+**Run command** (Command Prompt or PowerShell), **Run Python script**, **Write registry value**
+and **Run command over SSH** can do anything on the machine, so they show an **admin** badge in
+the step library. You can build and test with them, but **only an administrator can publish**
+an automation that uses them - unless an administrator allows builders to under **dashboard →
+Settings → Security**. Disabled steps don't count.
 
 ### When something can go wrong
 * Every step has **If this step fails**: try again a few times, or continue anyway.
@@ -203,6 +239,16 @@ network** — nothing is sent to the internet. When it is on you get:
   addresses, pick the screen elements), then test it as usual.
 * **Explain this error**: on a failed step (Studio) or a failed run (dashboard), the assistant
   explains in plain words what probably went wrong and what to change.
+* **The AI step** (**Ask the AI assistant**, in the *AI* group of the step library) lets an
+  automation use the model on a text it has read - an email, a PDF, a cell:
+  * **Choose a category**: e.g. *Invoice*, *Complaint*, *Order* - the answer is always exactly
+    one of them, ready for a **Switch** step.
+  * **Pull out fields**: e.g. *Invoice number*, *Total*, *Due date* - the answer has one value
+    per field (empty when the text doesn't have it).
+  * **Summarise**, **Translate**, or **Do what I write** (e.g. *“Write a polite two-line reply”*
+    or *“Which language is this?”*).
+  * The answer is saved in a variable (*ai_answer* unless you choose another). It works in test
+    runs and on robots; check important values before you rely on them, as a model can be wrong.
 * **Fixing failed steps by itself**: when a step fails — a button was renamed, a file or sheet
   has a different name — the assistant looks at what is on the screen, adjusts **only that
   step** and tries it again (up to 3 times). The run continues from that step, so nothing that
@@ -215,8 +261,9 @@ network** — nothing is sent to the internet. When it is on you get:
   * Turn it off per automation in the dashboard (**Settings → Let the AI assistant fix failed
     steps on robots**) or for your test runs in Studio (**Settings → AI assistant**).
 
-What it may change is deliberately limited to **how a step finds things**: which element on
-the screen, how long to wait, which sheet or column, and which file to *read*. It never changes
+When it fixes a failed step, what it may change is deliberately limited to **how a step finds
+things**: which element on the screen, how long to wait, which sheet or column, and which file
+to *read*. It never changes
 web addresses, the values that are typed or written, where results are saved, or credentials,
 and it never touches steps that use a password. It never sees passwords or what was typed into
 fields.

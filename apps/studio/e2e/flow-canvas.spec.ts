@@ -89,7 +89,7 @@ test('the Flow view shows a flowchart, adds steps on connectors and switches to 
       .getByRole('button', { name: 'Add a step here' })
       .click();
     await win.getByLabel('Search steps').fill('wait');
-    await win.getByRole('option', { name: /^Wait(?! for)/ }).click();
+    await win.getByRole('option', { name: /^Wait(?! for| until)/ }).click();
     await expect(
       win.getByRole('complementary', { name: 'Properties' }).getByRole('heading', { name: 'Wait' }),
     ).toBeVisible();

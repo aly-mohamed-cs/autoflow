@@ -42,6 +42,8 @@ function fakeModel(dataDir: string) {
       } else if (system!.startsWith('You repair failed steps')) {
         const folder = JSON.parse(user!).screen.paths.file.folder as string;
         content = { fixable: true, explanation: 'The file is called orders-2026.txt.', params: { file: join(folder, 'orders-2026.txt') } };
+      } else if (system!.startsWith("Summarise the user's text")) {
+        content = `Summary: ${user}`;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ choices: [{ message: { content: typeof content === 'string' ? content : JSON.stringify(content) } }] }));
@@ -49,7 +51,7 @@ function fakeModel(dataDir: string) {
   });
 }
 
-test('describe an automation, then let the AI fix a failing step during the test run', async () => {
+test('describe an automation, let the AI fix a failing step, then use the AI step', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'autoflow-ai-'));
   const dataDir = join(dir, 'data');
   mkdirSync(dataDir);
@@ -120,6 +122,18 @@ test('describe an automation, then let the AI fix a failing step during the test
     await canvas.getByLabel('Read text file').click();
     const props = win.getByRole('complementary', { name: 'Properties' });
     await expect(props.getByRole('textbox', { name: 'File' })).toContainText('orders-2026.txt');
+
+    // The AI step: the Studio asks the model through the Orchestrator during a test run.
+    const library = win.getByRole('complementary', { name: 'Step library' });
+    await library.getByRole('button', { name: 'Ask the AI assistant' }).click();
+    await props.locator('#param-task').click();
+    await win.getByRole('option', { name: 'Summarise' }).click();
+    await props.getByRole('textbox', { name: 'Text' }).fill('{{orders}}');
+    await library.getByRole('button', { name: 'Write to log' }).click();
+    await props.getByRole('textbox', { name: 'Message' }).fill('AI says: {{ai_answer}}');
+    await expect(win.getByText('Saved')).toBeVisible({ timeout: 5_000 });
+    await win.getByRole('button', { name: 'Test run' }).click();
+    await expect(win.getByText('AI says: Summary: 17 orders')).toBeVisible({ timeout: 30_000 });
     await app.close();
   } finally {
     server.kill();

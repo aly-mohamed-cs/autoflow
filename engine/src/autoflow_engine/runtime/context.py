@@ -184,6 +184,8 @@ class RunOptions:
     # AI self-repair (see runtime/repair.py): asked for new settings when a step fails.
     repair: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
     repair_attempts: int = 3
+    # The AI step (activities/ai.py): a task for the company's AI model, via the Orchestrator.
+    ai: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
 
 
 class RunContext:

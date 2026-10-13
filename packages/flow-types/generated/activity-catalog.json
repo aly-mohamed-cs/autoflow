@@ -67,12 +67,131 @@
       "description": "HTTP requests and web services"
     },
     {
+      "id": "System",
+      "icon": "monitor-cog",
+      "description": "Commands, clipboard, special folders, the registry"
+    },
+    {
+      "id": "FTP & SSH",
+      "icon": "server",
+      "description": "File servers (FTP, SFTP) and SSH commands"
+    },
+    {
+      "id": "AI",
+      "icon": "sparkles",
+      "description": "The company's own AI model: classify, extract, summarise"
+    },
+    {
       "id": "Database",
       "icon": "database",
       "description": "SQL databases"
     }
   ],
   "activities": [
+    {
+      "id": "ai.ask",
+      "title": "Ask the AI assistant",
+      "category": "AI",
+      "icon": "sparkles",
+      "sentence": "AI: {task} {text}",
+      "description": "Let the company's AI model read a text: sort it into a category, pull out fields, summarise, translate or follow your instructions. Needs the AI assistant to be turned on in the Orchestrator.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "task": {
+            "default": "classify",
+            "enum": [
+              "classify",
+              "extract",
+              "summarize",
+              "translate",
+              "answer"
+            ],
+            "title": "Task",
+            "type": "string",
+            "x-labels": {
+              "answer": "Do what I write",
+              "classify": "Choose a category",
+              "extract": "Pull out fields",
+              "summarize": "Summarise",
+              "translate": "Translate"
+            }
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-placeholder": "{{email[\"text\"]}}",
+            "x-ui": "multiline"
+          },
+          "categories": {
+            "description": "The answer is exactly one of these, e.g. Invoice, Complaint, Order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array",
+            "x-show-when": {
+              "task": [
+                "classify"
+              ]
+            }
+          },
+          "fields": {
+            "description": "What to pull out, e.g. Invoice number, Total, Due date. The answer has one value per field.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array",
+            "x-show-when": {
+              "task": [
+                "extract"
+              ]
+            }
+          },
+          "language": {
+            "default": "English",
+            "title": "Into",
+            "type": "string",
+            "x-show-when": {
+              "task": [
+                "translate"
+              ]
+            }
+          },
+          "instructions": {
+            "default": "",
+            "title": "Instructions",
+            "type": "string",
+            "x-placeholder": "Write a polite two-line reply to this customer.",
+            "x-show-when": {
+              "task": [
+                "answer"
+              ]
+            },
+            "x-ui": "multiline"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "AskParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Answer",
+          "type": "any",
+          "description": "",
+          "default_variable": "ai_answer"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
     {
       "id": "browser.open",
       "title": "Open browser",
@@ -6675,6 +6794,565 @@
       "requires": null
     },
     {
+      "id": "email.reply",
+      "title": "Reply to email",
+      "category": "Email",
+      "icon": "reply",
+      "sentence": "Reply to {message}",
+      "description": "Answer an email read with 'Read emails' (Brity ReplyMail). The original is quoted below.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "A row from \"Read emails\" (e.g. the loop item).",
+            "title": "Message",
+            "x-ui": "variable"
+          },
+          "body": {
+            "default": "",
+            "title": "Message",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "everyone": {
+            "default": false,
+            "title": "Reply to everyone",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ReplyParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "email.forward",
+      "title": "Forward email",
+      "category": "Email",
+      "icon": "forward",
+      "sentence": "Forward {message} to {to}",
+      "description": "Forward an email read with 'Read emails', with its attachments (Brity ForwardMail).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "A row from \"Read emails\" (e.g. the loop item).",
+            "title": "Message",
+            "x-ui": "variable"
+          },
+          "body": {
+            "default": "",
+            "title": "Message",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "to": {
+            "title": "To",
+            "x-placeholder": "name@company.com"
+          }
+        },
+        "required": [
+          "message",
+          "to"
+        ],
+        "title": "ForwardParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "email.mark",
+      "title": "Mark or delete email",
+      "category": "Email",
+      "icon": "mail-check",
+      "sentence": "{action}: {message}",
+      "description": "Mark an email as read / unread, or move it to Deleted Items (Brity DeleteMail).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "A row from \"Read emails\".",
+            "title": "Message",
+            "x-ui": "variable"
+          },
+          "action": {
+            "default": "read",
+            "enum": [
+              "read",
+              "unread",
+              "delete"
+            ],
+            "title": "Do",
+            "type": "string",
+            "x-labels": {
+              "delete": "Move to Deleted Items",
+              "read": "Mark as read",
+              "unread": "Mark as unread"
+            }
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "MarkParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "web.chat_message",
+      "title": "Send Teams or Slack message",
+      "category": "Web & APIs",
+      "icon": "message-circle",
+      "sentence": "Send {message} to {service}",
+      "description": "Post a message in a Teams or Slack channel, e.g. when a run finishes or needs attention.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "default": "teams",
+            "enum": [
+              "teams",
+              "slack",
+              "webhook"
+            ],
+            "title": "Send to",
+            "type": "string",
+            "x-labels": {
+              "slack": "Slack",
+              "teams": "Microsoft Teams",
+              "webhook": "Another webhook"
+            }
+          },
+          "webhook": {
+            "description": "A credential whose password is the channel's webhook address (it works like a password, so it is kept in Credentials).",
+            "title": "Webhook",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string",
+            "x-placeholder": "Invoices processed"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "x-placeholder": "{{COUNT(rows)}} invoices were entered.",
+            "x-ui": "multiline"
+          }
+        },
+        "required": [
+          "webhook",
+          "message"
+        ],
+        "title": "ChatParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ftp.list",
+      "title": "List files on server",
+      "category": "FTP & SSH",
+      "icon": "folder-tree",
+      "sentence": "List {pattern} in {folder} on {host}",
+      "description": "The file names in a folder of an FTP / SFTP server (Brity GetFTPFileList).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "default": "sftp",
+            "enum": [
+              "sftp",
+              "ftps",
+              "ftp"
+            ],
+            "title": "Kind of server",
+            "type": "string",
+            "x-labels": {
+              "ftp": "FTP (not encrypted)",
+              "ftps": "FTPS (FTP with encryption)",
+              "sftp": "SFTP (over SSH)"
+            }
+          },
+          "host": {
+            "title": "Server",
+            "type": "string",
+            "x-placeholder": "ftp.supplier.com"
+          },
+          "port": {
+            "default": 0,
+            "description": "0 = the usual one (22 / 21).",
+            "maximum": 65535,
+            "minimum": 0,
+            "title": "Port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "folder": {
+            "default": "",
+            "title": "Folder on the server",
+            "type": "string",
+            "x-placeholder": "/outgoing"
+          },
+          "pattern": {
+            "default": "*",
+            "title": "Name pattern",
+            "type": "string",
+            "x-placeholder": "*.csv"
+          }
+        },
+        "required": [
+          "host",
+          "credential"
+        ],
+        "title": "FtpListParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Files",
+          "type": "list",
+          "description": "",
+          "default_variable": "server_files"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ftp.download",
+      "title": "Download from server",
+      "category": "FTP & SSH",
+      "icon": "download",
+      "sentence": "Download {pattern} from {host}",
+      "description": "Download files from an FTP / SFTP server (Brity DownloadFTPFile).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "default": "sftp",
+            "enum": [
+              "sftp",
+              "ftps",
+              "ftp"
+            ],
+            "title": "Kind of server",
+            "type": "string",
+            "x-labels": {
+              "ftp": "FTP (not encrypted)",
+              "ftps": "FTPS (FTP with encryption)",
+              "sftp": "SFTP (over SSH)"
+            }
+          },
+          "host": {
+            "title": "Server",
+            "type": "string",
+            "x-placeholder": "ftp.supplier.com"
+          },
+          "port": {
+            "default": 0,
+            "description": "0 = the usual one (22 / 21).",
+            "maximum": 65535,
+            "minimum": 0,
+            "title": "Port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "folder": {
+            "default": "",
+            "title": "Folder on the server",
+            "type": "string",
+            "x-placeholder": "/outgoing"
+          },
+          "pattern": {
+            "default": "*",
+            "title": "Name pattern",
+            "type": "string",
+            "x-placeholder": "*.csv"
+          },
+          "to_folder": {
+            "title": "Save in",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "delete_after": {
+            "default": false,
+            "title": "Delete them from the server afterwards",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "host",
+          "credential",
+          "to_folder"
+        ],
+        "title": "FtpDownloadParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Files",
+          "type": "list",
+          "description": "",
+          "default_variable": "downloaded"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ftp.upload",
+      "title": "Upload to server",
+      "category": "FTP & SSH",
+      "icon": "upload",
+      "sentence": "Upload {files} to {host}",
+      "description": "Upload files to an FTP / SFTP server (Brity UploadFTPFile).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "default": "sftp",
+            "enum": [
+              "sftp",
+              "ftps",
+              "ftp"
+            ],
+            "title": "Kind of server",
+            "type": "string",
+            "x-labels": {
+              "ftp": "FTP (not encrypted)",
+              "ftps": "FTPS (FTP with encryption)",
+              "sftp": "SFTP (over SSH)"
+            }
+          },
+          "host": {
+            "title": "Server",
+            "type": "string",
+            "x-placeholder": "ftp.supplier.com"
+          },
+          "port": {
+            "default": 0,
+            "description": "0 = the usual one (22 / 21).",
+            "maximum": 65535,
+            "minimum": 0,
+            "title": "Port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "files": {
+            "description": "A file, or a list of files.",
+            "title": "Files",
+            "x-ui": "variable"
+          },
+          "folder": {
+            "default": "",
+            "title": "Folder on the server",
+            "type": "string",
+            "x-placeholder": "/incoming"
+          }
+        },
+        "required": [
+          "host",
+          "credential",
+          "files"
+        ],
+        "title": "FtpUploadParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ftp.delete",
+      "title": "Delete file on server",
+      "category": "FTP & SSH",
+      "icon": "trash",
+      "sentence": "Delete {file} on {host}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "default": "sftp",
+            "enum": [
+              "sftp",
+              "ftps",
+              "ftp"
+            ],
+            "title": "Kind of server",
+            "type": "string",
+            "x-labels": {
+              "ftp": "FTP (not encrypted)",
+              "ftps": "FTPS (FTP with encryption)",
+              "sftp": "SFTP (over SSH)"
+            }
+          },
+          "host": {
+            "title": "Server",
+            "type": "string",
+            "x-placeholder": "ftp.supplier.com"
+          },
+          "port": {
+            "default": 0,
+            "description": "0 = the usual one (22 / 21).",
+            "maximum": 65535,
+            "minimum": 0,
+            "title": "Port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "file": {
+            "title": "File on the server",
+            "type": "string",
+            "x-placeholder": "/outgoing/report.csv"
+          }
+        },
+        "required": [
+          "host",
+          "credential",
+          "file"
+        ],
+        "title": "FtpDeleteParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ssh.run",
+      "title": "Run command over SSH",
+      "category": "FTP & SSH",
+      "icon": "terminal",
+      "sentence": "Run {command} on {host}",
+      "description": "Run a command on a Linux / Unix server and keep what it printed. Only administrators can publish automations with this step.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "title": "Server",
+            "type": "string",
+            "x-placeholder": "linux01.company.local"
+          },
+          "port": {
+            "default": 22,
+            "maximum": 65535,
+            "minimum": 1,
+            "title": "Port",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "title": "Credential",
+            "type": "string",
+            "x-ui": "credential"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string",
+            "x-placeholder": "df -h /data",
+            "x-ui": "code"
+          },
+          "timeout": {
+            "default": 300,
+            "maximum": 86400,
+            "minimum": 1,
+            "title": "Stop it after (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-ui": "duration"
+          },
+          "fail_on_error": {
+            "default": true,
+            "title": "Fail when it reports an error (exit code not 0)",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "host",
+          "credential",
+          "command"
+        ],
+        "title": "SshParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "output",
+          "title": "Output",
+          "type": "text",
+          "description": "",
+          "default_variable": "ssh_output"
+        },
+        {
+          "name": "exit_code",
+          "title": "Exit code",
+          "type": "number",
+          "description": "",
+          "default_variable": "ssh_exit_code"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": "scripts"
+    },
+    {
       "id": "word.create",
       "title": "Create Word document",
       "category": "Word",
@@ -9128,6 +9806,681 @@
           "type": "file",
           "description": "",
           "default_variable": "screenshot"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.run_command",
+      "title": "Run command",
+      "category": "System",
+      "icon": "square-terminal",
+      "sentence": "Run {command}",
+      "description": "Run a command or PowerShell script and keep what it printed (Brity ExecuteCmd). Only administrators can publish automations with this step.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "title": "Command",
+            "type": "string",
+            "x-placeholder": "robocopy \"C:\\In\" \"D:\\Backup\" /MIR",
+            "x-ui": "code"
+          },
+          "shell": {
+            "default": "cmd",
+            "enum": [
+              "cmd",
+              "powershell"
+            ],
+            "title": "Run with",
+            "type": "string",
+            "x-labels": {
+              "cmd": "Command prompt",
+              "powershell": "PowerShell"
+            }
+          },
+          "folder": {
+            "default": "",
+            "title": "In folder",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "folder"
+          },
+          "timeout": {
+            "default": 300,
+            "maximum": 86400,
+            "minimum": 1,
+            "title": "Stop it after (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-ui": "duration"
+          },
+          "fail_on_error": {
+            "default": true,
+            "title": "Fail when it reports an error (exit code not 0)",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "CommandParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "output",
+          "title": "Output",
+          "type": "text",
+          "description": "",
+          "default_variable": "command_output"
+        },
+        {
+          "name": "exit_code",
+          "title": "Exit code",
+          "type": "number",
+          "description": "",
+          "default_variable": "exit_code"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": "scripts"
+    },
+    {
+      "id": "system.run_python",
+      "title": "Run Python script",
+      "category": "System",
+      "icon": "file-code",
+      "sentence": "Run a Python script",
+      "description": "For what no step does: run a few lines of Python in a separate process (Brity ExecuteScript / Python library). Only administrators can publish automations with this step.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Values handed over are in `inputs`; put the answer in `result`.",
+            "title": "Python code",
+            "type": "string",
+            "x-placeholder": "total = sum(row['Amount'] for row in inputs['rows'])\nresult = round(total, 2)",
+            "x-ui": "code"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "title": "Values to hand to it",
+            "type": "object",
+            "x-ui": "key_values"
+          },
+          "timeout": {
+            "default": 120,
+            "maximum": 86400,
+            "minimum": 1,
+            "title": "Stop it after (seconds)",
+            "type": "number",
+            "x-advanced": true,
+            "x-ui": "duration"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PythonParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "any",
+          "description": "",
+          "default_variable": "script_result"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": "scripts"
+    },
+    {
+      "id": "system.get_clipboard",
+      "title": "Get clipboard text",
+      "category": "System",
+      "icon": "clipboard-paste",
+      "sentence": "Get the text on the clipboard",
+      "description": "The text that was copied last (Ctrl+C), e.g. after copying from a program.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "NoParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "clipboard"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.set_clipboard",
+      "title": "Set clipboard text",
+      "category": "System",
+      "icon": "clipboard-copy",
+      "sentence": "Put {text} on the clipboard",
+      "description": "Put text on the clipboard, e.g. to paste it into a program with Ctrl+V.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-ui": "multiline"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SetClipboardParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.special_folder",
+      "title": "Get special folder",
+      "category": "System",
+      "icon": "folder-cog",
+      "sentence": "Get the {folder} folder",
+      "description": "Where Windows keeps the Desktop, Documents, Downloads... of the account that runs the automation (Brity GetSpecialFolder) - so it works on every PC and robot.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "default": "desktop",
+            "enum": [
+              "desktop",
+              "documents",
+              "downloads",
+              "pictures",
+              "temp",
+              "appdata",
+              "home"
+            ],
+            "title": "Folder",
+            "type": "string",
+            "x-labels": {
+              "appdata": "AppData (Roaming)",
+              "desktop": "Desktop",
+              "documents": "Documents",
+              "downloads": "Downloads",
+              "home": "User folder",
+              "pictures": "Pictures",
+              "temp": "Temporary files"
+            }
+          }
+        },
+        "title": "SpecialFolderParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "path",
+          "title": "Folder",
+          "type": "file",
+          "description": "",
+          "default_variable": "folder"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.open_file",
+      "title": "Open file with its program",
+      "category": "System",
+      "icon": "external-link",
+      "sentence": "Open {file}",
+      "description": "Open a file with the program Windows uses for it, like a double-click (Brity ExecuteFile).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "OpenFileParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.read_registry",
+      "title": "Read registry value",
+      "category": "System",
+      "icon": "list-tree",
+      "sentence": "Read {name} from {key}",
+      "description": "Read a setting from the Windows registry (Brity GetRegistryValue).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string",
+            "x-placeholder": "HKEY_CURRENT_USER\\Software\\Company\\App"
+          },
+          "name": {
+            "default": "",
+            "title": "Value name",
+            "type": "string",
+            "x-placeholder": "(the default value)"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "RegistryParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "any",
+          "description": "",
+          "default_variable": "registry_value"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "system.write_registry",
+      "title": "Write registry value",
+      "category": "System",
+      "icon": "list-tree",
+      "sentence": "Write {value} to {name} in {key}",
+      "description": "Change a setting in the Windows registry (Brity SetRegistryValue). Only administrators can publish automations with this step.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string",
+            "x-placeholder": "HKEY_CURRENT_USER\\Software\\Company\\App"
+          },
+          "name": {
+            "default": "",
+            "title": "Value name",
+            "type": "string",
+            "x-placeholder": "(the default value)"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          },
+          "kind": {
+            "default": "text",
+            "enum": [
+              "text",
+              "number"
+            ],
+            "title": "Kind",
+            "type": "string",
+            "x-labels": {
+              "number": "Number (DWORD)",
+              "text": "Text"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "WriteRegistryParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": "scripts"
+    },
+    {
+      "id": "files.wait_until",
+      "title": "Wait until file is free",
+      "category": "Files",
+      "icon": "file-clock",
+      "sentence": "Wait until {file} {until}",
+      "description": "Wait until another program has finished writing a file (or until it is deleted), e.g. a report that is still being exported.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-ui": "file"
+          },
+          "until": {
+            "default": "free",
+            "enum": [
+              "free",
+              "gone"
+            ],
+            "title": "Wait until it",
+            "type": "string",
+            "x-labels": {
+              "free": "is no longer in use",
+              "gone": "is deleted"
+            }
+          },
+          "timeout": {
+            "default": 120,
+            "maximum": 86400,
+            "minimum": 0,
+            "title": "Wait up to (seconds)",
+            "type": "number",
+            "x-ui": "duration"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "WaitFileParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.json_read",
+      "title": "Read JSON",
+      "category": "Data",
+      "icon": "braces",
+      "sentence": "Read {path} from JSON",
+      "description": "Turn JSON text into values and pick one out, e.g. customer.address.city or items[0].price. A list of objects becomes a table.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "description": "JSON text (e.g. from a web service).",
+            "title": "JSON",
+            "x-placeholder": "{{response[\"body\"]}}"
+          },
+          "path": {
+            "default": "",
+            "description": "Leave empty for all of it.",
+            "title": "Value to get",
+            "type": "string",
+            "x-placeholder": "customer.address.city   or   items[0].price"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "JsonReadParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "any",
+          "description": "",
+          "default_variable": "json_value"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.to_json",
+      "title": "Make JSON",
+      "category": "Data",
+      "icon": "braces",
+      "sentence": "Turn {value} into JSON",
+      "description": "Turn a table, list or value into JSON text, e.g. to send to a web service.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "x-ui": "variable"
+          },
+          "pretty": {
+            "default": true,
+            "title": "Easy to read (indented)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "ToJsonParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "json",
+          "title": "JSON",
+          "type": "text",
+          "description": "",
+          "default_variable": "json_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "data.xml_read",
+      "title": "Read XML",
+      "category": "Data",
+      "icon": "code-xml",
+      "sentence": "Read {xpath} from XML",
+      "description": "Pick values out of XML with an XPath (Brity Xml_GetValueByXpath). Gives a list.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "xml": {
+            "description": "XML text, or an XML file.",
+            "title": "XML",
+            "x-placeholder": "{{response}}"
+          },
+          "xpath": {
+            "title": "XPath",
+            "type": "string",
+            "x-placeholder": "//Invoice/Total   or   //Line/@sku"
+          }
+        },
+        "required": [
+          "xml",
+          "xpath"
+        ],
+        "title": "XmlParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "values",
+          "title": "Values",
+          "type": "list",
+          "description": "",
+          "default_variable": "xml_values"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.encrypt",
+      "title": "Encrypt text",
+      "category": "Text",
+      "icon": "lock",
+      "sentence": "Encrypt {text}",
+      "description": "Scramble text with a key from Credentials, so only automations with the same key can read it.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "key": {
+            "description": "A saved credential: its password is the key (never stored in the automation).",
+            "title": "Key",
+            "type": "string",
+            "x-ui": "credential"
+          }
+        },
+        "required": [
+          "text",
+          "key"
+        ],
+        "title": "CryptParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "encrypted",
+          "title": "Encrypted text",
+          "type": "text",
+          "description": "",
+          "default_variable": "encrypted"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.decrypt",
+      "title": "Decrypt text",
+      "category": "Text",
+      "icon": "lock-open",
+      "sentence": "Decrypt {text}",
+      "description": "Read text that 'Encrypt text' scrambled, with the same key.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "key": {
+            "description": "A saved credential: its password is the key (never stored in the automation).",
+            "title": "Key",
+            "type": "string",
+            "x-ui": "credential"
+          }
+        },
+        "required": [
+          "text",
+          "key"
+        ],
+        "title": "CryptParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "decrypted"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "text.base_encoding",
+      "title": "Base64",
+      "category": "Text",
+      "icon": "binary",
+      "sentence": "Base64 {action} {value}",
+      "description": "Turn text or a file into Base64 (e.g. for a web service), or back (Brity Base64__EncodeFile).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "default": "encode",
+            "enum": [
+              "encode",
+              "decode"
+            ],
+            "title": "Do",
+            "type": "string",
+            "x-labels": {
+              "decode": "Decode",
+              "encode": "Encode"
+            }
+          },
+          "value": {
+            "description": "Encode: text, or a file path. Decode: Base64 text.",
+            "title": "Text or file",
+            "type": "string"
+          },
+          "file": {
+            "default": "",
+            "title": "Save decoded bytes as",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "(give the decoded text)",
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "Base64Params",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "text",
+          "description": "",
+          "default_variable": "base64_result"
         }
       ],
       "blocks": [],

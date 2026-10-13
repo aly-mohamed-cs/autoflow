@@ -49,10 +49,17 @@ const engine = new EngineProcess(
     }
   },
   (status: EngineStatus) => broadcast(IPC.engineStatusChanged, status),
-  // The engine asks for an AI fix when a step fails during a test run with repair on.
+  // The engine asks the company's AI model (via the Orchestrator) during test runs: for a fix when a
+  // step fails with repair on, or for the answer of an "Ask the AI assistant" step.
   async (method, params) => {
-    if (method !== 'host.repair') throw new Error(`Unknown request ${method}`);
-    return orchestrator.request('POST', '/api/ai/repair-step', params, 620_000);
+    if (method === 'host.repair') return orchestrator.request('POST', '/api/ai/repair-step', params, 620_000);
+    if (method === 'host.ai') {
+      if (!(await orchestrator.info())) {
+        throw new Error('Connect Studio to the Orchestrator (Settings) to use the AI assistant.');
+      }
+      return orchestrator.request('POST', '/api/ai/complete', params, 620_000);
+    }
+    throw new Error(`Unknown request ${method}`);
   },
 );
 

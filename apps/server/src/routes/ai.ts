@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/sessions.js';
-import { DEFAULT_AI, type AiSettings, type RepairRequest } from '../services/ai.js';
+import { AiTaskBody, DEFAULT_AI, type AiSettings, type RepairRequest } from '../services/ai.js';
 import { HttpError } from '../services/core.js';
 
 /** What the engine sends when a step fails (see engine/runtime/repair.py). */
@@ -46,6 +46,11 @@ export async function aiRoutes(app: FastifyInstance) {
       .object({ activity: z.string().max(100), message: z.string().max(2000), hint: z.string().max(1000).nullable().optional(), params: z.record(z.string(), z.unknown()).optional() })
       .parse(request.body);
     return { explanation: await ai.explainError(body) };
+  });
+
+  /** The AI step during a Studio test run. */
+  app.post('/api/ai/complete', { preHandler: requireRole('builder'), bodyLimit: 1024 * 1024, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (request) => {
+    return ai.complete(AiTaskBody.parse(request.body));
   });
 
   /** Studio test runs: new settings for a step that failed (shown to the builder to keep or discard). */

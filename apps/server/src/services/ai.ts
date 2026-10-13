@@ -5,6 +5,7 @@
 import { blocksOf, normalizeCondition, type ActivityDef, type Catalog, type Flow, type Step } from '@autoflow/flow-types';
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { HttpError, type Settings } from './core.js';
 
 export interface AiSettings {
@@ -259,6 +260,96 @@ export class AiService {
     );
     return answer.trim().slice(0, 2000);
   }
+
+  /** The "Ask the AI assistant" step: classify, pull out fields, summarise, translate or follow instructions. */
+  async complete(task: AiTask): Promise<{ result: unknown }> {
+    const text = task.text.slice(0, 60_000);
+    switch (task.task) {
+      case 'classify': {
+        const categories = (task.categories ?? []).map((c) => c.trim()).filter(Boolean);
+        if (!categories.length) throw new HttpError(400, 'Give the categories to choose from.');
+        const answer = await this.chat(
+          [
+            {
+              role: 'system',
+              content:
+                `Sort the user's text into exactly one of these categories: ${categories.map((c) => JSON.stringify(c)).join(', ')}. ` +
+                'Answer with the category only, written exactly as above.',
+            },
+            { role: 'user', content: text },
+          ],
+          false,
+        );
+        return { result: pickCategory(answer, categories) };
+      }
+      case 'extract': {
+        const fields = (task.fields ?? []).map((f) => f.trim()).filter(Boolean);
+        if (!fields.length) throw new HttpError(400, 'Give the fields to pull out.');
+        const answer = await this.chat(
+          [
+            {
+              role: 'system',
+              content:
+                `Pull these fields out of the user's text: ${fields.map((f) => JSON.stringify(f)).join(', ')}. ` +
+                'Answer with one JSON object that has exactly these keys. Copy each value as it is written in the text ' +
+                '(dates and amounts too); use null when the text does not contain it.',
+            },
+            { role: 'user', content: text },
+          ],
+          true,
+        );
+        let parsed: Record<string, unknown> = {};
+        try {
+          parsed = JSON.parse(extractJson(answer)) as Record<string, unknown>;
+        } catch {
+          throw new HttpError(502, 'The AI model did not answer with the fields. Try again or simplify the field names.');
+        }
+        return { result: Object.fromEntries(fields.map((f) => [f, parsed[f] ?? null])) };
+      }
+      case 'summarize':
+      case 'translate':
+      case 'answer': {
+        const system =
+          task.task === 'summarize'
+            ? "Summarise the user's text in a few short sentences, in the language of the text."
+            : task.task === 'translate'
+              ? `Translate the user's text into ${task.language || 'English'}. Answer with the translation only.`
+              : `Do what these instructions say with the user's text. Answer with plain text only.\nInstructions: ${task.instructions ?? ''}`;
+        const answer = await this.chat(
+          [
+            { role: 'system', content: system },
+            { role: 'user', content: text },
+          ],
+          false,
+        );
+        return { result: answer.trim() };
+      }
+    }
+  }
+}
+
+/** What the AI step sends (engine/activities/ai.py). */
+export const AiTaskBody = z.object({
+  task: z.enum(['classify', 'extract', 'summarize', 'translate', 'answer']),
+  text: z.string().min(1).max(60_000),
+  categories: z.array(z.string().max(200)).max(50).optional(),
+  fields: z.array(z.string().max(100)).max(50).optional(),
+  language: z.string().max(60).optional(),
+  instructions: z.string().max(4000).optional(),
+});
+export type AiTask = z.infer<typeof AiTaskBody>;
+
+/** The category a model meant, even when it adds quotes, a full stop or a sentence around it. */
+export function pickCategory(answer: string, categories: string[]): string {
+  const clean = (s: string) => s.trim().replace(/^["'`*\s]+|["'`*.\s]+$/g, '').toLowerCase();
+  const said = clean(answer);
+  return (
+    categories.find((c) => clean(c) === said) ??
+    categories
+      .filter((c) => said.includes(clean(c)))
+      .sort((a, b) => b.length - a.length)[0] ??
+    answer.trim()
+  );
 }
 
 /** Keep only known, non-advanced step types and their known settings; give every step a fresh id. */

@@ -131,7 +131,16 @@ function LibraryItem({ def, onAdd }: { def: ActivityDef; onAdd: () => void }) {
         >
           <Icon name={def.icon} size={15} className="shrink-0 text-subtle" />
           <span className="truncate">{def.title}</span>
-          {def.advanced && <span className="ml-auto text-[10px] text-subtle">advanced</span>}
+          {def.requires === 'scripts' ? (
+            <span
+              className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-warning"
+              title="Only administrators can publish automations with this step"
+            >
+              <Icon name="shield" size={11} /> admin
+            </span>
+          ) : (
+            def.advanced && <span className="ml-auto text-[10px] text-subtle">advanced</span>
+          )}
         </button>
       </Tooltip>
     </li>

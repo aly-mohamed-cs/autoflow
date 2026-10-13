@@ -73,8 +73,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     control = RunControl()
     if args.cancel_file:
         _watch_cancel_file(Path(args.cancel_file), control)
-    if args.repair_stdin:
-        options.repair = _StdinRepair(control)
+    if args.repair_stdin or args.ai_stdin:
+        bridge = _StdinRequests(control)
+        if args.repair_stdin:
+            options.repair = lambda request: bridge("repair_request", request)
+        if args.ai_stdin:
+            options.ai = lambda request: bridge("ai_request", request)
 
     def emit(event: dict) -> None:
         if args.quiet and event["event"] not in ("run_finished", "log"):
@@ -85,10 +89,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if result.status == "succeeded" else 1
 
 
-class _StdinRepair:
-    """Repair provider for robots: a ``repair_request`` line goes out on stdout and the robot
-    answers with ``{"id": ..., "reply": {...}}`` on stdin after asking the Orchestrator
-    (or ``{"cancel": true}`` when the run is stopped meanwhile).
+class _StdinRequests:
+    """Questions for the robot (AI repair, AI step): a ``repair_request`` / ``ai_request`` line goes
+    out on stdout and the robot answers with ``{"id": ..., "reply": {...}}`` on stdin after asking
+    the Orchestrator (or ``{"cancel": true}`` when the run is stopped meanwhile).
 
     stdin is read only while waiting for an answer, never by a background thread: on Windows
     a pending read on a pipe blocks loading DLLs (numpy, OCR...) in every other thread.
@@ -98,17 +102,17 @@ class _StdinRepair:
         self._control = control
         self._next = 0
 
-    def __call__(self, request: dict) -> dict | None:
+    def __call__(self, event: str, request: dict) -> dict | None:
         from .errors import RunCancelled
 
         self._next += 1
         request_id = self._next
-        print(json.dumps({"event": "repair_request", "id": request_id, "request": request},
+        print(json.dumps({"event": event, "id": request_id, "request": request},
                          default=str, ensure_ascii=False), flush=True)
         while True:
             line = sys.stdin.readline()
             if not line:
-                raise AutoflowError("The robot stopped answering repair requests.")
+                raise AutoflowError("The robot stopped answering questions to the AI assistant.")
             try:
                 message = json.loads(line)
             except json.JSONDecodeError:
@@ -159,6 +163,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cancel-file", help="stop the run when this file appears")
     p.add_argument("--repair-stdin", action="store_true",
                    help="AI self-repair: print repair_request events and read replies from stdin")
+    p.add_argument("--ai-stdin", action="store_true",
+                   help="AI step: print ai_request events and read replies from stdin")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("rpc", help="JSON-RPC server on stdio (used by Studio)")

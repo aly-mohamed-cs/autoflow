@@ -46,14 +46,14 @@ gaps.
 - [x] PDF: search text, pages to images, extract images
 
 ## Release E - system and integrations
-- [ ] Run a command / PowerShell / Python script (admins decide who may use it)
-- [ ] Clipboard get / set; special folders (Desktop, Documents, Downloads, Temp); open a file with its program
-- [ ] Wait until a file is unlocked / deleted; registry read / write; encrypt / decrypt; Base64
-- [ ] JSON: read a value, convert to / from text; XML: read by XPath
-- [ ] Email: reply, forward, delete, mark read (Exchange); Outlook desktop
-- [ ] SSH commands; FTP / SFTP upload / download / list / delete
-- [ ] Notifications: Teams / Slack / generic webhook message
-- [ ] AI step (local model): classify, extract fields, summarise, translate, detect language
+- [x] Run a command / PowerShell / Python script (admins decide who may use it)
+- [x] Clipboard get / set; special folders (Desktop, Documents, Downloads, Temp); open a file with its program
+- [x] Wait until a file is unlocked / deleted; registry read / write; encrypt / decrypt; Base64
+- [x] JSON: read a value, convert to / from text; XML: read by XPath
+- [x] Email: reply, forward, delete, mark read (Exchange) - Outlook desktop is not planned: robots use the mail server directly
+- [x] SSH commands; FTP / SFTP upload / download / list / delete
+- [x] Notifications: Teams / Slack / generic webhook message
+- [x] AI step (local model): classify, extract fields, summarise, translate; detect language through "Do what I write"
 
 ## Release F - Orchestrator
 - [ ] Shared resources (assets): company-wide values and files that automations read at run time

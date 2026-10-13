@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
-import { extractJson, sanitizeSteps } from '../src/services/ai.js';
+import { extractJson, pickCategory, sanitizeSteps } from '../src/services/ai.js';
 import { applyPatches } from '../src/services/repairs.js';
 import { compareVersions } from '../src/services/robotReleases.js';
 import type { Config } from '../src/config.js';
@@ -507,6 +507,60 @@ describe('AI assistant (local model)', () => {
   it('finds JSON in chatty answers', () => {
     expect(extractJson('Sure! {"a": {"b": 1}} Hope that helps')).toBe('{"a": {"b": 1}}');
     expect(extractJson('```json\n{"x": 2}\n```')).toBe('{"x": 2}');
+  });
+
+  it('does the tasks of the AI step: classify, pull out fields, translate', async () => {
+    await api('PUT', '/api/settings/ai', { enabled: true, baseUrl: modelUrl, model: 'test-model', apiKey: '', timeoutS: 30 });
+    reply = (body) => {
+      const system = body.messages[0].content as string;
+      if (system.startsWith('Sort')) return { content: '"Invoice".' };
+      if (system.startsWith('Pull')) return { content: 'Sure: {"Total": "120.50", "Due date": null, "extra": 1}' };
+      return { content: ' Bonjour ' };
+    };
+    const classify = await api('POST', '/api/ai/complete', { task: 'classify', text: 'Invoice 42 attached', categories: ['Order', 'Invoice'] });
+    expect(classify.body).toEqual({ result: 'Invoice' });
+    const extract = await api('POST', '/api/ai/complete', { task: 'extract', text: 'Total 120.50', fields: ['Total', 'Due date'] });
+    expect(extract.body).toEqual({ result: { Total: '120.50', 'Due date': null } });
+    const translate = await api('POST', '/api/ai/complete', { task: 'translate', text: 'Hello', language: 'French' });
+    expect(translate.body).toEqual({ result: 'Bonjour' });
+    expect((await api('POST', '/api/ai/complete', { task: 'classify', text: 'x', categories: [] })).status).toBe(400);
+  });
+
+  it('matches the category a model meant', () => {
+    expect(pickCategory('Category: complaint.', ['Invoice', 'Complaint'])).toBe('Complaint');
+    expect(pickCategory('ORDER', ['Order', 'Purchase order'])).toBe('Order');
+    expect(pickCategory('It is a purchase order', ['Order', 'Purchase order'])).toBe('Purchase order');
+    expect(pickCategory('No idea', ['Order'])).toBe('No idea');
+  });
+});
+
+describe('steps that run commands or scripts', () => {
+  it('can only be published by administrators, unless they allow builders', async () => {
+    await api('POST', '/api/users', { username: 'bob', displayName: 'Builder', role: 'builder', password: 'builder password 1' });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'bob', password: 'builder password 1' } });
+    const builder = login.json().token;
+    const scripted = {
+      id: 'flow_scripts',
+      name: 'Nightly clean-up',
+      steps: [
+        { id: 'c', activity: 'system.run_command', params: { command: 'del /q C:\\Temp\\*.tmp' } },
+        { id: 'p', activity: 'system.run_python', params: { code: 'result = 1' }, disabled: true },
+      ],
+    };
+    const denied = await api('POST', `/api/flows/${scripted.id}/versions`, { flow: scripted }, builder);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error).toContain('(Run command)'); // a skipped step does not count
+    expect((await api('POST', `/api/flows/${scripted.id}/versions`, { flow: scripted })).status).toBe(200); // admin
+
+    expect((await api('GET', '/api/settings/security', undefined, builder)).status).toBe(403);
+    expect((await api('PUT', '/api/settings/security', { builderScripts: true })).status).toBe(200);
+    expect((await api('POST', `/api/flows/${scripted.id}/versions`, { flow: scripted }, builder)).status).toBe(200);
+    expect((await api('GET', '/api/settings/security')).body).toEqual({ security: { builderScripts: true } });
+    const audit = (await api('GET', '/api/audit')).body.entries;
+    expect(audit.find((e: any) => e.action === 'flow.published' && e.target === scripted.id)?.details).toMatchObject({
+      scripts: ['Run command'],
+    });
+    await api('PUT', '/api/settings/security', { builderScripts: false });
   });
 });
 

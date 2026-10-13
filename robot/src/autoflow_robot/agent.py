@@ -42,7 +42,7 @@ class Agent:
             timeout=30,
         )
         self.runner = JobRunner(home() / "runs", self.send_threadsafe, self.upload, self.fetch_credentials,
-                                repair=self.request_repair)
+                                repair=self.request_repair, ai=self.request_ai)
         self.updater = Updater(self.http, install_root())
         self._update_task: asyncio.Task | None = None
         self._updating = False  # downloading or installing: no new jobs
@@ -79,6 +79,17 @@ class Agent:
         # A model without a GPU can take minutes; the Orchestrator stops waiting after 10.
         r = self.http.post(f"/api/robot/jobs/{job_id}/repair", json=failure, timeout=660)
         r.raise_for_status()
+        return r.json()
+
+    def request_ai(self, job_id: str, task: dict[str, Any]) -> dict[str, Any]:
+        """The AI step of a running job: the Orchestrator asks the company's model."""
+        r = self.http.post(f"/api/robot/jobs/{job_id}/ai", json=task, timeout=660)
+        if r.status_code >= 400:
+            try:
+                message = r.json().get("error") or r.text
+            except ValueError:
+                message = r.text
+            raise RuntimeError(message[:300])
         return r.json()
 
     # -- connection loop ----------------------------------------------------------------

@@ -205,6 +205,79 @@ def test_ai_repairs_a_failed_step_on_the_robot(server, fake_model, tmp_path, mon
         thread.join(5)
 
 
+@pytest.fixture
+def classifier_model():
+    """An OpenAI-compatible model server that always answers with a category."""
+    import http.server
+    import json
+
+    calls: list[dict] = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):  # noqa: N802
+            calls.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            data = json.dumps({"choices": [{"message": {"content": "Category: invoice."}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}/v1", calls
+    srv.shutdown()
+
+
+def test_the_ai_step_runs_on_the_robot(server, classifier_model, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOFLOW_ROBOT_HOME", str(tmp_path / "robot"))
+    model_url, calls = classifier_model
+    out_file = tmp_path / "kind.txt"
+    api = httpx.Client(base_url=server, timeout=10)
+    api.post("/api/setup", json={"username": "admin", "displayName": "Admin", "password": "a long admin password"}).raise_for_status()
+    token = api.post("/api/auth/login", json={"username": "admin", "password": "a long admin password"}).json()["token"]
+    api.headers["Authorization"] = f"Bearer {token}"
+    api.put("/api/settings/ai", json={"enabled": True, "baseUrl": model_url, "model": "fake", "timeoutS": 30}).raise_for_status()
+    flow = {
+        "id": "flow_sort",
+        "name": "Sort mail",
+        "steps": [{"id": "run", "activity": "control.run_process", "params": {"process": "classify"}}],
+        "processes": [{
+            "id": "classify", "name": "Classify",
+            "steps": [
+                {"id": "ask", "activity": "ai.ask", "outputs": {"result": "kind"},
+                 "params": {"task": "classify", "text": "Please pay invoice 42", "categories": ["Order", "Invoice"]}},
+                {"id": "write", "activity": "files.write_text", "params": {"file": str(out_file), "text": "{{kind}}"}},
+            ],
+        }],
+    }
+    api.post("/api/flows/flow_sort/versions", json={"flow": flow}).raise_for_status()
+    key = api.post("/api/robots/enrollment-keys", json={"pool": "default", "hours": 1}).json()["key"]
+
+    from autoflow_robot.agent import Agent, enroll
+    from autoflow_robot.config import RobotConfig
+
+    enroll(server, key, name="AI robot")
+    agent = Agent(RobotConfig.load())
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_until_complete, args=(agent.run(),), daemon=True)
+    thread.start()
+    try:
+        _wait(lambda: api.get("/api/robots").json()["robots"][0]["online"], "robot online")
+        job = api.post("/api/flows/flow_sort/run", json={}).json()["job"]
+        _wait(lambda: api.get(f"/api/jobs/{job['id']}").json()["job"]["status"] in ("succeeded", "failed"), "job finished", 60)
+        detail = api.get(f"/api/jobs/{job['id']}").json()
+        assert detail["job"]["status"] == "succeeded", detail["job"]["error"]
+        assert out_file.read_text(encoding="utf-8") == "Invoice"
+        assert len(calls) == 1 and "Please pay invoice 42" in calls[0]["messages"][1]["content"]
+    finally:
+        loop.call_soon_threadsafe(agent.stop)
+        thread.join(5)
+
+
 def _wait(check, what, timeout=20):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

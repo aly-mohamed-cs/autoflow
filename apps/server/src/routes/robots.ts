@@ -7,7 +7,7 @@ import { requireRole } from '../auth/sessions.js';
 import { json, now } from '../db.js';
 import { hashToken, newId, newToken } from '../security.js';
 import { HttpError, notFound } from '../services/core.js';
-import type { RepairRequest } from '../services/ai.js';
+import { AiTaskBody, type RepairRequest } from '../services/ai.js';
 import { compareVersions } from '../services/robotReleases.js';
 import { RepairBody } from './ai.js';
 import { credentialNames } from './flows.js';
@@ -25,6 +25,8 @@ export interface RobotUpdateSettings {
   automatic: boolean;
 }
 export const DEFAULT_ROBOT_UPDATES: RobotUpdateSettings = { automatic: true };
+/** How often one robot run may ask the AI assistant (AI steps in a loop). */
+const AI_CALLS_PER_RUN = 500;
 
 const PatchBody = z.object({ name: z.string().trim().min(1).max(100).optional(), pool: z.string().trim().min(1).max(64).optional(), enabled: z.boolean().optional() });
 
@@ -202,6 +204,20 @@ export async function robotRoutes(app: FastifyInstance) {
     return release
       ? { version: release.version, url: release.url, size: release.size, sha256: release.sha256, automatic }
       : { version: null, automatic };
+  });
+
+  /** The AI step during a robot run (bounded per run, so a loop can't keep the model busy forever). */
+  const aiCalls = new Map<string, number>();
+  app.post('/api/robot/jobs/:id/ai', { bodyLimit: 1024 * 1024 }, async (request) => {
+    const robot = robotFor(request);
+    const { id } = request.params as { id: string };
+    const job = jobs.get(id);
+    if (!job || job.robot_id !== robot.id || job.status !== 'running') throw new HttpError(403, 'Not your job.');
+    const calls = (aiCalls.get(id) ?? 0) + 1;
+    if (calls > AI_CALLS_PER_RUN) throw new HttpError(429, `The AI assistant was already asked ${AI_CALLS_PER_RUN} times in this run.`);
+    aiCalls.set(id, calls);
+    if (aiCalls.size > 1000) aiCalls.delete(aiCalls.keys().next().value!); // forget the oldest runs
+    return ai.complete(AiTaskBody.parse(request.body));
   });
 
   /** AI self-repair during a robot run. The fix only changes this run; builders approve keeping it. */

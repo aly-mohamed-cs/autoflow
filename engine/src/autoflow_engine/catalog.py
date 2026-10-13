@@ -171,6 +171,9 @@ CATEGORIES: list[dict[str, str]] = [
     {"id": "PowerPoint", "icon": "presentation", "description": "PowerPoint presentations"},
     {"id": "Email", "icon": "mail", "description": "Send and read email"},
     {"id": "Web & APIs", "icon": "plug", "description": "HTTP requests and web services"},
+    {"id": "System", "icon": "monitor-cog", "description": "Commands, clipboard, special folders, the registry"},
+    {"id": "FTP & SSH", "icon": "server", "description": "File servers (FTP, SFTP) and SSH commands"},
+    {"id": "AI", "icon": "sparkles", "description": "The company's own AI model: classify, extract, summarise"},
     {"id": "Database", "icon": "database", "description": "SQL databases"},
 ]
 _CATEGORY_IDS = {c["id"] for c in CATEGORIES}

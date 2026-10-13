@@ -1,9 +1,10 @@
-import { walkFlow, type Flow } from '@autoflow/flow-types';
+import { walkFlow, type Catalog, type Flow } from '@autoflow/flow-types';
+import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/sessions.js';
 import { json, now } from '../db.js';
-import { badRequest, notFound } from '../services/core.js';
+import { badRequest, HttpError, notFound } from '../services/core.js';
 import { present, type JobRow } from '../services/jobs.js';
 import { publishVersion } from '../services/versions.js';
 
@@ -54,6 +55,27 @@ export function credentialNames(flow: Flow): string[] {
   return [...names];
 }
 
+/** Steps that can run any code (commands, scripts, SSH, registry): only admins may publish them. */
+const SCRIPT_STEPS = new Map(
+  (catalogJson as unknown as Catalog).activities.filter((a) => a.requires === 'scripts').map((a) => [a.id, a.title]),
+);
+
+export function scriptSteps(flow: Flow): string[] {
+  const found = new Set<string>();
+  for (const { step } of walkFlow(flow)) {
+    const title = SCRIPT_STEPS.get(step.activity);
+    if (title && !step.disabled) found.add(title);
+  }
+  return [...found];
+}
+
+/** Settings > Security. */
+export interface SecuritySettings {
+  /** Builders may publish automations with command / script steps (otherwise only administrators). */
+  builderScripts: boolean;
+}
+export const DEFAULT_SECURITY: SecuritySettings = { builderScripts: false };
+
 export function inputVariables(flow: Flow) {
   return (flow.variables ?? [])
     .filter((v) => v.is_input)
@@ -61,7 +83,7 @@ export function inputVariables(flow: Flow) {
 }
 
 export async function flowRoutes(app: FastifyInstance) {
-  const { db, jobs, audit, repairs } = app.svc;
+  const { db, jobs, audit, repairs, settings } = app.svc;
   const actor = (r: { user?: { id: string; username: string } }) => ({ id: r.user!.id, name: r.user!.username });
 
   app.get('/api/flows', { preHandler: requireRole('viewer') }, async (request) => {
@@ -112,13 +134,36 @@ export async function flowRoutes(app: FastifyInstance) {
   });
 
   /** Studio publishes a new version. Versions are immutable; runs always use a fixed version. */
+  app.get('/api/settings/security', { preHandler: requireRole('admin') }, async () => ({
+    security: settings.get<SecuritySettings>('security', DEFAULT_SECURITY),
+  }));
+
+  app.put('/api/settings/security', { preHandler: requireRole('admin') }, async (request) => {
+    const body = z.object({ builderScripts: z.boolean() }).parse(request.body);
+    settings.set('security', body);
+    audit.record(actor(request), 'settings.security_updated', undefined, body);
+    return { ok: true };
+  });
+
   app.post('/api/flows/:id/versions', { preHandler: requireRole('builder') }, async (request) => {
     const { id } = request.params as { id: string };
     const body = PublishBody.parse(request.body);
     if (body.flow.id !== id) throw badRequest('The automation id does not match the address.');
     const user = request.user!;
+    const scripts = scriptSteps(body.flow as unknown as Flow);
+    if (scripts.length && user.role !== 'admin' && !settings.get<SecuritySettings>('security', DEFAULT_SECURITY).builderScripts) {
+      throw new HttpError(
+        403,
+        `This automation runs commands or scripts (${scripts.join(', ')}). Only an administrator can publish it - ` +
+          'or an administrator can allow builders to, under Settings > Security.',
+      );
+    }
     const version = publishVersion(db, body.flow as unknown as Flow, body.notes ?? '', user.displayName);
-    audit.record({ id: user.id, name: user.username }, 'flow.published', id, { version, name: body.flow.name });
+    audit.record({ id: user.id, name: user.username }, 'flow.published', id, {
+      version,
+      name: body.flow.name,
+      ...(scripts.length ? { scripts } : {}),
+    });
     return { version };
   });
 
