@@ -3,6 +3,8 @@ name: Release
 # Push a version tag to build the installers and publish them as a GitHub release:
 #   git tag v0.2.0 && git push origin v0.2.0
 # The company server picks them up with: .\deploy\windows\update-server.ps1 -Installers
+# If a tag's release run failed, run this workflow by hand with the version and "publish" ticked:
+# it builds that tag and publishes its release (the tag itself is never moved).
 on:
   push:
     tags: ["v*"]
@@ -11,6 +13,10 @@ on:
       version:
         description: "Version to build (without v), for a test build without a release"
         required: true
+      publish:
+        description: "Publish the release of the existing tag v<version> (after its release run failed)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -20,6 +26,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && format('v{0}', inputs.version) || '' }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -41,16 +49,21 @@ jobs:
           $py = "build/studio/win-unpacked/resources/engine/python/python.exe"
           & $py -m autoflow_engine --version
           if ($LASTEXITCODE -ne 0) { throw "bundled engine does not start" }
+      # Test builds only: releases keep their installers on the GitHub release, and workflow
+      # artifacts count against the repository's (small) storage quota.
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
         with:
           name: autoflow-installers-${{ steps.version.outputs.version }}
           path: build/release/*
           if-no-files-found: error
+          retention-days: 7
       - name: Publish GitHub release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', inputs.version) }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" build/release/* \
-            --title "Autoflow $GITHUB_REF_NAME" --generate-notes
+          gh release create "$TAG" build/release/* \
+            --title "Autoflow $TAG" --generate-notes --verify-tag
