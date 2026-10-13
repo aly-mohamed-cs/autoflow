@@ -49,6 +49,7 @@ test('shared values and queue items in a test run, picked from the Orchestrator'
     await call('PUT', '/api/assets', { name: 'Portal address', kind: 'text', value: 'https://vendors.example' });
     const { id: queueId } = await call('POST', '/api/queues', { name: 'Customers' });
     await call('POST', `/api/queues/${queueId}/items`, { items: [{ reference: 'C-1', data: { name: 'Ann' } }] });
+    await call('POST', '/api/notices', { message: 'Robots are updated tonight at 22:00.', tone: 'warning' });
 
     const app = await electron.launch({ ...launchTarget(), env: { ...process.env, AUTOFLOW_USER_DATA: join(dir, 'studio') } });
     const win = await app.firstWindow();
@@ -63,6 +64,7 @@ test('shared values and queue items in a test run, picked from the Orchestrator'
     await expect(win.getByText('Connected', { exact: true })).toBeVisible();
 
     await win.getByRole('button', { name: 'Automations' }).click();
+    await expect(win.getByRole('region', { name: 'Notices' })).toContainText('Robots are updated tonight at 22:00.');
     await win.getByRole('button', { name: 'New automation' }).click();
     await win.getByLabel('Name').fill('Greet customers');
     await win.getByRole('button', { name: 'Create' }).click();

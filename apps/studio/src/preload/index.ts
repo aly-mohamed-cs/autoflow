@@ -55,6 +55,7 @@ const api: StudioApi = {
     publish: (flow, notes) => invoke(IPC.orchPublish, flow, notes),
     flows: () => invoke(IPC.orchFlows),
     names: () => invoke(IPC.orchNames),
+    notices: () => invoke(IPC.orchNotices),
   },
   ai: {
     status: () => invoke(IPC.aiStatus),

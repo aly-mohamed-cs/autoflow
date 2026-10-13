@@ -295,6 +295,13 @@ function registerIpc(): void {
     if (!(await orchestrator.info())) return { assets: [], queues: [] };
     return orchestrator.request<{ assets: string[]; queues: string[] }>('GET', '/api/run/names').catch(() => ({ assets: [], queues: [] }));
   });
+  handle(IPC.orchNotices, async () => {
+    if (!(await orchestrator.info())) return [];
+    return orchestrator
+      .request<{ notices: { id: string; message: string; tone: 'info' | 'warning' }[] }>('GET', '/api/notices')
+      .then((r) => r.notices)
+      .catch(() => []);
+  });
   handle(IPC.orchFlows, async () => {
     const res = await orchestrator.request<{ flows: PublishedFlow[] }>('GET', '/api/flows');
     return res.flows.map((f) => ({ id: f.id, name: f.name, latestVersion: f.latestVersion }));

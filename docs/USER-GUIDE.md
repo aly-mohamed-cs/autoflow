@@ -242,6 +242,8 @@ Open the **dashboard** (address from your administrator) and choose the automati
 
 Every run is kept in **Runs** with each step, the log and screenshots — open a failed run to
 see exactly where and why it stopped.
+To see what a robot is doing right now, open **Robots → Screen**: its screen, refreshed every
+second or two, with **Stop the run** if something goes wrong.
 
 **Event triggers** are watched by a robot of the pool you choose, so that robot must be able to
 open the folder (e.g. `\\fileserver\scans`) or sign in to the mailbox. Each new file or email

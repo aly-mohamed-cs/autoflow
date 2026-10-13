@@ -129,6 +129,8 @@ export interface StudioApi {
     flows(): Promise<PublishedFlow[]>;
     /** Shared values and queues on the Orchestrator, for the step pickers (empty when not connected). */
     names(): Promise<{ assets: string[]; queues: string[] }>;
+    /** Notices from the Orchestrator's administrators (empty when not connected). */
+    notices(): Promise<{ id: string; message: string; tone: 'info' | 'warning' }[]>;
   };
   /** The company's local AI model, through the Orchestrator (only when an admin turned it on). */
   ai: {
@@ -192,6 +194,7 @@ export const IPC = {
   orchPublish: 'orch:publish',
   orchFlows: 'orch:flows',
   orchNames: 'orch:names',
+  orchNotices: 'orch:notices',
   aiStatus: 'ai:status',
   aiDraft: 'ai:draft',
   aiExplain: 'ai:explain',

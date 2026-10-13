@@ -2,6 +2,7 @@ import { Badge, Button, Dialog, EmptyState, Field, Icon, Input, Menu, Switch } f
 import { useState } from 'react';
 import { useMe } from '../App';
 import { Card, ErrorBox, Loading, PageHeader } from '../components/common';
+import { RobotScreen } from '../components/RobotScreen';
 import { api, can, useApi, type Robot } from '../lib/api';
 import { relative } from '../lib/format';
 import { useLiveReload } from '../lib/live';
@@ -13,6 +14,7 @@ export function RobotsPage() {
   const [updateMessage, setUpdateMessage] = useState('');
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<Robot | null>(null);
+  const [watching, setWatching] = useState<Robot | null>(null);
   useLiveReload(reload, (e) => e.type === 'robot.updated' || e.type === 'job.updated');
   const admin = can(me.role, 'admin');
 
@@ -102,6 +104,11 @@ export function RobotsPage() {
                     <span className="flex items-center gap-1.5 text-muted"><Icon name="circle-off" size={14} /> Offline · seen {relative(r.lastSeenAt)}</span>
                   )}
                 </div>
+                {can(me.role, 'operator') && r.online && (
+                  <Button size="sm" variant="ghost" icon={<Icon name="monitor" size={14} />} onClick={() => setWatching(r)}>
+                    Screen
+                  </Button>
+                )}
                 {admin && (
                   <Menu
                     trigger={<Button variant="ghost" size="icon" aria-label={`Actions for ${r.name}`}><Icon name="ellipsis" size={16} /></Button>}
@@ -141,6 +148,7 @@ export function RobotsPage() {
       )}
       <AddRobotDialog open={adding} onClose={() => { setAdding(false); reload(); }} />
       <RenameDialog robot={renaming} onClose={() => { setRenaming(null); reload(); }} />
+      <RobotScreen robot={watching} onClose={() => setWatching(null)} />
     </>
   );
 }

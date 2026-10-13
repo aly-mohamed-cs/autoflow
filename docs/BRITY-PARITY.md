@@ -60,8 +60,9 @@ gaps.
 - [x] Queue steps inside automations: add item, get next item, mark done / failed, count; "For each queue item" loop
 - [x] Event triggers: new email arrives, file appears in a folder (watched by a robot of the pool)
 - [x] Process flows: chain automations (when A succeeds / fails / finishes, start B with A's results); waiting for an event = event triggers
-- [ ] Live robot screen view and remote stop from the dashboard
-- [ ] Notices for users; API keys for the REST API; email two-factor sign-in; server health page
+- [x] Live robot screen view and remote stop from the dashboard
+- [x] Notices for users; API keys for the REST API; server health page
+- [ ] Email two-factor sign-in
 - [ ] Attended "work plans": users run and schedule their own automations from a tray list
 
 ## Release G - enterprise apps

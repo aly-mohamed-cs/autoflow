@@ -123,7 +123,10 @@ release has finished building before running `-Installers`, or run it again afte
 |---|---|
 | Start / stop | `services.msc` → *Autoflow Orchestrator*, or `Restart-Service AutoflowOrchestrator` |
 | Logs | `C:\RPA-Server\data\logs\AutoflowOrchestrator.out.log` |
-| Health check | `https://<server>:8443/health` |
+| Health check | Dashboard → **Server health** (disk, backups, certificate, robots, waiting runs, triggers); for monitoring tools: `https://<server>:8443/health` |
+| Tell everyone something | Dashboard → **Settings → Notices**, e.g. planned maintenance; shown in the dashboard and Studio |
+| Let another system start automations | Dashboard → **Settings → API keys**; the system sends `Authorization: Bearer <key>` (operator keys start runs and add queue items, viewer keys only read) |
+| Watch a robot | Dashboard → **Robots → Screen** (operators and up; recorded in the audit log). To turn it off on a robot, set `"screen_view": false` in its `robot.json` and restart it |
 | Backup now | `.\deploy\windows\backup-server.ps1` |
 | Restore a backup | Stop the service, copy `data\backups\<date>\autoflow.db` over `data\autoflow.db`, start it |
 | Forgotten admin password | `$env:AUTOFLOW_DATA_DIR="C:\RPA-Server\data"; node apps\server\dist\index.js reset-password admin` |

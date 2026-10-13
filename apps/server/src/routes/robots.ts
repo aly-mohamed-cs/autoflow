@@ -121,6 +121,22 @@ export async function robotRoutes(app: FastifyInstance) {
     return { key: token, expiresAt, serverUrl: config.publicUrl };
   });
 
+  /** Live screen view: the dashboard asks every second or two while the view is open. */
+  const screenViews = new Map<string, number>();
+  app.get('/api/robots/:id/screen', { preHandler: requireRole('operator') }, async (request) => {
+    const { id } = request.params as { id: string };
+    const robot = db.get<{ id: string; name: string }>('SELECT id, name FROM robots WHERE id = ?', id);
+    if (!robot) throw notFound('The robot');
+    if (!gateway.isOnline(id)) return { online: false, frame: null, jobId: null };
+    // Watching a screen is recorded (once per person and robot every 10 minutes).
+    const seen = `${request.user!.id}:${id}`;
+    if (Date.now() - (screenViews.get(seen) ?? 0) > 600_000) {
+      screenViews.set(seen, Date.now());
+      audit.record(actor(request), 'robot.screen_viewed', id, { robot: robot.name });
+    }
+    return { online: true, frame: gateway.watchScreen(id), jobId: gateway.busyJob(id) };
+  });
+
   app.patch('/api/robots/:id', { preHandler: requireRole('admin') }, async (request) => {
     const { id } = request.params as { id: string };
     const body = PatchBody.parse(request.body);

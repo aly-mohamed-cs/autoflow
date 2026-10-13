@@ -31,6 +31,7 @@ class RobotConfig:
     pool: str = "default"
     pinned_cert: str | None = None  # PEM of a self-signed server certificate trusted at enrollment
     capabilities: list[str] = field(default_factory=lambda: ["browser", "excel", "files", "desktop"])
+    screen_view: bool = True  # operators may watch this robot's screen live in the dashboard
 
     @property
     def token(self) -> str:

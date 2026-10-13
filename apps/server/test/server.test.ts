@@ -763,6 +763,86 @@ describe('event triggers and chained automations', () => {
   });
 });
 
+describe('API keys, notices, server health and the live screen view', () => {
+  it('lets other systems run automations with an API key, within its role', async () => {
+    const created = (await api('POST', '/api/api-keys', { name: 'ERP', role: 'operator', days: 30 })).body;
+    expect(created.key).toMatch(/^afk_/);
+    const listed = (await api('GET', '/api/api-keys')).body.keys[0];
+    expect(listed).toMatchObject({ name: 'ERP', role: 'operator', hint: `afk_…${created.key.slice(-4)}`, revoked: false });
+    expect(JSON.stringify((await api('GET', '/api/api-keys')).body)).not.toContain(created.key); // shown once
+
+    expect((await api('GET', '/api/auth/me', undefined, created.key)).body.user).toMatchObject({ displayName: 'API key “ERP”', role: 'operator', source: 'api' });
+    const run = await api('POST', `/api/flows/${FLOW.id}/run`, { inputs: { customer: 'From ERP' } }, created.key);
+    expect(run.status).toBe(200);
+    expect(run.body.job).toMatchObject({ trigger: 'api', triggeredBy: 'API key “ERP”' });
+    await api('POST', `/api/jobs/${run.body.job.id}/cancel`);
+    expect((await api('POST', `/api/flows/${FLOW.id}/versions`, { flow: FLOW }, created.key)).status).toBe(403); // not a builder
+    expect((await api('GET', '/api/api-keys', undefined, created.key)).status).toBe(403);
+
+    const viewer = (await api('POST', '/api/api-keys', { name: 'Reporting', role: 'viewer', days: null })).body;
+    expect((await api('GET', '/api/jobs', undefined, viewer.key)).status).toBe(200);
+    expect((await api('POST', `/api/flows/${FLOW.id}/run`, {}, viewer.key)).status).toBe(403);
+    expect((await api('POST', '/api/api-keys', { name: 'Too strong', role: 'admin' })).status).toBe(400);
+
+    expect((await api('DELETE', `/api/api-keys/${created.id}`)).status).toBe(200);
+    expect((await api('GET', '/api/auth/me', undefined, created.key)).status).toBe(401);
+    expect((await api('GET', '/api/auth/me', undefined, 'afk_made_up')).status).toBe(401);
+  });
+
+  it('shows notices to everyone until they expire', async () => {
+    const soon = new Date(Date.now() + 3_600_000).toISOString();
+    const { id } = (await api('POST', '/api/notices', { message: 'Robots are updated tonight at 22:00.', tone: 'warning', until: soon })).body;
+    await api('POST', '/api/notices', { message: 'Old news', until: new Date(Date.now() - 1000).toISOString() });
+    const viewer = (await api('POST', '/api/api-keys', { name: 'Notice reader', role: 'viewer' })).body.key;
+    expect((await api('GET', '/api/notices', undefined, viewer)).body.notices).toEqual([
+      expect.objectContaining({ id, message: 'Robots are updated tonight at 22:00.', tone: 'warning', until: soon }),
+    ]);
+    expect((await api('GET', '/api/notices?all=1')).body.notices).toHaveLength(2);
+    expect((await api('POST', '/api/notices', { message: 'x' }, viewer)).status).toBe(403);
+    expect((await api('DELETE', `/api/notices/${id}`)).status).toBe(200);
+    expect((await api('GET', '/api/notices')).body.notices).toEqual([]);
+  });
+
+  it('reports the server health in plain words', async () => {
+    const health = (await api('GET', '/api/server-health')).body;
+    expect(health).toMatchObject({ version: expect.any(String), robots: { total: expect.any(Number) }, jobs: { queued: expect.any(Number) } });
+    expect(health.database.size).toBeGreaterThan(0);
+    const names = health.checks.map((c: any) => c.name);
+    expect(names).toEqual(expect.arrayContaining(['Backups', 'Certificate', 'Robots', 'Waiting runs', 'Failed runs']));
+    expect(health.checks.find((c: any) => c.name === 'Certificate')).toMatchObject({ status: 'warning', message: expect.stringContaining('plain HTTP') });
+    const viewer = (await api('POST', '/api/api-keys', { name: 'Health peek', role: 'viewer' })).body.key;
+    expect((await api('GET', '/api/server-health', undefined, viewer)).status).toBe(403);
+  });
+
+  it('shows a robot screen live only while someone watches, and records who did', async () => {
+    const { key } = (await api('POST', '/api/robots/enrollment-keys', { pool: 'screens', hours: 1 })).body;
+    const robot = (await app.inject({ method: 'POST', url: '/api/robot/enroll', payload: { key, name: 'Screen robot' } })).json();
+    const robotId = svc.db.get<{ id: string }>('SELECT id FROM robots WHERE name = ?', 'Screen robot')!.id;
+    expect((await api('GET', `/api/robots/${robotId}/screen`)).body).toEqual({ online: false, frame: null, jobId: null });
+
+    const messages: any[] = [];
+    const ws = new WebSocket(`ws://${base}/api/robot/connect`, { headers: { authorization: `Bearer ${robot.token}` } });
+    ws.on('message', (m) => messages.push(JSON.parse(m.toString())));
+    await new Promise((resolve) => ws.on('open', resolve));
+    ws.send(JSON.stringify({ type: 'hello', version: '0.5.0', capabilities: [] }));
+    await waitFor(async () => (await api('GET', `/api/robots/${robotId}/screen`)).body.online);
+    await waitFor(() => messages.some((m) => m.type === 'screen.watch'));
+    expect(messages.filter((m) => m.type === 'screen.watch')).toHaveLength(1);
+    expect(messages.find((m) => m.type === 'screen.watch')).toEqual({ type: 'screen.watch', seconds: 20 });
+    ws.send(JSON.stringify({ type: 'screen.frame', data: Buffer.from('jpeg bytes').toString('base64'), width: 1280, height: 720 }));
+    await waitFor(async () => (await api('GET', `/api/robots/${robotId}/screen`)).body.frame !== null);
+    const view = (await api('GET', `/api/robots/${robotId}/screen`)).body;
+    expect(view.frame).toMatchObject({ image: `data:image/jpeg;base64,${Buffer.from('jpeg bytes').toString('base64')}`, width: 1280, height: 720, error: null });
+    expect(messages.filter((m) => m.type === 'screen.watch')).toHaveLength(1); // not asked again within seconds
+    ws.send(JSON.stringify({ type: 'screen.unavailable', reason: 'The screen view is turned off on this robot.' }));
+    await waitFor(async () => (await api('GET', `/api/robots/${robotId}/screen`)).body.frame?.error !== null);
+    expect(svc.db.all('SELECT * FROM audit WHERE action = ? AND target = ?', 'robot.screen_viewed', robotId)).toHaveLength(1);
+    const viewer = (await api('POST', '/api/api-keys', { name: 'Screen peek', role: 'viewer' })).body.key;
+    expect((await api('GET', `/api/robots/${robotId}/screen`, undefined, viewer)).status).toBe(403);
+    ws.close();
+  });
+});
+
 describe('database updates', () => {
   it('rebuilds the runs table without losing runs, their steps or files', () => {
     const dir = mkdtempSync(join(tmpdir(), 'autoflow-migrate-'));

@@ -299,4 +299,27 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX flow_chains_flow ON flow_chains(flow_id);
   `,
+  /* 5: API keys for other systems, notices for users */ `
+  CREATE TABLE api_keys (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    key_hash      TEXT NOT NULL UNIQUE,
+    key_hint      TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK (role IN ('viewer', 'operator')),
+    created_by    TEXT,
+    created_at    TEXT NOT NULL,
+    expires_at    TEXT,
+    last_used_at  TEXT,
+    revoked_at    TEXT
+  );
+
+  CREATE TABLE notices (
+    id          TEXT PRIMARY KEY,
+    message     TEXT NOT NULL,
+    tone        TEXT NOT NULL DEFAULT 'info' CHECK (tone IN ('info', 'warning')),
+    until       TEXT,
+    created_by  TEXT,
+    created_at  TEXT NOT NULL
+  );
+  `,
 ];

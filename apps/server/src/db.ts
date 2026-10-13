@@ -8,7 +8,7 @@ export class Db {
   readonly raw: DatabaseSync;
   private readonly statements = new Map<string, ReturnType<DatabaseSync['prepare']>>();
 
-  constructor(path: string) {
+  constructor(readonly path: string) {
     this.raw = new DatabaseSync(path);
     this.raw.exec(`
       PRAGMA journal_mode = WAL;

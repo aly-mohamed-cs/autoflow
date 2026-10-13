@@ -13,6 +13,8 @@ export interface SessionUser {
   email: string | null;
   role: Role;
   source: 'local' | 'ldap';
+  /** Another system calling with an API key (not a person). */
+  apiKey?: boolean;
 }
 
 declare module 'fastify' {
@@ -35,12 +37,13 @@ export function deleteSession(db: Db, token: string): void {
 
 export function sessionToken(request: FastifyRequest): string | null {
   const header = request.headers.authorization;
-  if (header?.startsWith('Bearer afs_')) return header.slice(7);
+  if (header?.startsWith('Bearer afs_') || header?.startsWith('Bearer afk_')) return header.slice(7);
   return request.cookies?.[SESSION_COOKIE] ?? null;
 }
 
 export function userForToken(db: Db, token: string | null): SessionUser | null {
   if (!token) return null;
+  if (token.startsWith('afk_')) return userForApiKey(db, token);
   const row = db.get<{
     id: string; username: string; display_name: string; email: string | null; role: Role; source: 'local' | 'ldap'; disabled: number; expires_at: string;
   }>(
@@ -50,6 +53,18 @@ export function userForToken(db: Db, token: string | null): SessionUser | null {
   );
   if (!row || row.disabled || row.expires_at < now()) return null;
   return { id: row.id, username: row.username, displayName: row.display_name, email: row.email, role: row.role, source: row.source };
+}
+
+/** API keys act like a user with the key's role (at most operator: run automations, add queue items). */
+function userForApiKey(db: Db, token: string): SessionUser | null {
+  const key = db.get<{ id: string; name: string; role: Role; expires_at: string | null; revoked_at: string | null; last_used_at: string | null }>(
+    'SELECT id, name, role, expires_at, revoked_at, last_used_at FROM api_keys WHERE key_hash = ?',
+    hashToken(token),
+  );
+  if (!key || key.revoked_at || (key.expires_at && key.expires_at < now())) return null;
+  // Remember roughly when it was last used (not on every call).
+  if (!key.last_used_at || Date.parse(key.last_used_at) < Date.now() - 60_000) db.run('UPDATE api_keys SET last_used_at = ? WHERE id = ?', now(), key.id);
+  return { id: `apikey:${key.id}`, username: `api-key:${key.name}`, displayName: `API key “${key.name}”`, email: null, role: key.role, source: 'local', apiKey: true };
 }
 
 /** Route guard: signed in with at least the given role. */

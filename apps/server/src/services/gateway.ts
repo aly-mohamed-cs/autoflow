@@ -29,7 +29,21 @@ export type RobotMessage =
   | { type: 'robot.updating'; version: string }
   | { type: 'robot.update_failed'; version: string; error: string }
   | TriggerFired
-  | TriggerStatus;
+  | TriggerStatus
+  | { type: 'screen.frame'; data: string; width: number; height: number }
+  | { type: 'screen.unavailable'; reason: string };
+
+/** The newest picture of a robot's screen (kept in memory only, while someone watches). */
+export interface ScreenFrame {
+  image: string | null;
+  width: number;
+  height: number;
+  at: number;
+  error: string | null;
+}
+const SCREEN_ASK_EVERY_MS = 5_000;
+const SCREEN_WATCH_S = 20;
+const SCREEN_FRAME_MAX = 3 * 1024 * 1024;
 
 const DISCONNECT_GRACE_MS = 90_000;
 const CANCEL_GRACE_MS = 60_000;
@@ -48,6 +62,8 @@ export class Gateway {
   /** Robots installing a new version (robot id -> version) and the last update problem per robot. */
   private readonly updates = new Map<string, { version: string; since: number }>();
   private readonly updateErrors = new Map<string, string>();
+  private readonly screens = new Map<string, ScreenFrame>();
+  private readonly screenAsked = new Map<string, number>();
   /** Called when a robot comes back with a different version (audit log). */
   onVersionChange: (robotId: string, from: string, to: string) => void = () => undefined;
   /** Whether a job's robot may ask the AI assistant to fix failed steps (set by createServices). */
@@ -100,6 +116,21 @@ export class Gateway {
     if (message.type === 'watch') conn.watchSent = true;
     this.send(conn, message);
     return true;
+  }
+
+  /**
+   * The dashboard is showing this robot's screen: ask the robot for pictures for a little while
+   * (renewed as long as someone keeps watching) and return the newest one.
+   */
+  watchScreen(robotId: string): ScreenFrame | null {
+    const conn = this.connections.get(robotId);
+    if (!conn) return null;
+    if (Date.now() - (this.screenAsked.get(robotId) ?? 0) > SCREEN_ASK_EVERY_MS) {
+      this.screenAsked.set(robotId, Date.now());
+      this.send(conn, { type: 'screen.watch', seconds: SCREEN_WATCH_S });
+    }
+    const frame = this.screens.get(robotId);
+    return frame && Date.now() - frame.at < 15_000 ? frame : null;
   }
 
   busyJob(robotId: string): string | null {
@@ -160,6 +191,8 @@ export class Gateway {
   private detach(conn: Connection): void {
     if (this.connections.get(conn.robotId) !== conn) return;
     this.connections.delete(conn.robotId);
+    this.screens.delete(conn.robotId);
+    this.screenAsked.delete(conn.robotId);
     if (conn.jobId) this.watchLost(conn.jobId);
     this.publishRobot(conn.robotId);
     this.robotsChanged();
@@ -224,6 +257,14 @@ export class Gateway {
         this.robotsChanged();
         break;
       }
+      case 'screen.frame':
+        if (typeof msg.data === 'string' && msg.data.length < SCREEN_FRAME_MAX && this.screenAsked.has(conn.robotId)) {
+          this.screens.set(conn.robotId, { image: `data:image/jpeg;base64,${msg.data}`, width: Number(msg.width) || 0, height: Number(msg.height) || 0, at: Date.now(), error: null });
+        }
+        break;
+      case 'screen.unavailable':
+        this.screens.set(conn.robotId, { image: null, width: 0, height: 0, at: Date.now(), error: String(msg.reason ?? '').slice(0, 300) });
+        break;
       case 'trigger.fired':
       case 'trigger.status':
         try {

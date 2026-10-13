@@ -17,6 +17,7 @@ import websockets
 
 from .config import RobotConfig, __version__, home
 from .runner import JobRunner
+from .screen import ScreenStreamer
 from .updater import UpdateError, Updater, install_root, mark_failed
 from .watchers import Watchers
 
@@ -48,6 +49,7 @@ class Agent:
         self.updater = Updater(self.http, install_root())
         # Event triggers ("new file in a folder", "new email") the Orchestrator asks this robot to watch.
         self.watchers = Watchers(home() / "triggers", self.send_threadsafe, self.request_trigger_credential)
+        self.screen = ScreenStreamer(self.send_threadsafe, enabled=config.screen_view)
         self._update_task: asyncio.Task | None = None
         self._updating = False  # downloading or installing: no new jobs
         self._update_waiting: bool | None = None  # found while busy (value: forced by an admin)
@@ -120,6 +122,8 @@ class Agent:
 
     # -- connection loop ----------------------------------------------------------------
     def _queue(self, message: dict[str, Any]) -> None:
+        if message.get("type") == "screen.frame" and (self._ws is None or len(self._outbox) > 5):
+            return  # live pictures are only worth sending now: never buffer them
         self._outbox.append(message)
         asyncio.ensure_future(self._flush())
 
@@ -172,6 +176,7 @@ class Agent:
     def stop(self) -> None:
         self._stop.set()
         self.watchers.stop()
+        self.screen.stop()
 
     async def _heartbeat(self, ws: Any) -> None:
         while True:
@@ -253,6 +258,8 @@ class Agent:
             self.runner.cancel(message["job_id"])
         elif kind == "watch":
             self.watchers.update(list(message.get("triggers") or []))
+        elif kind == "screen.watch":
+            self.screen.watch(float(message.get("seconds") or 20))
 
 
 def enroll(server_url: str, key: str, name: str | None = None, trust_certificate: bool = False) -> RobotConfig:

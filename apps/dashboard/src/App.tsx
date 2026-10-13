@@ -6,7 +6,9 @@ import { href, useRoute } from './lib/router';
 import { AuditPage } from './pages/AuditPage';
 import { AutomationPage } from './pages/AutomationPage';
 import { AutomationsPage } from './pages/AutomationsPage';
+import { NoticeBanner } from './components/NoticeBanner';
 import { AssetsPage } from './pages/AssetsPage';
+import { ServerHealthPage } from './pages/ServerHealthPage';
 import { CredentialsPage } from './pages/CredentialsPage';
 import { HomePage } from './pages/HomePage';
 import { QueuePage, QueuesPage } from './pages/QueuesPage';
@@ -83,6 +85,7 @@ const NAV: { path: string; label: string; icon: string; role: Role }[] = [
   { path: 'shared-values', label: 'Shared values', icon: 'library', role: 'builder' },
   { path: 'users', label: 'Users', icon: 'users', role: 'admin' },
   { path: 'settings', label: 'Settings', icon: 'settings', role: 'viewer' },
+  { path: 'health', label: 'Server health', icon: 'heart-pulse', role: 'admin' },
   { path: 'audit', label: 'Audit log', icon: 'scroll-text', role: 'admin' },
 ];
 
@@ -153,6 +156,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
           </Button>
           <span className="ml-2 font-semibold">Autoflow</span>
         </div>
+        <NoticeBanner />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
           <Page route={route} />
         </main>
@@ -186,6 +190,8 @@ function Page({ route }: { route: string[] }) {
       return <SettingsPage />;
     case 'audit':
       return guard('admin', <AuditPage />);
+    case 'health':
+      return guard('admin', <ServerHealthPage />);
     default:
       return <NoAccess title="Page not found" />;
   }

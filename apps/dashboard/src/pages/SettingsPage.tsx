@@ -1,6 +1,7 @@
 import { Button, Field, Icon, Input, Segmented, Select, Switch, Textarea } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { useMe } from '../App';
+import { ApiKeys, Notices } from '../components/AdminCards';
 import { Card, PageHeader } from '../components/common';
 import { api, can, useApi, type Role } from '../lib/api';
 import { bytes, dateTime } from '../lib/format';
@@ -27,6 +28,8 @@ export function SettingsPage() {
         {can(me.role, 'admin') && <Directory />}
         {can(me.role, 'admin') && <AiAssistant />}
         {can(me.role, 'admin') && <Security />}
+        {can(me.role, 'admin') && <Notices />}
+        {can(me.role, 'admin') && <ApiKeys />}
       </div>
     </>
   );

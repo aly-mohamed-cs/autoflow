@@ -101,6 +101,10 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/api/auth/me', async (request, reply) => {
     if (!request.user) return reply.code(401).send({ error: 'Please sign in.' });
+    if (request.user.apiKey) {
+      const { id, username, displayName, role } = request.user;
+      return { user: { id, username, displayName, email: null, role, roleLabel: ROLE_LABELS[role], source: 'api' } };
+    }
     return { user: me(request.user.id) };
   });
 

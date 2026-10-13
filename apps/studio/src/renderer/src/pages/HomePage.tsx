@@ -14,6 +14,10 @@ export function HomePage() {
   const [deleting, setDeleting] = useState<FlowSummary | null>(null);
   const [describing, setDescribing] = useState(false);
   const aiEnabled = useAiEnabled();
+  const [notices, setNotices] = useState<{ id: string; message: string; tone: 'info' | 'warning' }[]>([]);
+  useEffect(() => {
+    void window.autoflow.orchestrator.notices().then(setNotices).catch(() => undefined);
+  }, []);
 
   const refresh = useCallback(() => {
     window.autoflow.flows
@@ -57,6 +61,23 @@ export function HomePage() {
             New automation
           </Button>
         </header>
+
+        {notices.length > 0 && (
+          <div className="mt-6 space-y-2" role="region" aria-label="Notices">
+            {notices.map((n) => (
+              <p
+                key={n.id}
+                className={cn(
+                  'flex items-start gap-2.5 rounded-lg border px-4 py-2.5 text-[13px]',
+                  n.tone === 'warning' ? 'border-transparent bg-warning-soft text-warning' : 'border-border bg-primary-soft',
+                )}
+              >
+                <Icon name={n.tone === 'warning' ? 'triangle-alert' : 'megaphone'} size={16} className="mt-0.5 shrink-0" />
+                <span className="whitespace-pre-line">{n.message}</span>
+              </p>
+            ))}
+          </div>
+        )}
 
         <section className="mt-8">
           <h2 className="mb-3 text-[13px] font-semibold text-muted">Start from a template</h2>

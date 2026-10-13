@@ -200,7 +200,7 @@ export async function flowRoutes(app: FastifyInstance) {
     const job = jobs.create({
       flowId: id,
       version: body.version,
-      trigger: body.trigger ?? 'manual',
+      trigger: user.apiKey ? 'api' : (body.trigger ?? 'manual'),
       triggeredBy: body.trigger === 'hotkey' ? `${user.displayName} (hotkey)` : user.displayName,
       inputs: body.inputs,
       pool: body.pool,

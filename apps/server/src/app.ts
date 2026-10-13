@@ -13,6 +13,7 @@ import { adminRoutes } from './routes/admin.js';
 import { aiRoutes } from './routes/ai.js';
 import { assetRoutes } from './routes/assets.js';
 import { eventRoutes } from './routes/events.js';
+import { systemRoutes } from './routes/system.js';
 import { authRoutes } from './routes/auth.js';
 import { flowRoutes } from './routes/flows.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -151,6 +152,7 @@ export async function buildApp(svc: Services, options: FastifyServerOptions = {}
   await app.register(triggerRoutes);
   await app.register(assetRoutes);
   await app.register(eventRoutes);
+  await app.register(systemRoutes);
   await app.register(adminRoutes);
   await app.register(aiRoutes);
 
