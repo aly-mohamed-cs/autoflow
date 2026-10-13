@@ -18,6 +18,7 @@ import websockets
 from .config import RobotConfig, __version__, home
 from .runner import JobRunner
 from .updater import UpdateError, Updater, install_root, mark_failed
+from .watchers import Watchers
 
 log = logging.getLogger("autoflow.robot")
 
@@ -45,6 +46,8 @@ class Agent:
                                 repair=self.request_repair, ai=self.request_ai,
                                 orchestrator=self.request_orchestrator)
         self.updater = Updater(self.http, install_root())
+        # Event triggers ("new file in a folder", "new email") the Orchestrator asks this robot to watch.
+        self.watchers = Watchers(home() / "triggers", self.send_threadsafe, self.request_trigger_credential)
         self._update_task: asyncio.Task | None = None
         self._updating = False  # downloading or installing: no new jobs
         self._update_waiting: bool | None = None  # found while busy (value: forced by an admin)
@@ -104,6 +107,17 @@ class Agent:
             raise RuntimeError(message[:500])
         return r.json()
 
+    def request_trigger_credential(self, trigger_id: str) -> dict[str, Any]:
+        """The mailbox sign-in of an email trigger this robot watches."""
+        r = self.http.get(f"/api/robot/triggers/{trigger_id}/credential")
+        if r.status_code >= 400:
+            try:
+                message = r.json().get("error") or r.text
+            except ValueError:
+                message = r.text
+            raise RuntimeError(message[:300])
+        return r.json()
+
     # -- connection loop ----------------------------------------------------------------
     def _queue(self, message: dict[str, Any]) -> None:
         self._outbox.append(message)
@@ -157,6 +171,7 @@ class Agent:
 
     def stop(self) -> None:
         self._stop.set()
+        self.watchers.stop()
 
     async def _heartbeat(self, ws: Any) -> None:
         while True:
@@ -236,6 +251,8 @@ class Agent:
                 self._queue({"type": "job.rejected", "job_id": job["id"], "reason": "busy"})
         elif kind == "job.cancel":
             self.runner.cancel(message["job_id"])
+        elif kind == "watch":
+            self.watchers.update(list(message.get("triggers") or []))
 
 
 def enroll(server_url: str, key: str, name: str | None = None, trust_certificate: bool = False) -> RobotConfig:

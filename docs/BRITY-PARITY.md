@@ -58,8 +58,8 @@ gaps.
 ## Release F - Orchestrator
 - [x] Shared resources (assets): company-wide values and files that automations read at run time
 - [x] Queue steps inside automations: add item, get next item, mark done / failed, count; "For each queue item" loop
-- [ ] Event triggers: new email arrives, file appears in a folder
-- [ ] Process flows: chain automations (when A finishes, start B; wait for an event; branch on result)
+- [x] Event triggers: new email arrives, file appears in a folder (watched by a robot of the pool)
+- [x] Process flows: chain automations (when A succeeds / fails / finishes, start B with A's results); waiting for an event = event triggers
 - [ ] Live robot screen view and remote stop from the dashboard
 - [ ] Notices for users; API keys for the REST API; email two-factor sign-in; server health page
 - [ ] Attended "work plans": users run and schedule their own automations from a tray list

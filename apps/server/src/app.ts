@@ -12,6 +12,7 @@ import type { Db } from './db.js';
 import { adminRoutes } from './routes/admin.js';
 import { aiRoutes } from './routes/ai.js';
 import { assetRoutes } from './routes/assets.js';
+import { eventRoutes } from './routes/events.js';
 import { authRoutes } from './routes/auth.js';
 import { flowRoutes } from './routes/flows.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -20,6 +21,8 @@ import { triggerRoutes } from './routes/triggers.js';
 import type { Vault } from './security.js';
 import { Audit, Bus, HttpError, Settings } from './services/core.js';
 import { Assets } from './services/assets.js';
+import { Chains } from './services/chains.js';
+import { EventTriggers } from './services/eventTriggers.js';
 import { Gateway } from './services/gateway.js';
 import { AiService } from './services/ai.js';
 import { Jobs } from './services/jobs.js';
@@ -41,6 +44,8 @@ export interface Services {
   scheduler: Scheduler;
   queues: Queues;
   assets: Assets;
+  eventTriggers: EventTriggers;
+  chains: Chains;
   ai: AiService;
   repairs: Repairs;
   robotReleases: RobotReleases;
@@ -86,6 +91,8 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
     scheduler: new Scheduler(db, jobs),
     queues: new Queues(db, jobs, bus),
     assets: new Assets(db, join(config.dataDir, 'assets')),
+    eventTriggers: new EventTriggers(db, jobs, gateway),
+    chains: new Chains(db, jobs),
     ai,
     repairs,
     robotReleases,
@@ -143,6 +150,7 @@ export async function buildApp(svc: Services, options: FastifyServerOptions = {}
   await app.register(robotRoutes);
   await app.register(triggerRoutes);
   await app.register(assetRoutes);
+  await app.register(eventRoutes);
   await app.register(adminRoutes);
   await app.register(aiRoutes);
 

@@ -47,4 +47,6 @@ export const TRIGGER_LABELS: Record<string, string> = {
   queue: 'Queue',
   hotkey: 'Hotkey',
   api: 'API',
+  event: 'Event trigger',
+  chain: 'After another automation',
 };

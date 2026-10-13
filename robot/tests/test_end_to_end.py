@@ -335,6 +335,50 @@ def test_shared_values_and_queue_items_on_the_robot(server, tmp_path, monkeypatc
         thread.join(5)
 
 
+def test_a_new_file_in_a_watched_folder_starts_a_run(server, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOFLOW_ROBOT_HOME", str(tmp_path / "robot"))
+    inbox, out = tmp_path / "inbox", tmp_path / "out"
+    inbox.mkdir()
+    out.mkdir()
+    (inbox / "invoice-7.pdf").write_bytes(b"%PDF-1.4 test")
+    api = httpx.Client(base_url=server, timeout=10)
+    api.post("/api/setup", json={"username": "admin", "displayName": "Admin", "password": "a long admin password"}).raise_for_status()
+    token = api.post("/api/auth/login", json={"username": "admin", "password": "a long admin password"}).json()["token"]
+    api.headers["Authorization"] = f"Bearer {token}"
+    flow = {
+        "id": "flow_file",
+        "name": "Handle new invoice",
+        "variables": [{"name": "trigger_file_name", "type": "text", "is_input": True}],
+        "steps": [{"id": "w", "activity": "files.write_text",
+                   "params": {"file": str(out / "seen.txt"), "text": "Got {{trigger_file_name}}"}}],
+    }
+    api.post("/api/flows/flow_file/versions", json={"flow": flow}).raise_for_status()
+    trigger = api.post("/api/event-triggers", json={
+        "kind": "file", "flowId": "flow_file", "name": "Invoices folder", "includeExisting": True,
+        "config": {"folder": str(inbox), "pattern": "*.pdf", "intervalS": 10},
+    }).json()["id"]
+    key = api.post("/api/robots/enrollment-keys", json={"pool": "default", "hours": 1}).json()["key"]
+
+    from autoflow_robot.agent import Agent, enroll
+    from autoflow_robot.config import RobotConfig
+
+    enroll(server, key, name="Watching robot")
+    agent = Agent(RobotConfig.load())
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_until_complete, args=(agent.run(),), daemon=True)
+    thread.start()
+    try:
+        # The file is taken once it stayed the same for one check (10 s), then the run writes its name.
+        _wait(lambda: (out / "seen.txt").exists(), "the triggered run", 60)
+        assert (out / "seen.txt").read_text(encoding="utf-8") == "Got invoice-7.pdf"
+        listed = next(t for t in api.get("/api/event-triggers").json()["triggers"] if t["id"] == trigger)
+        assert listed["watcher"]["name"] == "Watching robot" and listed["runs"] == 1 and listed["lastError"] is None
+        assert agent.watchers.watching == [trigger]
+    finally:
+        loop.call_soon_threadsafe(agent.stop)
+        thread.join(5)
+
+
 def _wait(check, what, timeout=20):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

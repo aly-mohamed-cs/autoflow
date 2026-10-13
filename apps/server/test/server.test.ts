@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -13,6 +14,7 @@ import { applyPatches } from '../src/services/repairs.js';
 import { compareVersions } from '../src/services/robotReleases.js';
 import type { Config } from '../src/config.js';
 import { Db } from '../src/db.js';
+import { MIGRATIONS } from '../src/migrations.js';
 import { Vault } from '../src/security.js';
 
 let app: FastifyInstance;
@@ -641,6 +643,161 @@ describe('steps that run commands or scripts', () => {
       scripts: ['Run command'],
     });
     await api('PUT', '/api/settings/security', { builderScripts: false });
+  });
+});
+
+describe('event triggers and chained automations', () => {
+  const publish = (id: string, name: string, inputs: string[] = []) =>
+    api('POST', `/api/flows/${id}/versions`, {
+      flow: { id, name, variables: inputs.map((n) => ({ name: n, type: 'any', is_input: true })), steps: [{ id: 's1', activity: 'control.log', params: { message: 'hi' } }] },
+    });
+  const enrollRobot = async (pool: string, name: string) => {
+    const { key } = (await api('POST', '/api/robots/enrollment-keys', { pool, hours: 1 })).body;
+    return (await app.inject({ method: 'POST', url: '/api/robot/enroll', payload: { key, name } })).json() as { token: string };
+  };
+  const triggers = async () => (await api('GET', '/api/event-triggers')).body.triggers as any[];
+
+  it('hands each trigger to one online robot, which starts one run per new file or email', async () => {
+    await publish('flow_inbox', 'Process invoices');
+    const robot = await enrollRobot('watchers', 'Watcher');
+    const messages: any[] = [];
+    const connect = async () => {
+      const ws = new WebSocket(`ws://${base}/api/robot/connect`, { headers: { authorization: `Bearer ${robot.token}` } });
+      ws.on('message', (m) => messages.push(JSON.parse(m.toString())));
+      await new Promise((resolve) => ws.on('open', resolve));
+      ws.send(JSON.stringify({ type: 'hello', version: '0.5.0', capabilities: [] }));
+      return ws;
+    };
+    let ws = await connect();
+    const lastWatch = () => messages.filter((m) => m.type === 'watch').at(-1);
+
+    const file = (await api('POST', '/api/event-triggers', {
+      kind: 'file', flowId: 'flow_inbox', name: 'New invoices', pool: 'watchers', config: { folder: 'C:\\Invoices', pattern: '*.pdf' },
+    })).body;
+    await waitFor(() => lastWatch()?.triggers.length === 1);
+    expect(lastWatch().triggers[0]).toMatchObject({ id: file.id, kind: 'file', config: { folder: 'C:\\Invoices', pattern: '*.pdf', subfolders: false, intervalS: 30 } });
+    expect(lastWatch().triggers[0].since).toMatch(/^\d{4}-/); // files from before don't count
+
+    const fire = (id: string, key: string, data: unknown) => ws.send(JSON.stringify({ type: 'trigger.fired', trigger_id: id, key, data }));
+    fire(file.id, 'C:\\Invoices\\a.pdf|1|10', { path: 'C:\\Invoices\\a.pdf', name: 'a.pdf' });
+    fire(file.id, 'C:\\Invoices\\a.pdf|1|10', { path: 'C:\\Invoices\\a.pdf', name: 'a.pdf' }); // seen again: no second run
+    fire(file.id, 'C:\\Invoices\\b.pdf|1|10', { wrong: true }); // not what a file trigger reports
+    fire('trg_unknown', 'x', { path: 'x', name: 'x' });
+    await waitFor(async () => (await triggers())[0]?.runs === 1);
+    await new Promise((r) => setTimeout(r, 100));
+    const runs = svc.db.all<any>(`SELECT * FROM jobs WHERE trigger = 'event'`);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ flow_id: 'flow_inbox', pool: 'watchers', triggered_by: 'Trigger “New invoices”', trigger_ref: file.id });
+    expect(JSON.parse(runs[0].inputs)).toEqual({ trigger_file: 'C:\\Invoices\\a.pdf', trigger_file_name: 'a.pdf' });
+
+    ws.send(JSON.stringify({ type: 'trigger.status', trigger_id: file.id, error: 'The folder C:\\Invoices was not found.' }));
+    await waitFor(async () => (await triggers())[0].lastError !== null);
+    expect((await triggers())[0]).toMatchObject({ flowName: 'Process invoices', watcher: { name: 'Watcher', online: true }, includeExisting: false, lastError: 'The folder C:\\Invoices was not found.' });
+
+    // Email: only the robot watching the trigger gets the mailbox password.
+    await api('PUT', '/api/credentials', { name: 'Invoices mailbox', username: 'invoices@company.local', password: 'Mailbox-pass1' });
+    const mail = (await api('POST', '/api/event-triggers', {
+      kind: 'email', flowId: 'flow_inbox', name: 'Invoice mails', pool: 'watchers', config: { server: 'mail.company.local', credential: 'Invoices mailbox', subjectContains: 'Invoice' },
+    })).body;
+    await waitFor(() => lastWatch()?.triggers.length === 2);
+    const credential = (token: string) => app.inject({ method: 'GET', url: `/api/robot/triggers/${mail.id}/credential`, headers: { authorization: `Bearer ${token}` } });
+    expect((await credential(robot.token)).json()).toEqual({ username: 'invoices@company.local', password: 'Mailbox-pass1' });
+    expect((await credential((await enrollRobot('elsewhere', 'Other robot')).token)).statusCode).toBe(403);
+    fire(mail.id, 'AAMk1', { id: 'AAMk1', from: 'vendor@example.com', subject: 'Invoice 42', received: '2026-10-13T08:00:00Z', text: 'Please pay', attachments: 'inv42.pdf' });
+    await waitFor(() => svc.db.all(`SELECT 1 FROM jobs WHERE trigger = 'event'`).length === 2);
+    const emailRun = svc.db.get<any>(`SELECT inputs FROM jobs WHERE trigger = 'event' AND trigger_ref = ?`, mail.id);
+    expect(JSON.parse(emailRun.inputs).trigger_email).toMatchObject({ id: 'AAMk1', subject: 'Invoice 42', attachments: 'inv42.pdf' });
+
+    // Turned off: the robot stops watching it. Gone offline: nobody watches; back: told again.
+    await api('PUT', `/api/event-triggers/${mail.id}`, {
+      kind: 'email', flowId: 'flow_inbox', name: 'Invoice mails', pool: 'watchers', enabled: false, config: { server: 'mail.company.local', credential: 'Invoices mailbox' },
+    });
+    await waitFor(() => lastWatch()?.triggers.length === 1);
+    expect((await credential(robot.token)).statusCode).toBe(403);
+    ws.close();
+    await waitFor(async () => (await triggers()).every((t) => t.watcher === null));
+    messages.length = 0;
+    ws = await connect();
+    await waitFor(() => lastWatch()?.triggers.length === 1);
+    ws.close();
+    expect((await api('DELETE', `/api/event-triggers/${file.id}`)).status).toBe(200);
+    expect(svc.db.all('SELECT * FROM trigger_events WHERE trigger_id = ?', file.id)).toHaveLength(0);
+  });
+
+  it('starts the next automation when one finishes, with its results, and stops endless chains', async () => {
+    await publish('flow_report', 'Download report');
+    await publish('flow_send', 'Send report', ['report', 'previous_run']);
+    await publish('flow_alert', 'Tell IT', ['previous_run', 'report']);
+    expect((await api('POST', '/api/flows/flow_report/chains', { runWhen: 'succeeded', nextFlowId: 'flow_send' })).status).toBe(200);
+    await api('POST', '/api/flows/flow_report/chains', { runWhen: 'failed', nextFlowId: 'flow_alert', passOutputs: false });
+    expect((await api('POST', '/api/flows/flow_report/chains', { runWhen: 'succeeded', nextFlowId: 'flow_send' })).status).toBe(400);
+    const chained = () => svc.db.all<any>(`SELECT * FROM jobs WHERE trigger = 'chain' ORDER BY queued_at, rowid`);
+
+    const ok = svc.jobs.create({ flowId: 'flow_report', trigger: 'manual', pool: 'chains' });
+    svc.jobs.finish(ok.id, { status: 'succeeded', outputs: { report: 'C:\\out\\r.xlsx', extra: 'not a start value of Send report' } });
+    expect(chained()).toHaveLength(1);
+    expect(chained()[0]).toMatchObject({ flow_id: 'flow_send', chain_depth: 1, pool: 'chains', triggered_by: 'After “Download report”' });
+    expect(JSON.parse(chained()[0].inputs)).toEqual({ report: 'C:\\out\\r.xlsx', previous_run: { automation: 'Download report', status: 'succeeded', error: '', run_id: ok.id } });
+
+    const bad = svc.jobs.create({ flowId: 'flow_report', trigger: 'manual', pool: 'chains' });
+    svc.jobs.finish(bad.id, { status: 'failed', outputs: { report: 'x' }, error: { message: 'Portal down' } });
+    expect(chained()).toHaveLength(2);
+    expect(JSON.parse(chained()[1].inputs)).toEqual({ previous_run: { automation: 'Download report', status: 'failed', error: 'Portal down', run_id: bad.id } });
+
+    const stopped = svc.jobs.create({ flowId: 'flow_report', trigger: 'manual', pool: 'chains' });
+    svc.jobs.finish(stopped.id, { status: 'cancelled' });
+    expect(chained()).toHaveLength(2); // a person stopped it
+
+    // An automation that starts itself stops after 10 runs in a row.
+    await api('POST', '/api/flows/flow_alert/chains', { runWhen: 'finished', nextFlowId: 'flow_alert' });
+    svc.jobs.finish(svc.jobs.create({ flowId: 'flow_alert', trigger: 'chain', pool: 'chains', chainDepth: 10 }).id, { status: 'succeeded' });
+    expect(chained().filter((j) => j.chain_depth === 11)).toHaveLength(0);
+
+    const links = (await api('GET', '/api/flows/flow_send/chains')).body;
+    expect(links.startedBy).toEqual([expect.objectContaining({ flowName: 'Download report', runWhen: 'succeeded' })]);
+    const next = (await api('GET', '/api/flows/flow_report/chains')).body.next;
+    expect(next.map((c: any) => [c.runWhen, c.nextFlowName, c.passOutputs])).toEqual([['succeeded', 'Send report', true], ['failed', 'Tell IT', false]]);
+    expect((await api('PATCH', `/api/chains/${next[0].id}`, { enabled: false })).status).toBe(200);
+    expect((await api('GET', '/api/flows/flow_send/chains')).body.startedBy).toEqual([]);
+    expect((await api('DELETE', `/api/chains/${next[1].id}`)).status).toBe(200);
+  });
+});
+
+describe('database updates', () => {
+  it('rebuilds the runs table without losing runs, their steps or files', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'autoflow-migrate-'));
+    const path = join(dir, 'old.db');
+    const raw = new DatabaseSync(path);
+    raw.exec('PRAGMA foreign_keys = ON');
+    raw.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
+    MIGRATIONS.slice(0, 3).forEach((sql, i) => {
+      raw.exec(sql);
+      raw.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(i + 1, 'then');
+    });
+    raw.exec(`
+      INSERT INTO flows (id, name, created_at, updated_at) VALUES ('f', 'F', 'x', 'x');
+      INSERT INTO jobs (id, flow_id, version, status, trigger, queued_at, repair_calls) VALUES ('j', 'f', 1, 'succeeded', 'manual', 'x', 2);
+      INSERT INTO job_events (job_id, seq, ts, kind, data) VALUES ('j', 1, 1, 'log', '{}');
+      INSERT INTO artifacts (id, job_id, kind, name, path, size, created_at) VALUES ('a', 'j', 'screenshot', 'n', 'p', 1, 'x');
+    `);
+    raw.close();
+
+    const db = new Db(path);
+    try {
+      expect(db.migrate()).toBe(MIGRATIONS.length - 3);
+      expect(db.get('SELECT trigger, repair_calls, chain_depth FROM jobs WHERE id = ?', 'j')).toEqual({ trigger: 'manual', repair_calls: 2, chain_depth: 0 });
+      expect(db.all('SELECT * FROM job_events')).toHaveLength(1);
+      expect(db.all('SELECT * FROM artifacts')).toHaveLength(1);
+      db.run(`INSERT INTO jobs (id, flow_id, version, status, trigger, queued_at) VALUES ('k', 'f', 1, 'queued', 'event', 'x')`);
+      // Deleting a run still removes its steps and files (the references survived the rebuild).
+      db.run('DELETE FROM jobs WHERE id = ?', 'j');
+      expect(db.all('SELECT * FROM job_events')).toHaveLength(0);
+      expect(db.all('SELECT * FROM artifacts')).toHaveLength(0);
+      expect(db.get<{ foreign_keys: number }>('PRAGMA foreign_keys')).toEqual({ foreign_keys: 1 });
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

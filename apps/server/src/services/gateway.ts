@@ -5,6 +5,7 @@ import type { WebSocket } from 'ws';
 import type { Db } from '../db.js';
 import { json, now } from '../db.js';
 import type { Bus } from './core.js';
+import type { TriggerFired, TriggerStatus } from './eventTriggers.js';
 import type { JobRow, Jobs } from './jobs.js';
 import { compareVersions } from './robotReleases.js';
 
@@ -15,6 +16,8 @@ interface Connection {
   /** Job the robot is working on (or was just offered). */
   jobId: string | null;
   lastSeen: number;
+  /** Whether this connection got its list of event triggers to watch yet. */
+  watchSent: boolean;
 }
 
 export type RobotMessage =
@@ -24,7 +27,9 @@ export type RobotMessage =
   | { type: 'job.finished'; job_id: string; status: 'succeeded' | 'failed' | 'cancelled'; duration_ms?: number; outputs?: Record<string, unknown>; error?: { message: string; hint?: string | null; step_id?: string } | null }
   | { type: 'job.rejected'; job_id: string; reason?: string }
   | { type: 'robot.updating'; version: string }
-  | { type: 'robot.update_failed'; version: string; error: string };
+  | { type: 'robot.update_failed'; version: string; error: string }
+  | TriggerFired
+  | TriggerStatus;
 
 const DISCONNECT_GRACE_MS = 90_000;
 const CANCEL_GRACE_MS = 60_000;
@@ -49,6 +54,10 @@ export class Gateway {
   repairAllowed: (job: JobRow) => boolean = () => false;
   /** Newest robot version in Downloads while robots update by themselves, else null (set by createServices). */
   newestRobotVersion: () => string | null = () => null;
+  /** Robots came or went (event triggers are handed to online robots). */
+  onRobotsChanged: (() => void)[] = [];
+  /** A watcher robot reports a new file / email, or a problem (set by EventTriggers). */
+  onTriggerMessage: (robotId: string, msg: TriggerFired | TriggerStatus) => void = () => undefined;
 
   constructor(
     private readonly db: Db,
@@ -78,6 +87,19 @@ export class Gateway {
 
   isOnline(robotId: string): boolean {
     return this.connections.has(robotId);
+  }
+
+  /** Connected robots; `fresh` ones haven't been told what to watch yet. */
+  onlineRobots(): { robotId: string; pool: string; fresh: boolean }[] {
+    return [...this.connections.values()].map((c) => ({ robotId: c.robotId, pool: c.pool, fresh: !c.watchSent }));
+  }
+
+  sendTo(robotId: string, message: Record<string, unknown>): boolean {
+    const conn = this.connections.get(robotId);
+    if (!conn) return false;
+    if (message.type === 'watch') conn.watchSent = true;
+    this.send(conn, message);
+    return true;
   }
 
   busyJob(robotId: string): string | null {
@@ -125,7 +147,7 @@ export class Gateway {
       return;
     }
     this.connections.get(robotId)?.socket.close(4000, 'Replaced by a newer connection');
-    const conn: Connection = { robotId, pool: robot.pool, socket, jobId: null, lastSeen: Date.now() };
+    const conn: Connection = { robotId, pool: robot.pool, socket, jobId: null, lastSeen: Date.now(), watchSent: false };
     this.connections.set(robotId, conn);
     this.touch(robotId);
     socket.on('message', (raw) => this.onMessage(conn, raw.toString()));
@@ -140,6 +162,7 @@ export class Gateway {
     this.connections.delete(conn.robotId);
     if (conn.jobId) this.watchLost(conn.jobId);
     this.publishRobot(conn.robotId);
+    this.robotsChanged();
   }
 
   /** If nobody reports progress on a running job for a while, fail it. */
@@ -197,8 +220,18 @@ export class Gateway {
         this.resume(conn, msg.busy_job_id ?? null);
         this.publishRobot(conn.robotId);
         this.dispatch();
+        conn.watchSent = false; // a restarted robot watches nothing until told again
+        this.robotsChanged();
         break;
       }
+      case 'trigger.fired':
+      case 'trigger.status':
+        try {
+          this.onTriggerMessage(conn.robotId, msg);
+        } catch (err) {
+          console.error('event trigger message failed:', (err as Error).message);
+        }
+        break;
       case 'robot.updating':
         this.updates.set(conn.robotId, { version: String(msg.version).slice(0, 40), since: Date.now() });
         this.updateErrors.delete(conn.robotId);
@@ -232,6 +265,16 @@ export class Gateway {
           this.publishRobot(conn.robotId);
         }
         break;
+    }
+  }
+
+  private robotsChanged(): void {
+    for (const fn of this.onRobotsChanged) {
+      try {
+        fn();
+      } catch (err) {
+        console.error('robot change handler failed:', (err as Error).message);
+      }
     }
   }
 

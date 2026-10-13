@@ -226,4 +226,77 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX queue_items_job ON queue_items(job_id, status);
   `,
+  /* 4: event triggers and chained automations (runs started by 'event' and 'chain') */ `
+  CREATE TABLE jobs_new (
+    id            TEXT PRIMARY KEY,
+    flow_id       TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+    version       INTEGER NOT NULL,
+    status        TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+    trigger       TEXT NOT NULL CHECK (trigger IN ('manual', 'schedule', 'webhook', 'queue', 'hotkey', 'api', 'event', 'chain')),
+    trigger_ref   TEXT,
+    triggered_by  TEXT,
+    inputs        TEXT NOT NULL DEFAULT '{}',
+    pool          TEXT NOT NULL DEFAULT 'default',
+    robot_id      TEXT,
+    priority      INTEGER NOT NULL DEFAULT 0,
+    timeout_s     INTEGER NOT NULL DEFAULT 3600,
+    queue_item_id TEXT,
+    queued_at     TEXT NOT NULL,
+    started_at    TEXT,
+    finished_at   TEXT,
+    duration_ms   INTEGER,
+    outputs       TEXT,
+    error         TEXT,
+    cancel_requested INTEGER NOT NULL DEFAULT 0,
+    repair_calls  INTEGER NOT NULL DEFAULT 0,
+    chain_depth   INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO jobs_new (id, flow_id, version, status, trigger, trigger_ref, triggered_by, inputs, pool, robot_id, priority, timeout_s,
+                        queue_item_id, queued_at, started_at, finished_at, duration_ms, outputs, error, cancel_requested, repair_calls)
+    SELECT id, flow_id, version, status, trigger, trigger_ref, triggered_by, inputs, pool, robot_id, priority, timeout_s,
+           queue_item_id, queued_at, started_at, finished_at, duration_ms, outputs, error, cancel_requested, repair_calls FROM jobs;
+  DROP TABLE jobs;
+  ALTER TABLE jobs_new RENAME TO jobs;
+  CREATE INDEX jobs_status ON jobs(status, priority DESC, queued_at);
+  CREATE INDEX jobs_flow ON jobs(flow_id, queued_at DESC);
+  CREATE INDEX jobs_queued_at ON jobs(queued_at DESC);
+
+  -- "A new file appears in a folder", "a new email arrives": watched by one robot of the pool.
+  CREATE TABLE event_triggers (
+    id                TEXT PRIMARY KEY,
+    flow_id           TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+    name              TEXT NOT NULL,
+    kind              TEXT NOT NULL CHECK (kind IN ('file', 'email')),
+    config            TEXT NOT NULL DEFAULT '{}',
+    pool              TEXT NOT NULL DEFAULT 'default',
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    since             TEXT,
+    watcher_robot_id  TEXT,
+    last_fired_at     TEXT,
+    last_error        TEXT,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL
+  );
+  -- Files and emails that already started a run (so each starts only one).
+  CREATE TABLE trigger_events (
+    trigger_id  TEXT NOT NULL REFERENCES event_triggers(id) ON DELETE CASCADE,
+    key         TEXT NOT NULL,
+    job_id      TEXT,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (trigger_id, key)
+  );
+
+  -- "When automation A finishes, start automation B."
+  CREATE TABLE flow_chains (
+    id            TEXT PRIMARY KEY,
+    flow_id       TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+    run_when      TEXT NOT NULL CHECK (run_when IN ('succeeded', 'failed', 'finished')),
+    next_flow_id  TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+    pass_outputs  INTEGER NOT NULL DEFAULT 1,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    created_by    TEXT,
+    created_at    TEXT NOT NULL
+  );
+  CREATE INDEX flow_chains_flow ON flow_chains(flow_id);
+  `,
 ];

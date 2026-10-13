@@ -236,9 +236,27 @@ Open the **dashboard** (address from your administrator) and choose the automati
 | When another system asks | **Webhooks → Create webhook**; give the address to IT |
 | For many separate items | Create a **Queue**, add items (paste rows from Excel); each item gets its own run |
 | With a keyboard shortcut | In Studio: **Settings → Quick launch**, e.g. *Ctrl+Alt+1* |
+| When a file appears in a folder | **Event triggers → When a file appears** |
+| When an email arrives | **Event triggers → When an email arrives** |
+| After another automation | On the other automation: **Then start**, e.g. when it succeeds or fails |
 
 Every run is kept in **Runs** with each step, the log and screenshots — open a failed run to
 see exactly where and why it stopped.
+
+**Event triggers** are watched by a robot of the pool you choose, so that robot must be able to
+open the folder (e.g. `\\fileserver\scans`) or sign in to the mailbox. Each new file or email
+starts one run; a file counts once it has been completely copied in. Files and emails that were
+already there when you created the trigger don't count, unless you ask for them. To use the file
+or email in the steps, give the automation the start value (Studio → **Start values & variables**):
+
+* `trigger_file` (the full path) or `trigger_file_name` for a folder trigger;
+* `trigger_email` for an email trigger: `{{trigger_email["subject"]}}`, `["from"]`, `["text"]`,
+  `["attachments"]` (file names). To save its attachments, use **Read emails** with **Only this
+  message** set to `{{trigger_email["id"]}}`, then **Save email attachments**.
+
+**Then start** chains automations. With *hand over results*, the next automation gets this
+one's results as start values with the same names, and `previous_run` (its automation, status,
+error) if it has such a start value. A person stopping a run doesn't start the next one.
 
 ---
 

@@ -60,10 +60,19 @@ export class Db {
     for (const [index, sql] of MIGRATIONS.entries()) {
       const version = index + 1;
       if (done.has(version)) continue;
-      this.tx(() => {
-        this.raw.exec(sql);
-        this.run('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', version, new Date().toISOString());
-      });
+      // Some migrations rebuild a table (SQLite can't change a CHECK in place): with foreign keys on,
+      // dropping the old table would delete the rows that point to it. Checked before committing.
+      this.raw.exec('PRAGMA foreign_keys = OFF');
+      try {
+        this.tx(() => {
+          this.raw.exec(sql);
+          const broken = this.all('PRAGMA foreign_key_check');
+          if (broken.length) throw new Error(`Database update ${version} left ${broken.length} broken references.`);
+          this.run('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', version, new Date().toISOString());
+        });
+      } finally {
+        this.raw.exec('PRAGMA foreign_keys = ON');
+      }
       applied++;
     }
     return applied;

@@ -43,29 +43,37 @@ class ExchangeParams(Params):
     mailbox: str = Param("", title="Mailbox address", placeholder="(the credential's own mailbox)", advanced=True)
 
 
-def _account(ctx: RunContext, p: ExchangeParams) -> Any:
+def _mailbox_address(mailbox: str, username: str) -> str:
+    address = to_text(mailbox).strip() or (username if "@" in username else "")
+    if not address:
+        raise ActivityError("Enter the mailbox address (e.g. robot@company.com) under More options.")
+    return address
+
+
+def connect(server: str, username: str, password: str, mailbox: str) -> Any:
+    """Sign in to an Exchange mailbox (EWS). Also used by robots watching a mailbox (email triggers)."""
     from exchangelib import DELEGATE, Account, Configuration, Credentials
     from exchangelib.errors import EWSError, UnauthorizedError
 
-    cred = ctx.credential(p.credential)
-    mailbox = to_text(p.mailbox).strip() or (cred.username if "@" in cred.username else "")
-    if not mailbox:
-        raise ActivityError("Enter the mailbox address (e.g. robot@company.com) under More options.")
-    key = f"ews:{p.server}:{mailbox}"
-    if key in ctx.resources:
-        return ctx.resources[key]
     try:
-        credentials = Credentials(cred.username, str(cred.password))
-        config = Configuration(server=to_text(p.server).strip(), credentials=credentials)
-        account = Account(mailbox, config=config, autodiscover=False, access_type=DELEGATE)
+        config = Configuration(server=to_text(server).strip(), credentials=Credentials(username, password))
+        account = Account(_mailbox_address(mailbox, username), config=config, autodiscover=False,
+                          access_type=DELEGATE)
         account.root  # noqa: B018 - connects and checks the sign-in
     except UnauthorizedError:
         raise ActivityError("Exchange rejected the username or password.", "Check the credential.") from None
     except (EWSError, OSError) as exc:
-        raise ActivityError(f"Could not connect to Exchange at {p.server}: {exc}",
+        raise ActivityError(f"Could not connect to Exchange at {server}: {exc}",
                             "Check the server name, and that the robot can reach it.") from None
-    ctx.resources[key] = account
     return account
+
+
+def _account(ctx: RunContext, p: ExchangeParams) -> Any:
+    cred = ctx.credential(p.credential)
+    key = f"ews:{p.server}:{_mailbox_address(p.mailbox, cred.username)}"
+    if key not in ctx.resources:
+        ctx.resources[key] = connect(p.server, cred.username, str(cred.password), p.mailbox)
+    return ctx.resources[key]
 
 
 # -- sending ----------------------------------------------------------------------------------
@@ -156,6 +164,11 @@ class ReadParams(ExchangeParams):
     subject_contains: str = Param("", title="Subject contains")
     max_count: int = Param(50, title="At most", ge=1, le=1000)
     mark_as_read: bool = Param(False, title="Mark them as read")
+    message_id: str = Param(
+        "", title="Only this message", advanced=True, placeholder='{{trigger_email["id"]}}',
+        description="The id of one email, e.g. the one that started this run (email trigger). "
+        "The other filters are then ignored.",
+    )
 
 
 def _folder(account: Any, path: str) -> Any:
@@ -184,35 +197,64 @@ def _folder(account: Any, path: str) -> Any:
 )
 def read(ctx: RunContext, p: ReadParams) -> Table:
     account = _account(ctx, p)
-    query = _folder(account, p.folder).all()
-    if p.unread_only:
-        query = query.filter(is_read=False)
-    if p.subject_contains:
-        query = query.filter(subject__icontains=p.subject_contains)
     cache: dict[str, Any] = ctx.resources.setdefault("ews_messages", {})
     table = Table(["id", "from", "subject", "received", "text", "attachments"])
-    wanted_from = p.from_contains.strip().casefold()
-    # Exchange can't search inside sender addresses, so that filter is applied here.
-    for item in query.order_by("-datetime_received")[: p.max_count * (5 if wanted_from else 1)]:
-        sender = item.sender
-        sender_text = f"{getattr(sender, 'name', '') or ''} {getattr(sender, 'email_address', '') or ''}".casefold()
-        if wanted_from and wanted_from not in sender_text:
-            continue
-        if len(table) >= p.max_count:
-            break
+    if to_text(p.message_id).strip():
+        items = [_fetch(account, to_text(p.message_id).strip())]
+    else:
+        items = find_messages(account, p.folder, unread_only=p.unread_only, subject_contains=p.subject_contains,
+                              from_contains=p.from_contains, max_count=p.max_count)
+    for item in items:
         cache[item.id] = item
-        table.append({
-            "id": item.id,
-            "from": getattr(item.sender, "email_address", "") if item.sender else "",
-            "subject": item.subject or "",
-            "received": item.datetime_received,
-            "text": (item.text_body or "").strip(),
-            "attachments": ", ".join(a.name for a in item.attachments or []),
-        })
+        table.append(describe(item))
         if p.mark_as_read and not item.is_read:
             item.is_read = True
             item.save(update_fields=["is_read"])
     return table
+
+
+def find_messages(account: Any, folder: str, *, unread_only: bool, subject_contains: str, from_contains: str,
+                  max_count: int, since: Any = None) -> list[Any]:
+    """Newest messages first. Also used by robots watching a mailbox (email triggers)."""
+    query = _folder(account, folder).all()
+    if unread_only:
+        query = query.filter(is_read=False)
+    if subject_contains:
+        query = query.filter(subject__icontains=subject_contains)
+    if since is not None:
+        query = query.filter(datetime_received__gte=since)
+    found: list[Any] = []
+    wanted_from = from_contains.strip().casefold()
+    # Exchange can't search inside sender addresses, so that filter is applied here.
+    for item in query.order_by("-datetime_received")[: max_count * (5 if wanted_from else 1)]:
+        sender = item.sender
+        sender_text = f"{getattr(sender, 'name', '') or ''} {getattr(sender, 'email_address', '') or ''}".casefold()
+        if wanted_from and wanted_from not in sender_text:
+            continue
+        if len(found) >= max_count:
+            break
+        found.append(item)
+    return found
+
+
+def describe(item: Any) -> dict[str, Any]:
+    """An email as a row of 'Read emails' (and as the start value of an email trigger's run)."""
+    return {
+        "id": item.id,
+        "from": getattr(item.sender, "email_address", "") if item.sender else "",
+        "subject": item.subject or "",
+        "received": item.datetime_received,
+        "text": (item.text_body or "").strip(),
+        "attachments": ", ".join(a.name for a in item.attachments or []),
+    }
+
+
+def _fetch(account: Any, message_id: str) -> Any:
+    # As (id, changekey): exchangelib would turn a bare string into one id per character.
+    item = next(iter(account.fetch(ids=[(message_id, None)])), None)
+    if item is None or isinstance(item, Exception) or not hasattr(item, "subject"):
+        raise ActivityError("That email was not found in the mailbox.", "It may have been moved or deleted.")
+    return item
 
 
 class AttachmentParams(Params):

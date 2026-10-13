@@ -4656,6 +4656,14 @@
             "default": false,
             "title": "Mark them as read",
             "type": "boolean"
+          },
+          "message_id": {
+            "default": "",
+            "description": "The id of one email, e.g. the one that started this run (email trigger). The other filters are then ignored.",
+            "title": "Only this message",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "{{trigger_email[\"id\"]}}"
           }
         },
         "required": [

@@ -4,6 +4,7 @@
   validate FLOW.json         print problems found in a flow
   run      FLOW.json         run a flow, printing events as JSON lines
   rpc                        JSON-RPC server on stdin/stdout (used by Studio)
+  check-mail                 new emails for a robot's email trigger (JSON on stdin)
 """
 
 from __future__ import annotations
@@ -91,6 +92,40 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if result.status == "succeeded" else 1
 
 
+def cmd_check_mail(_args: argparse.Namespace) -> int:
+    """Robots watching a mailbox (email triggers) ask this every minute or so. The settings and the
+    mailbox password come as one JSON line on stdin; the matching emails go out as one JSON line:
+    ``{"messages": [...]}`` or ``{"error": "...", "hint": "..."}``."""
+    from datetime import datetime
+
+    from .activities.email import connect, describe, find_messages
+    from .values import to_jsonable
+
+    settings = json.loads(sys.stdin.readline() or "{}")
+    try:
+        account = connect(settings.get("server", ""), settings.get("username", ""), settings.get("password", ""),
+                          settings.get("mailbox", ""))
+        since = settings.get("since")
+        items = find_messages(
+            account, settings.get("folder") or "Inbox", unread_only=bool(settings.get("unread_only", True)),
+            subject_contains=settings.get("subject_contains", ""), from_contains=settings.get("from_contains", ""),
+            max_count=int(settings.get("max", 50)),
+            since=datetime.fromisoformat(since.replace("Z", "+00:00")) if since else None,
+        )
+        messages = []
+        for item in items:
+            message = describe(item)
+            received = message["received"]
+            # Plain text, as the Orchestrator expects (to_jsonable would wrap dates as {"$type": "date"}).
+            message["received"] = received.isoformat() if hasattr(received, "isoformat") else str(received or "")
+            messages.append(to_jsonable(message))
+        print(json.dumps({"messages": messages}, default=str, ensure_ascii=False))
+        return 0
+    except AutoflowError as exc:
+        print(json.dumps({"error": exc.message, "hint": exc.hint}, ensure_ascii=False))
+        return 1
+
+
 class _StdinRequests:
     """Questions for the robot (AI repair, AI step, shared values and queues): a ``repair_request`` /
     ``ai_request`` / ``orchestrator_request`` line goes out on stdout and the robot answers with
@@ -171,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--orchestrator-stdin", action="store_true",
                    help="shared values and queues: print orchestrator_request events and read replies from stdin")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("check-mail", help="list new emails for an email trigger (settings and password on stdin)")
+    p.set_defaults(func=cmd_check_mail)
 
     p = sub.add_parser("rpc", help="JSON-RPC server on stdio (used by Studio)")
     p.set_defaults(func=lambda _a: (__import__("autoflow_engine.rpc").rpc.serve_stdio(), 0)[1])

@@ -3,6 +3,7 @@ import { Badge, Button, cn, Dialog, EmptyState, Field, Icon, Input, Select, Swit
 import { useEffect, useState } from 'react';
 import { useMe } from '../App';
 import { AiFixes } from '../components/AiFixes';
+import { EventTriggers, FollowUps } from '../components/EventTriggers';
 import { Card, ConfirmButton, ErrorBox, Loading, PageHeader, RunsTable } from '../components/common';
 import { StepTree } from '../components/StepTree';
 import { api, can, useApi, type AiFix, type FlowSummary, type InputVar, type Job, type Schedule } from '../lib/api';
@@ -66,6 +67,8 @@ export function AutomationPage({ id }: { id: string }) {
             { value: 'runs', label: 'Runs', content: <RunsTable jobs={runs.data?.jobs ?? []} showFlow={false} empty="Press Run now, or add a schedule." /> },
             { value: 'schedules', label: 'Schedules', content: <Schedules flowId={id} inputs={detail.data.inputs} /> },
             { value: 'webhooks', label: 'Webhooks', content: <Webhooks flowId={id} /> },
+            { value: 'events', label: 'Event triggers', content: <EventTriggers flowId={id} inputs={detail.data.inputs} /> },
+            { value: 'then', label: 'Then start', content: <FollowUps flowId={id} /> },
             { value: 'steps', label: 'Steps', content: detail.data.definition ? <div className="p-4"><StepTree flow={detail.data.definition} /></div> : null },
             { value: 'versions', label: 'Versions', content: <Versions versions={detail.data.versions} /> },
             { value: 'settings', label: 'Settings', content: <FlowSettings flow={flow} onSaved={detail.reload} /> },

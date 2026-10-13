@@ -5,7 +5,7 @@ import { newId } from '../security.js';
 import { badRequest, notFound, type Bus } from './core.js';
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type Trigger = 'manual' | 'schedule' | 'webhook' | 'queue' | 'hotkey' | 'api';
+export type Trigger = 'manual' | 'schedule' | 'webhook' | 'queue' | 'hotkey' | 'api' | 'event' | 'chain';
 
 export interface JobRow {
   id: string;
@@ -29,6 +29,8 @@ export interface JobRow {
   error: string | null;
   cancel_requested: number;
   repair_calls: number;
+  /** How many automations started each other before this run (chains stop after a limit). */
+  chain_depth: number;
 }
 
 export interface CreateJob {
@@ -42,6 +44,7 @@ export interface CreateJob {
   priority?: number;
   timeoutS?: number;
   queueItemId?: string | null;
+  chainDepth?: number;
 }
 
 export interface FinishJob {
@@ -87,8 +90,8 @@ export class Jobs {
     }
     const id = newId('job');
     this.db.run(
-      `INSERT INTO jobs (id, flow_id, version, status, trigger, trigger_ref, triggered_by, inputs, pool, priority, timeout_s, queue_item_id, queued_at)
-       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO jobs (id, flow_id, version, status, trigger, trigger_ref, triggered_by, inputs, pool, priority, timeout_s, queue_item_id, chain_depth, queued_at)
+       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.flowId,
       version,
@@ -100,6 +103,7 @@ export class Jobs {
       input.priority ?? 0,
       input.timeoutS ?? 3600,
       input.queueItemId ?? null,
+      input.chainDepth ?? 0,
       now(),
     );
     const job = this.get(id)!;

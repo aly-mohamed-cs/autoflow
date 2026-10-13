@@ -197,6 +197,19 @@ export async function robotRoutes(app: FastifyInstance) {
     return { credentials: out };
   });
 
+  /** The mailbox sign-in for an email trigger - only for the robot watching it. */
+  app.get('/api/robot/triggers/:id/credential', async (request) => {
+    const robot = robotFor(request);
+    const { id } = request.params as { id: string };
+    const trigger = app.svc.eventTriggers.get(id);
+    if (!trigger || trigger.kind !== 'email' || !trigger.enabled || trigger.watcher_robot_id !== robot.id) throw new HttpError(403, 'Not your trigger.');
+    const name = json<{ credential?: string }>(trigger.config, {}).credential ?? '';
+    const row = db.get<{ username: string; secret: string }>('SELECT username, secret FROM credentials WHERE name = ?', name);
+    if (!row) throw new HttpError(404, `The credential “${name}” was not found. Add it under Credentials.`);
+    audit.record({ name: `robot:${robot.name}` }, 'credentials.read', id, { names: [name], trigger: trigger.name });
+    return { username: row.username, password: vault.decrypt(row.secret) };
+  });
+
   /** The newest robot version on this server; robots download it from /downloads/ and check the hash. */
   app.get('/api/robot/update', async (request) => {
     robotFor(request);
