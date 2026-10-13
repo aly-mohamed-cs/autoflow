@@ -66,4 +66,5 @@ gaps.
 - [x] Attended "work plans": users run and schedule their own automations on their PC (Studio: My work plan, tray)
 
 ## Release G - enterprise apps
-- [ ] SAP GUI: wait for screen, grids and tables (read, select, set), trees, status bar, combo boxes, run script
+- [x] SAP GUI: wait for screen, grids and tables (read, select, set), trees, status bar, combo boxes, run script
+  (SAP GUI Scripting; tested against a stand-in for SAP's object model - try it on a real SAP system before relying on it)

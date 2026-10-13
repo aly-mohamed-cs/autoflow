@@ -87,6 +87,11 @@
       "description": "Shared values and work queues kept in the Orchestrator"
     },
     {
+      "id": "SAP",
+      "icon": "factory",
+      "description": "SAP GUI for Windows: transactions, fields, tables and trees"
+    },
+    {
       "id": "Database",
       "icon": "database",
       "description": "SQL databases"
@@ -9370,6 +9375,723 @@
       "block_list": null,
       "advanced": false,
       "requires": null
+    },
+    {
+      "id": "sap.connect",
+      "title": "Attach to SAP",
+      "category": "SAP",
+      "icon": "building",
+      "sentence": "Attach to SAP {connection}",
+      "description": "Use an open SAP GUI window, or open a connection from SAP Logon and log on with a saved credential. The SAP steps after it work in this window.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "attach",
+            "enum": [
+              "attach",
+              "logon"
+            ],
+            "title": "SAP",
+            "type": "string",
+            "x-labels": {
+              "attach": "Use the SAP window that is open",
+              "logon": "Open a connection and log on"
+            }
+          },
+          "connection": {
+            "default": "",
+            "description": "As it is called in SAP Logon. For 'use the open window', leave empty for the first one.",
+            "title": "Connection",
+            "type": "string",
+            "x-placeholder": "PRD - Production"
+          },
+          "session_number": {
+            "default": 0,
+            "description": "Which window of the connection: 0 is the first.",
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Session",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "credential": {
+            "default": "",
+            "title": "Credential",
+            "type": "string",
+            "x-show-when": {
+              "mode": [
+                "logon"
+              ]
+            },
+            "x-ui": "credential"
+          },
+          "client": {
+            "default": "",
+            "title": "Client",
+            "type": "string",
+            "x-placeholder": "100",
+            "x-show-when": {
+              "mode": [
+                "logon"
+              ]
+            }
+          },
+          "language": {
+            "default": "EN",
+            "title": "Language",
+            "type": "string",
+            "x-advanced": true,
+            "x-show-when": {
+              "mode": [
+                "logon"
+              ]
+            }
+          },
+          "close_at_end": {
+            "default": true,
+            "title": "Close the connection when the automation ends",
+            "type": "boolean",
+            "x-show-when": {
+              "mode": [
+                "logon"
+              ]
+            }
+          }
+        },
+        "title": "AttachParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "info",
+          "title": "Session",
+          "type": "any",
+          "description": "",
+          "default_variable": "info"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.transaction",
+      "title": "Start SAP transaction",
+      "category": "SAP",
+      "icon": "square-terminal",
+      "sentence": "Start SAP transaction {code}",
+      "description": "Open a transaction, like typing its code (e.g. VA01, ME21N) in the command field.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Transaction",
+            "type": "string",
+            "x-placeholder": "VA01"
+          },
+          "stop_on_error": {
+            "default": true,
+            "title": "Stop if SAP shows an error",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TransactionParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.set_text",
+      "title": "Type in SAP field",
+      "category": "SAP",
+      "icon": "text-cursor-input",
+      "sentence": "Type {text} in SAP field {field}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/usr/ctxtVBAK-AUART",
+            "x-ui": "sap_id"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "press_enter": {
+            "default": false,
+            "title": "Press Enter afterwards",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "SetTextParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.press",
+      "title": "Press SAP button or key",
+      "category": "SAP",
+      "icon": "mouse-pointer-click",
+      "sentence": "Press {button}{key} in SAP",
+      "description": "Press a button (by its id) or a key such as Enter, Save or Execute (F8), then wait until SAP is done.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "what": {
+            "default": "button",
+            "enum": [
+              "button",
+              "key"
+            ],
+            "title": "Press",
+            "type": "string",
+            "x-labels": {
+              "button": "A button",
+              "key": "A key"
+            }
+          },
+          "button": {
+            "default": "",
+            "title": "Button id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/tbar[1]/btn[8]",
+            "x-show-when": {
+              "what": [
+                "button"
+              ]
+            },
+            "x-ui": "sap_id"
+          },
+          "key": {
+            "default": "enter",
+            "enum": [
+              "enter",
+              "save",
+              "back",
+              "exit",
+              "cancel",
+              "f2",
+              "f4",
+              "f5",
+              "f6",
+              "f7",
+              "f8",
+              "f9",
+              "page_down",
+              "page_up"
+            ],
+            "title": "Key",
+            "type": "string",
+            "x-labels": {
+              "back": "Back (F3)",
+              "cancel": "Cancel (F12)",
+              "enter": "Enter",
+              "exit": "Exit (Shift+F3)",
+              "f2": "F2",
+              "f4": "F4 (possible values)",
+              "f5": "F5",
+              "f6": "F6",
+              "f7": "F7",
+              "f8": "Execute (F8)",
+              "f9": "F9",
+              "page_down": "Page down",
+              "page_up": "Page up",
+              "save": "Save (Ctrl+S)"
+            },
+            "x-show-when": {
+              "what": [
+                "key"
+              ]
+            }
+          },
+          "window": {
+            "default": 0,
+            "description": "0 is the main window, 1 a pop-up.",
+            "maximum": 9,
+            "minimum": 0,
+            "title": "Window",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "stop_on_error": {
+            "default": true,
+            "title": "Stop if SAP shows an error",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "title": "PressParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.select",
+      "title": "Select in SAP",
+      "category": "SAP",
+      "icon": "list-checks",
+      "sentence": "Select {value} in SAP {control}",
+      "description": "Choose in a dropdown, tick a checkbox, pick a radio button, open a tab or a menu entry.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "control": {
+            "title": "Id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/usr/cmbVBAK-VKORG or wnd[0]/usr/tabsTAXI/tabpT\\01",
+            "x-ui": "sap_id"
+          },
+          "value": {
+            "default": "",
+            "description": "Dropdowns: the key (e.g. 1000). Checkboxes: yes or no. Tabs, radio buttons and menus: leave empty.",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "control"
+        ],
+        "title": "SelectParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.read",
+      "title": "Read SAP field",
+      "category": "SAP",
+      "icon": "scan-text",
+      "sentence": "Read SAP field {control}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "control": {
+            "title": "Id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/usr/txtVBAK-VBELN",
+            "x-ui": "sap_id"
+          }
+        },
+        "required": [
+          "control"
+        ],
+        "title": "ReadParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "sap_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.status",
+      "title": "Read SAP status bar",
+      "category": "SAP",
+      "icon": "message-square-warning",
+      "sentence": "Read the SAP status bar",
+      "description": "The message at the bottom of the SAP window, e.g. 'Standard Order 12345 has been saved', and its kind (success, warning, error).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "NoParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Message",
+          "type": "text",
+          "description": "",
+          "default_variable": "sap_message"
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text",
+          "description": "",
+          "default_variable": "sap_message_kind"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.read_table",
+      "title": "Read SAP table",
+      "category": "SAP",
+      "icon": "table",
+      "sentence": "Read SAP table {table}",
+      "description": "Read an SAP list (ALV grid) or table control into a table, all rows - also the ones you would have to scroll to.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/usr/cntlGRID1/shellcont/shell",
+            "x-ui": "sap_id"
+          },
+          "max_rows": {
+            "default": 10000,
+            "maximum": 1000000,
+            "minimum": 1,
+            "title": "At most",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "column_names": {
+            "default": "titles",
+            "enum": [
+              "titles",
+              "technical"
+            ],
+            "title": "Column names",
+            "type": "string",
+            "x-advanced": true,
+            "x-labels": {
+              "technical": "Technical (e.g. MATNR)",
+              "titles": "As shown (e.g. Material)"
+            }
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "GridParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "rows",
+          "title": "Rows",
+          "type": "table",
+          "description": "",
+          "default_variable": "sap_rows"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.table_action",
+      "title": "Work with SAP table",
+      "category": "SAP",
+      "icon": "table-properties",
+      "sentence": "{action} in SAP table {table}",
+      "description": "Select rows, click or double-click a cell, press a button of the table's toolbar, or type in a cell of a table control.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "table": {
+            "title": "Table id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/usr/cntlGRID1/shellcont/shell",
+            "x-ui": "sap_id"
+          },
+          "action": {
+            "default": "select_rows",
+            "enum": [
+              "select_rows",
+              "double_click",
+              "click_cell",
+              "toolbar",
+              "set_cell"
+            ],
+            "title": "Do",
+            "type": "string",
+            "x-labels": {
+              "click_cell": "Click a cell",
+              "double_click": "Double-click a cell",
+              "select_rows": "Select rows",
+              "set_cell": "Type in a cell (table control)",
+              "toolbar": "Press a table toolbar button"
+            }
+          },
+          "rows": {
+            "default": "",
+            "description": "Row numbers, starting at 1.",
+            "title": "Rows",
+            "type": "string",
+            "x-placeholder": "1, 3-5",
+            "x-show-when": {
+              "action": [
+                "select_rows"
+              ]
+            }
+          },
+          "row": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Row",
+            "type": "integer",
+            "x-show-when": {
+              "action": [
+                "double_click",
+                "click_cell",
+                "set_cell"
+              ]
+            }
+          },
+          "column": {
+            "default": "",
+            "description": "The technical column name (grids) or its position, starting at 1 (table controls).",
+            "title": "Column",
+            "type": "string",
+            "x-placeholder": "MATNR",
+            "x-show-when": {
+              "action": [
+                "double_click",
+                "click_cell",
+                "set_cell"
+              ]
+            }
+          },
+          "button": {
+            "default": "",
+            "title": "Button",
+            "type": "string",
+            "x-placeholder": "&MB_EXPORT",
+            "x-show-when": {
+              "action": [
+                "toolbar"
+              ]
+            }
+          },
+          "value": {
+            "default": "",
+            "title": "Text",
+            "type": "string",
+            "x-show-when": {
+              "action": [
+                "set_cell"
+              ]
+            }
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "TableActionParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.tree",
+      "title": "Work with SAP tree",
+      "category": "SAP",
+      "icon": "list-tree",
+      "sentence": "{action} {path} in SAP tree",
+      "description": "Select, open or double-click a node of an SAP tree (e.g. the SAP Easy Access menu), or read all node names.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "tree": {
+            "title": "Tree id",
+            "type": "string",
+            "x-placeholder": "wnd[0]/shellcont/shell/shellcont[0]/shell",
+            "x-ui": "sap_id"
+          },
+          "action": {
+            "default": "double_click",
+            "enum": [
+              "select",
+              "expand",
+              "double_click",
+              "read"
+            ],
+            "title": "Do",
+            "type": "string",
+            "x-labels": {
+              "double_click": "Double-click a node",
+              "expand": "Open a node",
+              "read": "Read the node names",
+              "select": "Select a node"
+            }
+          },
+          "path": {
+            "default": "",
+            "description": "The node's texts from the top, separated by /.",
+            "title": "Node",
+            "type": "string",
+            "x-placeholder": "Favorites/Sales/VA01",
+            "x-show-when": {
+              "action": [
+                "select",
+                "expand",
+                "double_click"
+              ]
+            }
+          }
+        },
+        "required": [
+          "tree"
+        ],
+        "title": "TreeParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "nodes",
+          "title": "Node names",
+          "type": "list",
+          "description": "",
+          "default_variable": "nodes"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.wait",
+      "title": "Wait for SAP",
+      "category": "SAP",
+      "icon": "hourglass",
+      "sentence": "Wait until SAP {until}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "until": {
+            "default": "idle",
+            "enum": [
+              "idle",
+              "field",
+              "title"
+            ],
+            "title": "Wait until",
+            "type": "string",
+            "x-labels": {
+              "field": "A field is there",
+              "idle": "SAP is done",
+              "title": "The window title contains"
+            }
+          },
+          "field": {
+            "default": "",
+            "title": "Field id",
+            "type": "string",
+            "x-show-when": {
+              "until": [
+                "field"
+              ]
+            },
+            "x-ui": "sap_id"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string",
+            "x-placeholder": "Create Sales Order",
+            "x-show-when": {
+              "until": [
+                "title"
+              ]
+            }
+          },
+          "timeout": {
+            "default": 30,
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Wait at most (seconds)",
+            "type": "number"
+          }
+        },
+        "title": "WaitParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "sap.run_script",
+      "title": "Run SAP GUI script",
+      "category": "SAP",
+      "icon": "file-code",
+      "sentence": "Run an SAP GUI script",
+      "description": "Play back a script recorded with SAP GUI's script recorder. Only administrators can publish automations with this step.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "script": {
+            "description": "As recorded by SAP GUI's script recorder (.vbs).",
+            "title": "SAP GUI script (VBScript)",
+            "type": "string",
+            "x-ui": "code"
+          },
+          "timeout": {
+            "default": 300,
+            "maximum": 7200,
+            "minimum": 1,
+            "title": "Stop after (seconds)",
+            "type": "number",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "script"
+        ],
+        "title": "ScriptParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": "scripts"
     },
     {
       "id": "screen.click_image",

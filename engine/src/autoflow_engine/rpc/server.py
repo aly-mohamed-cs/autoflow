@@ -95,6 +95,7 @@ class EngineServer:
             "inspector.children": lambda p: {"children": inspector.children(p["handle"], p.get("path") or [])},
             "inspector.element": lambda p: inspector.element(p["handle"], p.get("path") or []),
             "inspector.highlight": lambda p: inspector.highlight(p["handle"], p.get("path") or []),
+            "sap.focused": lambda _p: _sap_focused(),
         }
 
     @property
@@ -297,6 +298,13 @@ class EngineServer:
             raise RpcError(APP_ERROR, "No flow is running.")
         action(self._control)
         return {"ok": True}
+
+
+def _sap_focused() -> dict[str, str]:
+    """Studio's "use the SAP field with the cursor" (SAP steps)."""
+    from ..activities.sap import focused_control
+
+    return focused_control()
 
 
 def serve_stdio() -> None:

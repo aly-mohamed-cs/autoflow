@@ -154,6 +154,14 @@ function Widget({
     case 'credential':
       return <CredentialInput id={id} value={text} onChange={(v) => onChange(v || undefined)} />;
 
+    case 'sap_id':
+      return (
+        <div className="space-y-1">
+          <TokenInput {...tokenProps} value={text} onChange={(v) => onChange(v || undefined)} placeholder={field.placeholder} />
+          <SapFocusButton onPicked={(id) => onChange(id)} />
+        </div>
+      );
+
     case 'asset':
     case 'queue':
       return <OrchestratorNameInput id={id} kind={field.kind} value={text} onChange={(v) => onChange(v || undefined)} />;
@@ -261,6 +269,32 @@ function CodeInput({ id, value, onChange, placeholder }: { id: string; value: st
       rows={5}
       className="font-mono text-xs"
     />
+  );
+}
+
+/** Take the id of the SAP field that has the cursor (click into it in SAP first). */
+function SapFocusButton({ onPicked }: { onPicked: (id: string) => void }) {
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <div>
+      <button
+        type="button"
+        className="text-xs text-primary hover:underline"
+        onClick={async () => {
+          setMessage(null);
+          try {
+            const focused = await window.autoflow.engine.call<{ id: string; type: string; text: string }>('sap.focused', {}, 15_000);
+            onPicked(focused.id);
+            setMessage({ ok: true, text: `Took ${focused.type.replace(/^Gui/, '')}${focused.text ? ` “${focused.text}”` : ''}.` });
+          } catch (e) {
+            setMessage({ ok: false, text: e instanceof Error ? e.message : String(e) });
+          }
+        }}
+      >
+        Use the SAP field that has the cursor
+      </button>
+      {message && <p className={message.ok ? 'text-xs text-subtle' : 'text-xs text-danger'}>{message.text}</p>}
+    </div>
   );
 }
 

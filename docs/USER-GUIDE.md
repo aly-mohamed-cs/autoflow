@@ -123,6 +123,27 @@ Some things have no button the recorder can see — drawings, maps, charts, remo
   and **Drag between positions** (sliders, drawings).
 * Positions depend on window size and screen scaling: prefer picked elements where you can.
 
+### Work in SAP
+The **SAP** steps work in SAP GUI for Windows through SAP GUI Scripting, so your SAP team must
+allow scripting (on the server: `sapgui/user_scripting`; in SAP GUI: *Options → Accessibility &
+Scripting*).
+
+1. **Attach to SAP**: use the SAP window that is open, or open a connection from SAP Logon and log
+   on with a saved credential.
+2. **Start SAP transaction** (e.g. *VA01*), **Type in SAP field**, **Select in SAP** (dropdowns,
+   checkboxes, tabs), **Press SAP button or key** (Enter, Save, Execute…), **Read SAP field**.
+3. **Read SAP table** gives all rows of an SAP list as a table; **Work with SAP table** selects
+   rows, double-clicks a cell or presses a button of the list's toolbar. **Work with SAP tree**
+   opens nodes by their names, e.g. *Favorites/Sales/VA01*.
+4. After pressing a button or key, the step waits until SAP is done and **stops if the status bar
+   shows an error** (switch that off under *More options*). **Read SAP status bar** gives the
+   message, e.g. the new order number.
+
+Every SAP field has an id like `wnd[0]/usr/ctxtVBAK-AUART`. The easy way to get it: click into the
+field in SAP, then press **Use the SAP field that has the cursor** under the id in Studio. SAP's
+own script recorder (*Customize Local Layout → Script Recording and Playback*) shows ids too, and
+its recordings can be played with **Run SAP GUI script** (administrators publish those).
+
 ### Programs without controls (remote desktops, Citrix, charts)
 When **Pick on screen** can't see a button, work with what is drawn on the screen (**Screen** steps):
 * **Click image** / **Point at image** / **Wait for image** / **Is image on screen** — press

@@ -44,7 +44,7 @@ def test_scripts_are_marked_for_administrators():
 
     catalog.load_activities()
     marked = {a.id for a in catalog.REGISTRY.values() if a.requires == "scripts"}
-    assert marked == {"system.run_command", "system.run_python", "system.write_registry", "ssh.run"}
+    assert marked == {"system.run_command", "system.run_python", "system.write_registry", "ssh.run", "sap.run_script"}
 
 
 def test_clipboard_folders_and_files(h, tmp_path):
