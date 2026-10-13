@@ -537,8 +537,9 @@ def test_menus_lists_details_pictures_and_text_on_screen(tmp_path, demo_erp):
 
 
 def test_missing_pictures_fail_clearly(h):
-    from autoflow_engine.selectors import screen
     from PIL import Image
+
+    from autoflow_engine.selectors import screen
 
     noise = Image.effect_noise((40, 30), 120).convert("RGB")  # nothing on screen looks like this
     picture = screen.to_png_data_uri(noise)
