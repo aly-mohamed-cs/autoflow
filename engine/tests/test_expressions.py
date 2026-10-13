@@ -83,6 +83,7 @@ def test_friendly_errors():
 def test_templates_keep_types_and_interpolate():
     assert resolve("{{table}}", V) is V["table"]
     assert resolve("Hello {{name}}, total {{price * 2}}", V) == "Hello Mona, total 25"
+    assert resolve("{{name}} {{qty}}", V) == "Mona 5"  # two references, not one formula "name}} {{qty"
     assert resolve({"a": ["{{qty}}", 3]}, V) == {"a": ["5", 3]}
     assert resolve("no braces", V) == "no braces"
 

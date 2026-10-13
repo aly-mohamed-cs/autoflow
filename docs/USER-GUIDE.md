@@ -197,6 +197,20 @@ step.
 * **Encrypt text** / **Decrypt text** protect a text with a key kept in a credential;
   **Base64** converts to and from Base64.
 
+### Values shared by many automations, and work queues
+* **Shared values** (dashboard → **Shared values**) keep things several automations need, such
+  as a portal address, an approval limit or a price list file. **Get shared value** reads one
+  while the automation runs, so a change is made once, in the dashboard. Passwords belong in
+  **Credentials**, not here.
+* **Queues** split work between runs and robots. **Add queue item** puts work in a queue, e.g.
+  one item per invoice row (choose *Or a whole row* to take all its columns).
+  **For each queue item** works through a queue: the steps inside run for each waiting item,
+  which is then marked done. If a step fails, the item is marked failed (or set to be tried
+  again later) and the loop goes on with the next one. For more control use **Get next queue
+  item** and **Finish queue item**; **Count queue items** tells how many are waiting.
+* In Studio these steps need a connection to the Orchestrator (**Settings**). They work on the
+  real queue; items a test run took but didn't finish go back to the queue when it ends.
+
 ### Commands and scripts (administrators decide)
 **Run command** (Command Prompt or PowerShell), **Run Python script**, **Write registry value**
 and **Run command over SSH** can do anything on the machine, so they show an **admin** badge in

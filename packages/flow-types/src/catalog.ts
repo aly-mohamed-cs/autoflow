@@ -6,7 +6,7 @@ export type UiKind =
   | 'text' | 'multiline' | 'number' | 'boolean' | 'choice' | 'file' | 'folder' | 'save_file'
   | 'variable' | 'variable_name' | 'condition' | 'element' | 'credential' | 'column' | 'keys'
   | 'url' | 'key_values' | 'list' | 'code' | 'duration' | 'password'
-  | 'process' | 'process_inputs' | 'point' | 'image' | 'region';
+  | 'process' | 'process_inputs' | 'point' | 'image' | 'region' | 'asset' | 'queue';
 
 /** A JSON Schema property as exported by pydantic, plus Autoflow's x- hints. */
 export interface ParamSchema {

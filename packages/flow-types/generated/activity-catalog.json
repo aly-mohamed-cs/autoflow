@@ -82,6 +82,11 @@
       "description": "The company's own AI model: classify, extract, summarise"
     },
     {
+      "id": "Orchestrator",
+      "icon": "network",
+      "description": "Shared values and work queues kept in the Orchestrator"
+    },
+    {
       "id": "Database",
       "icon": "database",
       "description": "SQL databases"
@@ -8008,6 +8013,359 @@
         }
       ],
       "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "assets.get",
+      "title": "Get shared value",
+      "category": "Orchestrator",
+      "icon": "library",
+      "sentence": "Get shared value {name}",
+      "description": "Read a company-wide value or file kept in the Orchestrator (dashboard > Shared values), e.g. a portal address, a limit or a price list. A file is saved in the run's folder and the step gives its path.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Shared value",
+            "type": "string",
+            "x-placeholder": "Vendor portal address",
+            "x-ui": "asset"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SharedValueParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "value",
+          "title": "Value",
+          "type": "any",
+          "description": "",
+          "default_variable": "shared_value"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "queue.add",
+      "title": "Add queue item",
+      "category": "Orchestrator",
+      "icon": "list-plus",
+      "sentence": "Add an item to queue {queue}",
+      "description": "Put work into a queue in the Orchestrator, e.g. one item per invoice. If the queue has an automation, robots start working on the item straight away.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "queue": {
+            "title": "Queue",
+            "type": "string",
+            "x-placeholder": "Invoices to enter",
+            "x-ui": "queue"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "The item's data, e.g. Invoice = {{row[\"Invoice\"]}}.",
+            "title": "Values",
+            "type": "object",
+            "x-ui": "key_values"
+          },
+          "row": {
+            "default": null,
+            "description": "e.g. the current row of a For each loop: each column becomes a value of the item.",
+            "title": "Or a whole row",
+            "x-ui": "variable"
+          },
+          "reference": {
+            "default": "",
+            "description": "A short name people see in the dashboard, e.g. the invoice number.",
+            "title": "Reference",
+            "type": "string",
+            "x-placeholder": "{{row[\"Invoice\"]}}"
+          },
+          "priority": {
+            "default": 0,
+            "description": "Items with higher numbers are worked on first.",
+            "maximum": 100,
+            "minimum": -100,
+            "title": "Priority",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "queue"
+        ],
+        "title": "AddItemParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "item_id",
+          "title": "Item number",
+          "type": "text",
+          "description": "",
+          "default_variable": "item_id"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "queue.next",
+      "title": "Get next queue item",
+      "category": "Orchestrator",
+      "icon": "list-start",
+      "sentence": "Get the next item of queue {queue}",
+      "description": "Take the next waiting item of a queue to work on it. Finish it afterwards with 'Finish queue item' - or use 'For each queue item', which does both.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "queue": {
+            "title": "Queue",
+            "type": "string",
+            "x-placeholder": "Invoices to enter",
+            "x-ui": "queue"
+          }
+        },
+        "required": [
+          "queue"
+        ],
+        "title": "QueueParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "item",
+          "title": "Item",
+          "type": "any",
+          "description": "",
+          "default_variable": "queue_item"
+        },
+        {
+          "name": "found",
+          "title": "Got an item",
+          "type": "boolean",
+          "description": "",
+          "default_variable": "queue_item_found"
+        },
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "description": "",
+          "default_variable": "reference"
+        },
+        {
+          "name": "item_id",
+          "title": "Item number",
+          "type": "text",
+          "description": "",
+          "default_variable": "item_id"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "queue.finish",
+      "title": "Finish queue item",
+      "category": "Orchestrator",
+      "icon": "list-checks",
+      "sentence": "Mark the queue item as {outcome}",
+      "description": "Tell the Orchestrator how working on a queue item went. Items marked 'try it again later' go back to the queue while the queue's retries last.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "default": "done",
+            "enum": [
+              "done",
+              "retry",
+              "failed"
+            ],
+            "title": "Result",
+            "type": "string",
+            "x-labels": {
+              "done": "Done",
+              "failed": "Failed - don't try again",
+              "retry": "Failed - try it again later"
+            }
+          },
+          "message": {
+            "default": "",
+            "title": "Reason",
+            "type": "string",
+            "x-placeholder": "The vendor number does not exist",
+            "x-show-when": {
+              "outcome": [
+                "retry",
+                "failed"
+              ]
+            }
+          },
+          "result": {
+            "additionalProperties": true,
+            "description": "Optional values kept with the item, e.g. Reference = {{reference_no}}.",
+            "title": "Result values",
+            "type": "object",
+            "x-show-when": {
+              "outcome": [
+                "done"
+              ]
+            },
+            "x-ui": "key_values"
+          },
+          "item_id": {
+            "default": "",
+            "description": "Leave empty for the item taken last with 'Get next queue item'.",
+            "title": "Item number",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "title": "FinishParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "queue.count",
+      "title": "Count queue items",
+      "category": "Orchestrator",
+      "icon": "list-ordered",
+      "sentence": "Count {status} in queue {queue}",
+      "description": "How many items of a queue are waiting, being worked on, done or failed.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "queue": {
+            "title": "Queue",
+            "type": "string",
+            "x-placeholder": "Invoices to enter",
+            "x-ui": "queue"
+          },
+          "status": {
+            "default": "new",
+            "enum": [
+              "new",
+              "in_progress",
+              "done",
+              "failed",
+              "all"
+            ],
+            "title": "Count",
+            "type": "string",
+            "x-labels": {
+              "all": "All items",
+              "done": "Done items",
+              "failed": "Failed items",
+              "in_progress": "Items being worked on",
+              "new": "Waiting items"
+            }
+          }
+        },
+        "required": [
+          "queue"
+        ],
+        "title": "CountParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Number of items",
+          "type": "number",
+          "description": "",
+          "default_variable": "queue_count"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "queue.for_each",
+      "title": "For each queue item",
+      "category": "Orchestrator",
+      "icon": "list-video",
+      "sentence": "For each item of queue {queue}",
+      "description": "Work through a queue: take the next waiting item, run the steps inside, and mark it done - or, when a step fails, mark it failed (or to try again) and go on with the next item.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "queue": {
+            "title": "Queue",
+            "type": "string",
+            "x-placeholder": "Invoices to enter",
+            "x-ui": "queue"
+          },
+          "item_variable": {
+            "default": "queue_item",
+            "title": "Name of current item",
+            "type": "string",
+            "x-ui": "variable_name"
+          },
+          "on_failure": {
+            "default": "retry",
+            "enum": [
+              "retry",
+              "failed",
+              "stop"
+            ],
+            "title": "If an item fails",
+            "type": "string",
+            "x-labels": {
+              "failed": "Mark it failed, go on with the next",
+              "retry": "Try it again later, go on with the next",
+              "stop": "Mark it failed and stop"
+            }
+          },
+          "max_items": {
+            "default": 0,
+            "description": "Stop after this many items; 0 works until the queue is empty.",
+            "minimum": 0,
+            "title": "At most",
+            "type": "integer",
+            "x-advanced": true
+          },
+          "reference_variable": {
+            "default": "queue_item_reference",
+            "title": "Name of reference",
+            "type": "string",
+            "x-advanced": true,
+            "x-ui": "variable_name"
+          }
+        },
+        "required": [
+          "queue"
+        ],
+        "title": "ForEachItemParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [
+        {
+          "name": "body",
+          "title": "Do"
+        }
+      ],
       "block_list": null,
       "advanced": false,
       "requires": null

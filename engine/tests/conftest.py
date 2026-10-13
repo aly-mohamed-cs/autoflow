@@ -36,13 +36,14 @@ class Harness:
 
     def run(self, steps: list[dict], *, variables: list[dict] | None = None, inputs: dict | None = None,
             control: RunControl | None = None, credentials=None, settings: dict | None = None,
-            processes: list[dict] | None = None) -> RunResult:
+            processes: list[dict] | None = None, orchestrator=None) -> RunResult:
         self.events = []
         flow = Flow.model_validate({
             "id": "test", "name": "Test flow", "steps": steps,
             "variables": variables or [], "settings": settings or {}, "processes": processes or [],
         })
-        options = RunOptions(work_dir=self.tmp_path / "run", inputs=inputs or {}, credentials=credentials)
+        options = RunOptions(work_dir=self.tmp_path / "run", inputs=inputs or {}, credentials=credentials,
+                             orchestrator=orchestrator)
         self.runner = FlowRunner(flow, options, self.events.append, control=control)
         return self.runner.run()
 

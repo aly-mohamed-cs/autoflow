@@ -10,6 +10,7 @@ import { HttpError, notFound } from '../services/core.js';
 import { AiTaskBody, type RepairRequest } from '../services/ai.js';
 import { compareVersions } from '../services/robotReleases.js';
 import { RepairBody } from './ai.js';
+import { runRequest } from './assets.js';
 import { credentialNames } from './flows.js';
 
 const EnrollBody = z.object({
@@ -218,6 +219,15 @@ export async function robotRoutes(app: FastifyInstance) {
     aiCalls.set(id, calls);
     if (aiCalls.size > 1000) aiCalls.delete(aiCalls.keys().next().value!); // forget the oldest runs
     return ai.complete(AiTaskBody.parse(request.body));
+  });
+
+  /** Shared values and queue steps during a robot run. */
+  app.post('/api/robot/jobs/:id/orchestrator', { bodyLimit: 2 * 1024 * 1024 }, async (request) => {
+    const robot = robotFor(request);
+    const { id } = request.params as { id: string };
+    const job = jobs.get(id);
+    if (!job || job.robot_id !== robot.id || job.status !== 'running') throw new HttpError(403, 'Not your job.');
+    return runRequest(app.svc, request.body, id);
   });
 
   /** AI self-repair during a robot run. The fix only changes this run; builders approve keeping it. */

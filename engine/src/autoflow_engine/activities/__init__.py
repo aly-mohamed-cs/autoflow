@@ -13,6 +13,7 @@ from . import (  # noqa: F401
     files,
     integrations,
     office,
+    orchestrator,
     pdf,
     pdf_pages,
     screen,

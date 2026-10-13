@@ -42,7 +42,8 @@ class Agent:
             timeout=30,
         )
         self.runner = JobRunner(home() / "runs", self.send_threadsafe, self.upload, self.fetch_credentials,
-                                repair=self.request_repair, ai=self.request_ai)
+                                repair=self.request_repair, ai=self.request_ai,
+                                orchestrator=self.request_orchestrator)
         self.updater = Updater(self.http, install_root())
         self._update_task: asyncio.Task | None = None
         self._updating = False  # downloading or installing: no new jobs
@@ -90,6 +91,17 @@ class Agent:
             except ValueError:
                 message = r.text
             raise RuntimeError(message[:300])
+        return r.json()
+
+    def request_orchestrator(self, job_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Shared values and queue steps of a running job."""
+        r = self.http.post(f"/api/robot/jobs/{job_id}/orchestrator", json=request, timeout=120)
+        if r.status_code >= 400:
+            try:
+                message = r.json().get("error") or r.text
+            except ValueError:
+                message = r.text
+            raise RuntimeError(message[:500])
         return r.json()
 
     # -- connection loop ----------------------------------------------------------------

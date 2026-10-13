@@ -127,6 +127,8 @@ export interface StudioApi {
     disconnect(): Promise<void>;
     publish(flow: Flow, notes: string): Promise<{ version: number; url: string }>;
     flows(): Promise<PublishedFlow[]>;
+    /** Shared values and queues on the Orchestrator, for the step pickers (empty when not connected). */
+    names(): Promise<{ assets: string[]; queues: string[] }>;
   };
   /** The company's local AI model, through the Orchestrator (only when an admin turned it on). */
   ai: {
@@ -189,6 +191,7 @@ export const IPC = {
   orchDisconnect: 'orch:disconnect',
   orchPublish: 'orch:publish',
   orchFlows: 'orch:flows',
+  orchNames: 'orch:names',
   aiStatus: 'ai:status',
   aiDraft: 'ai:draft',
   aiExplain: 'ai:explain',

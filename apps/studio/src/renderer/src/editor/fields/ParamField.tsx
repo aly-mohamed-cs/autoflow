@@ -1,6 +1,6 @@
 // Renders one activity setting with the right widget, chosen from the catalog schema.
 import type { Condition } from '@autoflow/flow-types';
-import { Field, Select, Switch, Textarea } from '@autoflow/ui';
+import { Field, Input, Select, Switch, Textarea } from '@autoflow/ui';
 import { useEffect, useState } from 'react';
 import { referencedVariable } from '../../lib/scope';
 import type { FieldInfo } from '../../lib/catalog';
@@ -154,6 +154,10 @@ function Widget({
     case 'credential':
       return <CredentialInput id={id} value={text} onChange={(v) => onChange(v || undefined)} />;
 
+    case 'asset':
+    case 'queue':
+      return <OrchestratorNameInput id={id} kind={field.kind} value={text} onChange={(v) => onChange(v || undefined)} />;
+
     case 'column':
       return <ColumnInput id={id} value={value} onChange={(v) => onChange(v || undefined)} columns={sourceColumns()} />;
 
@@ -257,6 +261,39 @@ function CodeInput({ id, value, onChange, placeholder }: { id: string; value: st
       rows={5}
       className="font-mono text-xs"
     />
+  );
+}
+
+/** A shared value or queue on the Orchestrator: chosen from its list when Studio is connected. */
+function OrchestratorNameInput({ id, kind, value, onChange }: { id: string; kind: 'asset' | 'queue'; value: string; onChange: (v: string) => void }) {
+  const [names, setNames] = useState<string[] | null>(null);
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    void window.autoflow.orchestrator
+      .names()
+      .then((all) => setNames(kind === 'asset' ? all.assets : all.queues))
+      .catch(() => setNames([]));
+  }, [kind]);
+  const what = kind === 'asset' ? 'shared value' : 'queue';
+  if (names?.length && !typing && (!value || names.includes(value))) {
+    return (
+      <div className="space-y-1">
+        <Select id={id} value={value} onChange={onChange} options={names.map((n) => ({ value: n, label: n }))} placeholder={`Choose a ${what}`} />
+        <button type="button" className="text-xs text-subtle underline" onClick={() => setTyping(true)}>
+          Type a name instead
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={`Name of the ${what}`} />
+      {names !== null && names.length === 0 && (
+        <p className="text-xs text-subtle">
+          {kind === 'asset' ? 'Shared values' : 'Queues'} are kept in the Orchestrator. Connect Studio under Settings to choose one.
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@ import { Cron } from 'croner';
 import type { Db } from '../db.js';
 import { json, now } from '../db.js';
 import { newId } from '../security.js';
-import { badRequest, type Bus } from './core.js';
+import { badRequest, HttpError, type Bus } from './core.js';
 import type { JobRow, Jobs } from './jobs.js';
 
 export interface ScheduleRow {
@@ -91,6 +91,15 @@ export class Scheduler {
 
 // -- work queues ---------------------------------------------------------------------
 
+const TEST_CLAIM_MS = 30 * 60_000;
+
+export interface QueueItemForRun {
+  id: string;
+  reference: string;
+  data: Record<string, unknown>;
+  attempt: number;
+}
+
 export interface QueueRow {
   id: string;
   name: string;
@@ -145,7 +154,7 @@ export class Queues {
       : this.db.all<QueueRow>('SELECT * FROM queues WHERE enabled = 1 AND flow_id IS NOT NULL');
     for (const queue of queues) {
       const waiting = this.db.all<{ id: string; data: string; priority: number; reference: string }>(
-        `SELECT id, data, priority, reference FROM queue_items WHERE queue_id = ? AND status = 'new' ORDER BY priority DESC, created_at LIMIT 50`,
+        `SELECT id, data, priority, reference FROM queue_items WHERE queue_id = ? AND status = 'new' ORDER BY priority DESC, attempts, created_at LIMIT 50`,
         queue.id,
       );
       for (const item of waiting) {
@@ -174,7 +183,124 @@ export class Queues {
     }
   }
 
+  // -- queue steps inside automations ("Get next queue item" ...) ---------------------------
+
+  byName(name: string): QueueRow {
+    const queue = this.db.get<QueueRow>('SELECT * FROM queues WHERE name = ?', name.trim());
+    if (!queue) throw new HttpError(404, `There is no queue called “${name}”. Create it in the dashboard under Queues.`);
+    return queue;
+  }
+
+  /**
+   * Take the next waiting item for a run. `claimedBy` is the job id, or `test:<user>` for a
+   * Studio test run; test runs that never finish their item give it back after 30 minutes.
+   */
+  claimNext(queueName: string, claimedBy: string): QueueItemForRun | null {
+    const queue = this.byName(queueName);
+    if (!queue.enabled) throw badRequest(`The queue “${queue.name}” is paused.`);
+    const item = this.db.tx(() => {
+      this.db.run(
+        `UPDATE queue_items SET status = 'new', job_id = NULL, updated_at = ? WHERE queue_id = ? AND status = 'in_progress' AND job_id LIKE 'test:%' AND updated_at < ?`,
+        now(),
+        queue.id,
+        new Date(Date.now() - TEST_CLAIM_MS).toISOString(),
+      );
+      const next = this.db.get<{ id: string; reference: string; data: string; attempts: number }>(
+        `SELECT id, reference, data, attempts FROM queue_items WHERE queue_id = ? AND status = 'new' ORDER BY priority DESC, attempts, created_at LIMIT 1`,
+        queue.id,
+      );
+      if (!next) return null;
+      this.db.run(
+        `UPDATE queue_items SET status = 'in_progress', job_id = ?, attempts = attempts + 1, updated_at = ? WHERE id = ?`,
+        claimedBy,
+        now(),
+        next.id,
+      );
+      return { id: next.id, reference: next.reference, data: json<Record<string, unknown>>(next.data, {}), attempt: next.attempts + 1 };
+    });
+    if (item) this.bus.publish({ type: 'queue.updated', queueId: queue.id });
+    return item;
+  }
+
+  /** "Finish queue item": done, failed (tried again while retries are left) or failed for good. */
+  finish(itemId: string, outcome: 'done' | 'retry' | 'failed', claimedBy: string, details: { result?: unknown; message?: string }): void {
+    const item = this.db.get<{ queue_id: string; status: string; job_id: string | null; attempts: number }>(
+      'SELECT queue_id, status, job_id, attempts FROM queue_items WHERE id = ?',
+      itemId,
+    );
+    if (!item) throw new HttpError(404, 'That queue item was not found.');
+    if (item.status !== 'in_progress' || item.job_id !== claimedBy) {
+      throw badRequest('That queue item is not being worked on by this run. Use “Get next queue item” first.');
+    }
+    const queue = this.db.get<QueueRow>('SELECT * FROM queues WHERE id = ?', item.queue_id);
+    const status = outcome === 'done' ? 'done' : outcome === 'retry' && queue && item.attempts <= queue.max_retries ? 'new' : 'failed';
+    this.db.run(
+      `UPDATE queue_items SET status = ?, result = ?, error = ?, job_id = CASE WHEN ? = 'new' THEN NULL ELSE job_id END, updated_at = ? WHERE id = ?`,
+      status,
+      outcome === 'done' ? JSON.stringify(details.result ?? {}) : null,
+      outcome === 'done' ? null : (details.message || 'Marked as failed by the automation.').slice(0, 2000),
+      status,
+      now(),
+      itemId,
+    );
+    this.bus.publish({ type: 'queue.updated', queueId: item.queue_id });
+    if (status === 'new') this.pump(item.queue_id);
+  }
+
+  count(queueName: string, status: 'new' | 'in_progress' | 'done' | 'failed' | 'all'): number {
+    const queue = this.byName(queueName);
+    const row =
+      status === 'all'
+        ? this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM queue_items WHERE queue_id = ?', queue.id)
+        : this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM queue_items WHERE queue_id = ? AND status = ?', queue.id, status);
+    return row?.n ?? 0;
+  }
+
+  /** After a Studio test run: items it took but didn't finish go back to the queue, not counted as a try. */
+  releaseTestClaims(claimedBy: string): number {
+    const claimed = this.db.all<{ id: string; queue_id: string }>(
+      `SELECT id, queue_id FROM queue_items WHERE job_id = ? AND status = 'in_progress'`,
+      claimedBy,
+    );
+    for (const item of claimed) {
+      this.db.run(
+        `UPDATE queue_items SET status = 'new', job_id = NULL, attempts = MAX(attempts - 1, 0), updated_at = ? WHERE id = ?`,
+        now(),
+        item.id,
+      );
+    }
+    for (const queueId of new Set(claimed.map((c) => c.queue_id))) {
+      this.bus.publish({ type: 'queue.updated', queueId });
+      this.pump(queueId);
+    }
+    return claimed.length;
+  }
+
+  /** Items a run took with "Get next queue item" but didn't finish go back to the queue (or fail). */
+  private releaseClaims(job: JobRow): void {
+    const claimed = this.db.all<{ id: string; queue_id: string; attempts: number }>(
+      `SELECT id, queue_id, attempts FROM queue_items WHERE job_id = ? AND status = 'in_progress' AND id != ?`,
+      job.id,
+      job.queue_item_id ?? '',
+    );
+    for (const item of claimed) {
+      const queue = this.db.get<QueueRow>('SELECT * FROM queues WHERE id = ?', item.queue_id);
+      const retry = queue && item.attempts <= queue.max_retries;
+      this.db.run(
+        `UPDATE queue_items SET status = ?, job_id = CASE WHEN ? = 'new' THEN NULL ELSE job_id END, error = ?, updated_at = ? WHERE id = ?`,
+        retry ? 'new' : 'failed',
+        retry ? 'new' : 'failed',
+        'The run ended before it finished this item.',
+        now(),
+        item.id,
+      );
+      this.bus.publish({ type: 'queue.updated', queueId: item.queue_id });
+    }
+    for (const queueId of new Set(claimed.map((c) => c.queue_id))) this.pump(queueId);
+  }
+
   private onJobFinished(job: JobRow): void {
+    this.releaseClaims(job);
     if (!job.queue_item_id) return;
     const item = this.db.get<{ queue_id: string; attempts: number }>('SELECT queue_id, attempts FROM queue_items WHERE id = ?', job.queue_item_id);
     if (!item) return;

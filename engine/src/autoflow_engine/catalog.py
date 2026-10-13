@@ -30,7 +30,7 @@ UI_KINDS = {
     "text", "multiline", "number", "boolean", "choice", "file", "folder", "save_file",
     "variable", "variable_name", "condition", "element", "credential", "column", "keys",
     "url", "key_values", "list", "code", "duration", "password",
-    "process", "process_inputs", "point", "image", "region",
+    "process", "process_inputs", "point", "image", "region", "asset", "queue",
 }
 
 
@@ -174,6 +174,7 @@ CATEGORIES: list[dict[str, str]] = [
     {"id": "System", "icon": "monitor-cog", "description": "Commands, clipboard, special folders, the registry"},
     {"id": "FTP & SSH", "icon": "server", "description": "File servers (FTP, SFTP) and SSH commands"},
     {"id": "AI", "icon": "sparkles", "description": "The company's own AI model: classify, extract, summarise"},
+    {"id": "Orchestrator", "icon": "network", "description": "Shared values and work queues kept in the Orchestrator"},
     {"id": "Database", "icon": "database", "description": "SQL databases"},
 ]
 _CATEGORY_IDS = {c["id"] for c in CATEGORIES}

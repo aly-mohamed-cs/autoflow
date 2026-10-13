@@ -21,6 +21,9 @@ UploadFn = Callable[[str, Path, str | None], str | None]  # (job_id, file, step_
 CredentialsFn = Callable[[str], dict[str, Any]]
 RepairFn = Callable[[str, dict[str, Any]], dict[str, Any]]  # (job_id, failure) -> AI fix from the Orchestrator
 AiFn = Callable[[str, dict[str, Any]], dict[str, Any]]  # (job_id, task) -> the AI step's answer
+# (job_id, request) -> the Orchestrator's answer for shared values and queue steps
+OrchestratorFn = Callable[[str, dict[str, Any]], dict[str, Any]]
+ORCHESTRATOR_STEPS = ("assets.get", "queue.add", "queue.next", "queue.finish", "queue.count", "queue.for_each")
 
 KEEP_RUNS = 20
 CANCEL_GRACE_S = 30
@@ -30,13 +33,15 @@ class JobRunner:
     """One job at a time. The engine runs in a child process so a crash can't take the robot down."""
 
     def __init__(self, runs_dir: Path, send: SendFn, upload: UploadFn, credentials: CredentialsFn,
-                 python: str | None = None, repair: RepairFn | None = None, ai: AiFn | None = None):
+                 python: str | None = None, repair: RepairFn | None = None, ai: AiFn | None = None,
+                 orchestrator: OrchestratorFn | None = None):
         self.runs_dir = runs_dir
         self.send = send
         self.upload = upload
         self.credentials = credentials
         self.repair = repair
         self.ai = ai
+        self.orchestrator = orchestrator
         self.python = python or sys.executable
         self.job_id: str | None = None
         self._process: subprocess.Popen | None = None
@@ -103,19 +108,21 @@ class JobRunner:
             flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
             repair = bool(job.get("repair")) and self.repair is not None
             ai = self.ai is not None and _uses(job["flow"], "ai.ask")
+            orch = self.orchestrator is not None and any(_uses(job["flow"], a) for a in ORCHESTRATOR_STEPS)
             self._process = subprocess.Popen(
                 [self.python, "-m", "autoflow_engine", "run", str(work / "flow.json"),
                  "--inputs", "@" + str(work / "inputs.json"), "--work-dir", str(work / "files"),
                  "--credentials-stdin", "--cancel-file", str(self._cancel_file),
-                 *(["--repair-stdin"] if repair else []), *(["--ai-stdin"] if ai else [])],
+                 *(["--repair-stdin"] if repair else []), *(["--ai-stdin"] if ai else []),
+                 *(["--orchestrator-stdin"] if orch else [])],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=work, env=env, creationflags=flags, text=True, encoding="utf-8", errors="replace",
             )
             assert self._process.stdin and self._process.stdout and self._process.stderr
             self._process.stdin.write(json.dumps(secrets) + "\n")
             self._process.stdin.flush()
-            if not repair and not ai:
-                self._process.stdin.close()  # otherwise the answers to the engine's AI questions go here
+            if not repair and not ai and not orch:
+                self._process.stdin.close()  # otherwise the answers to the engine's questions go here
             del secrets
             threading.Thread(target=_drain, args=(self._process.stderr, stderr_tail), daemon=True).start()
             timer = threading.Timer(max(int(job.get("timeout_s") or 3600), 10), lambda: self.cancel(job_id))
@@ -125,7 +132,7 @@ class JobRunner:
                 event = _parse(line)
                 if event is None:
                     continue
-                if event.get("event") in ("repair_request", "ai_request"):
+                if event.get("event") in ("repair_request", "ai_request", "orchestrator_request"):
                     # Asked off the reading loop so engine output keeps flowing while the model thinks.
                     threading.Thread(target=self._answer, args=(job_id, event, self._process),
                                      daemon=True).start()
@@ -164,14 +171,17 @@ class JobRunner:
 
 
     def _answer(self, job_id: str, event: dict[str, Any], process: subprocess.Popen) -> None:
-        """Ask the Orchestrator what the engine wants to know (an AI fix, or the AI step's answer)."""
+        """Ask the Orchestrator what the engine wants to know (an AI fix, the AI step's answer, a shared
+        value or a queue item)."""
         answer: dict[str, Any] = {"id": event.get("id")}
-        handler = self.repair if event.get("event") == "repair_request" else self.ai
+        kind = event.get("event")
+        handler = {"repair_request": self.repair, "ai_request": self.ai, "orchestrator_request": self.orchestrator}.get(
+            str(kind))
         try:
             answer["reply"] = handler(job_id, event.get("request") or {}) if handler else None
         except Exception as exc:
-            log.warning("%s failed: %s", event.get("event"), exc)
-            answer["error"] = f"Could not reach the AI assistant: {exc}"
+            log.warning("%s failed: %s", kind, exc)
+            answer["error"] = str(exc) if kind == "orchestrator_request" else f"Could not reach the AI assistant: {exc}"
         self._write_engine(process, answer)
 
 

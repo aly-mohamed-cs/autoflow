@@ -6,6 +6,7 @@ import { href, useRoute } from './lib/router';
 import { AuditPage } from './pages/AuditPage';
 import { AutomationPage } from './pages/AutomationPage';
 import { AutomationsPage } from './pages/AutomationsPage';
+import { AssetsPage } from './pages/AssetsPage';
 import { CredentialsPage } from './pages/CredentialsPage';
 import { HomePage } from './pages/HomePage';
 import { QueuePage, QueuesPage } from './pages/QueuesPage';
@@ -79,6 +80,7 @@ const NAV: { path: string; label: string; icon: string; role: Role }[] = [
   { path: 'queues', label: 'Queues', icon: 'inbox', role: 'viewer' },
   { path: 'robots', label: 'Robots', icon: 'bot', role: 'viewer' },
   { path: 'credentials', label: 'Credentials', icon: 'key-round', role: 'builder' },
+  { path: 'shared-values', label: 'Shared values', icon: 'library', role: 'builder' },
   { path: 'users', label: 'Users', icon: 'users', role: 'admin' },
   { path: 'settings', label: 'Settings', icon: 'settings', role: 'viewer' },
   { path: 'audit', label: 'Audit log', icon: 'scroll-text', role: 'admin' },
@@ -176,6 +178,8 @@ function Page({ route }: { route: string[] }) {
       return <RobotsPage />;
     case 'credentials':
       return guard('builder', <CredentialsPage />);
+    case 'shared-values':
+      return guard('builder', <AssetsPage />);
     case 'users':
       return guard('admin', <UsersPage />);
     case 'settings':

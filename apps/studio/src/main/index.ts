@@ -38,12 +38,20 @@ const broadcast = (channel: string, payload: unknown) => {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
 };
 
+/** A test run took queue items ("Get next queue item"); unfinished ones are given back when it ends. */
+let tookQueueItems = false;
+
 const engine = new EngineProcess(
   findPython(app.getAppPath(), process.resourcesPath),
   (method, params) => {
     if (method === 'run.event') {
       broadcast(IPC.runEvent, params);
       runGuard.onEvent(params as { event?: string });
+      if ((params as { event?: string }).event === 'run_finished' && tookQueueItems) {
+        // Queue items the test run took but didn't finish go back to the queue.
+        tookQueueItems = false;
+        void orchestrator.request('POST', '/api/run/orchestrator', { op: 'queue.release' }).catch(() => undefined);
+      }
     } else {
       broadcast(IPC.engineNotification, { method, params });
     }
@@ -58,6 +66,13 @@ const engine = new EngineProcess(
         throw new Error('Connect Studio to the Orchestrator (Settings) to use the AI assistant.');
       }
       return orchestrator.request('POST', '/api/ai/complete', params, 620_000);
+    }
+    if (method === 'host.orchestrator') {
+      if (!(await orchestrator.info())) {
+        throw new Error('Connect Studio to the Orchestrator (Settings) to use shared values and queues in test runs.');
+      }
+      if ((params as { op?: string }).op === 'queue.next') tookQueueItems = true;
+      return orchestrator.request('POST', '/api/run/orchestrator', params, 110_000);
     }
     throw new Error(`Unknown request ${method}`);
   },
@@ -276,6 +291,10 @@ function registerIpc(): void {
     return { version: result.version, url: `${info?.url}/#/automations/${encodeURIComponent(flow.id)}` };
   });
 
+  handle(IPC.orchNames, async () => {
+    if (!(await orchestrator.info())) return { assets: [], queues: [] };
+    return orchestrator.request<{ assets: string[]; queues: string[] }>('GET', '/api/run/names').catch(() => ({ assets: [], queues: [] }));
+  });
   handle(IPC.orchFlows, async () => {
     const res = await orchestrator.request<{ flows: PublishedFlow[] }>('GET', '/api/flows');
     return res.flows.map((f) => ({ id: f.id, name: f.name, latestVersion: f.latestVersion }));

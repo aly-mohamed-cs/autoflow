@@ -73,12 +73,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     control = RunControl()
     if args.cancel_file:
         _watch_cancel_file(Path(args.cancel_file), control)
-    if args.repair_stdin or args.ai_stdin:
+    if args.repair_stdin or args.ai_stdin or args.orchestrator_stdin:
         bridge = _StdinRequests(control)
         if args.repair_stdin:
             options.repair = lambda request: bridge("repair_request", request)
         if args.ai_stdin:
             options.ai = lambda request: bridge("ai_request", request)
+        if args.orchestrator_stdin:
+            options.orchestrator = lambda request: bridge("orchestrator_request", request)
 
     def emit(event: dict) -> None:
         if args.quiet and event["event"] not in ("run_finished", "log"):
@@ -90,9 +92,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 class _StdinRequests:
-    """Questions for the robot (AI repair, AI step): a ``repair_request`` / ``ai_request`` line goes
-    out on stdout and the robot answers with ``{"id": ..., "reply": {...}}`` on stdin after asking
-    the Orchestrator (or ``{"cancel": true}`` when the run is stopped meanwhile).
+    """Questions for the robot (AI repair, AI step, shared values and queues): a ``repair_request`` /
+    ``ai_request`` / ``orchestrator_request`` line goes out on stdout and the robot answers with
+    ``{"id": ..., "reply": {...}}`` on stdin after asking the Orchestrator (or ``{"cancel": true}``
+    when the run is stopped meanwhile).
 
     stdin is read only while waiting for an answer, never by a background thread: on Windows
     a pending read on a pipe blocks loading DLLs (numpy, OCR...) in every other thread.
@@ -165,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="AI self-repair: print repair_request events and read replies from stdin")
     p.add_argument("--ai-stdin", action="store_true",
                    help="AI step: print ai_request events and read replies from stdin")
+    p.add_argument("--orchestrator-stdin", action="store_true",
+                   help="shared values and queues: print orchestrator_request events and read replies from stdin")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("rpc", help="JSON-RPC server on stdio (used by Studio)")

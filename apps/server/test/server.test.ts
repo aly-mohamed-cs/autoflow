@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -217,6 +217,32 @@ describe('publishing, robots and runs', () => {
     await waitFor(async () => (await api('GET', `/api/queues/${id}/items`)).body.items[0].status === 'done');
     const item = (await api('GET', `/api/queues/${id}/items`)).body.items[0];
     expect(item).toMatchObject({ attempts: 2, result: { ref: 'R-9' } });
+  });
+
+  it('lets running automations take queue items, and gives back the ones they did not finish', async () => {
+    const { id: queueId } = (await api('POST', '/api/queues', { name: 'Work', maxRetries: 2 })).body;
+    await api('POST', `/api/queues/${queueId}/items`, { items: [{ reference: 'A', data: { n: 1 } }, { reference: 'B', data: { n: 2 } }] });
+    const run = (await api('POST', `/api/flows/${FLOW.id}/run`, {})).body.job;
+    await waitFor(() => received.some((m) => m.type === 'job.assign' && m.job.id === run.id));
+    const ask = (body: unknown, job = run.id, token = robotToken) =>
+      app.inject({ method: 'POST', url: `/api/robot/jobs/${job}/orchestrator`, headers: { authorization: `Bearer ${token}` }, payload: body as object });
+
+    const first = (await ask({ op: 'queue.next', queue: 'work' })).json().item; // names ignore case
+    expect(first).toMatchObject({ reference: 'A', data: { n: 1 }, attempt: 1 });
+    expect((await ask({ op: 'queue.finish', item: first.id, outcome: 'done', result: { booked: true } })).json()).toEqual({ ok: true });
+    const second = (await ask({ op: 'queue.next', queue: 'Work' })).json().item;
+    expect(second.reference).toBe('B');
+    expect((await ask({ op: 'queue.count', queue: 'Work', status: 'in_progress' })).json()).toEqual({ count: 1 });
+    expect((await ask({ op: 'queue.next', queue: 'Work' })).json()).toEqual({ item: null });
+    expect((await ask({ op: 'queue.next', queue: 'Nope' })).json().error).toMatch(/no queue called “Nope”/);
+    expect((await ask({ op: 'queue.next', queue: 'Work' }, run.id, adminToken)).statusCode).toBe(401);
+
+    // The run ends without finishing B: it goes back to the queue for the next run.
+    robot.send(JSON.stringify({ type: 'job.finished', job_id: run.id, status: 'succeeded' }));
+    await waitFor(async () => (await api('GET', `/api/queues/${queueId}/items`)).body.items.some((i: any) => i.reference === 'B' && i.status === 'new'));
+    const items = (await api('GET', `/api/queues/${queueId}/items`)).body.items;
+    expect(items.find((i: any) => i.reference === 'A')).toMatchObject({ status: 'done', result: { booked: true } });
+    expect((await ask({ op: 'queue.next', queue: 'Work' })).statusCode).toBe(403); // the run is over
   });
 
   it('cancels a queued run and validates schedules', async () => {
@@ -531,6 +557,60 @@ describe('AI assistant (local model)', () => {
     expect(pickCategory('ORDER', ['Order', 'Purchase order'])).toBe('Order');
     expect(pickCategory('It is a purchase order', ['Order', 'Purchase order'])).toBe('Purchase order');
     expect(pickCategory('No idea', ['Order'])).toBe('No idea');
+  });
+});
+
+describe('shared values and queues in Studio test runs', () => {
+  const run = (body: unknown) => api('POST', '/api/run/orchestrator', body);
+
+  it('keeps shared values and hands them to running automations', async () => {
+    expect((await api('PUT', '/api/assets', { name: 'Portal address', kind: 'text', value: 'https://vendors.example' })).status).toBe(200);
+    expect((await api('PUT', '/api/assets', { name: 'Limit', kind: 'number', value: 'lots' })).body.error).toBe('Enter a number.');
+    await api('PUT', '/api/assets', { name: 'Limit', kind: 'number', value: '250' });
+    await api('PUT', '/api/assets', { name: 'Live', kind: 'yesno', value: 'true' });
+    const content = Buffer.from('item,price\nA,1\n').toString('base64');
+    await api('PUT', '/api/assets', { name: 'Prices', kind: 'file', fileName: 'prices.csv', content, description: 'Price list' });
+
+    const list = (await api('GET', '/api/assets')).body.assets;
+    expect(list.map((a: any) => a.name)).toEqual(['Limit', 'Live', 'Portal address', 'Prices']);
+    expect(list[3]).toMatchObject({ kind: 'file', value: '', fileName: 'prices.csv', fileSize: 15 });
+    expect((await run({ op: 'asset.get', name: 'portal address' })).body).toEqual({ kind: 'text', value: 'https://vendors.example' });
+    expect((await run({ op: 'asset.get', name: 'Limit' })).body).toEqual({ kind: 'number', value: 250 });
+    expect((await run({ op: 'asset.get', name: 'Live' })).body).toEqual({ kind: 'yesno', value: true });
+    expect((await run({ op: 'asset.get', name: 'Prices' })).body).toMatchObject({ kind: 'file', fileName: 'prices.csv', content });
+    expect((await run({ op: 'asset.get', name: 'Nope' })).status).toBe(404);
+
+    // Editing without a new file keeps the file; deleting removes it from disk.
+    await api('PUT', '/api/assets', { name: 'Prices', kind: 'file', description: 'Prices 2026' });
+    expect((await run({ op: 'asset.get', name: 'Prices' })).body.content).toBe(content);
+    const stored = svc.db.get<{ value: string }>('SELECT value FROM assets WHERE name = ?', 'Prices')!.value;
+    await api('DELETE', '/api/assets/Prices');
+    expect(existsSync(join(dataDir, 'assets', stored))).toBe(false);
+    expect(svc.db.all('SELECT * FROM audit WHERE action LIKE ?', 'asset.%')).toHaveLength(6);
+  });
+
+  it('lets test runs fill and work a queue, and gives unfinished items back afterwards', async () => {
+    await api('POST', '/api/queues', { name: 'Test work', maxRetries: 1 });
+    expect((await run({ op: 'queue.add', queue: 'Test work', reference: 'X', data: { n: 1 } })).body.id).toMatch(/^qi_/);
+    await run({ op: 'queue.add', queue: 'Test work', reference: 'Y', data: { n: 2 } });
+    const x = (await run({ op: 'queue.next', queue: 'Test work' })).body.item;
+    expect((await run({ op: 'queue.finish', item: x.id, outcome: 'retry', message: 'Portal down' })).body).toEqual({ ok: true });
+    expect((await run({ op: 'queue.count', queue: 'Test work', status: 'new' })).body).toEqual({ count: 2 });
+
+    const again = (await run({ op: 'queue.next', queue: 'Test work' })).body.item;
+    expect(again).toMatchObject({ reference: 'Y' }); // X went to the back
+    const x2 = (await run({ op: 'queue.next', queue: 'Test work' })).body.item;
+    expect(x2).toMatchObject({ reference: 'X', attempt: 2 });
+    await run({ op: 'queue.finish', item: x2.id, outcome: 'retry', message: 'Still down' });
+    expect((await run({ op: 'queue.count', queue: 'Test work', status: 'failed' })).body).toEqual({ count: 1 }); // out of retries
+
+    // The test run ends with Y unfinished: it goes back, and the try doesn't count.
+    expect((await run({ op: 'queue.release' })).body).toEqual({ released: 1 });
+    const queueId = svc.db.get<{ id: string }>('SELECT id FROM queues WHERE name = ?', 'Test work')!.id;
+    const y = (await api('GET', `/api/queues/${queueId}/items`)).body.items.find((i: any) => i.reference === 'Y');
+    expect(y).toMatchObject({ status: 'new', attempts: 0, jobId: null });
+    expect((await run({ op: 'queue.finish', item: y.id, outcome: 'done' })).body.error).toMatch(/not being worked on by this run/);
+    expect((await api('GET', '/api/run/names')).body).toMatchObject({ assets: ['Limit', 'Live', 'Portal address'], queues: expect.arrayContaining(['Test work']) });
   });
 });
 

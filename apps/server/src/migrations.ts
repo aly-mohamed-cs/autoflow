@@ -212,4 +212,18 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX repair_suggestions_flow ON repair_suggestions(flow_id, status);
   `,
+  /* 3: shared values (assets) and queue steps */ `
+  -- Company-wide values and files automations read while they run ("Get shared value").
+  CREATE TABLE assets (
+    name         TEXT PRIMARY KEY COLLATE NOCASE,
+    kind         TEXT NOT NULL CHECK (kind IN ('text', 'number', 'yesno', 'file')),
+    value        TEXT NOT NULL DEFAULT '',
+    file_name    TEXT,
+    file_size    INTEGER,
+    description  TEXT NOT NULL DEFAULT '',
+    updated_by   TEXT,
+    updated_at   TEXT NOT NULL
+  );
+  CREATE INDEX queue_items_job ON queue_items(job_id, status);
+  `,
 ];

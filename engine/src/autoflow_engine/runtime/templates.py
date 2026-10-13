@@ -32,8 +32,9 @@ def resolve(value: Any, variables: Mapping[str, Any]) -> Any:
 def resolve_text(text: str, variables: Mapping[str, Any]) -> Any:
     if "{{" not in text:
         return text
-    whole = TEMPLATE.fullmatch(text)
-    if whole:
+    # Not fullmatch: that stretches the lazy match over "{{first}} {{last}}" as one formula.
+    whole = TEMPLATE.match(text)
+    if whole and whole.end() == len(text):
         return evaluate(whole.group(1), variables)
     return TEMPLATE.sub(lambda m: to_text(evaluate(m.group(1), variables)), text)
 

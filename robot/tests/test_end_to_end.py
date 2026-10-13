@@ -278,6 +278,63 @@ def test_the_ai_step_runs_on_the_robot(server, classifier_model, tmp_path, monke
         thread.join(5)
 
 
+def test_shared_values_and_queue_items_on_the_robot(server, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOFLOW_ROBOT_HOME", str(tmp_path / "robot"))
+    out = tmp_path / "out"
+    out.mkdir()
+    api = httpx.Client(base_url=server, timeout=10)
+    api.post("/api/setup", json={"username": "admin", "displayName": "Admin", "password": "a long admin password"}).raise_for_status()
+    token = api.post("/api/auth/login", json={"username": "admin", "password": "a long admin password"}).json()["token"]
+    api.headers["Authorization"] = f"Bearer {token}"
+    api.put("/api/assets", json={"name": "Greeting", "kind": "text", "value": "Hello"}).raise_for_status()
+    queue = api.post("/api/queues", json={"name": "Customers", "maxRetries": 0}).json()["id"]
+    api.post(f"/api/queues/{queue}/items", json={"items": [
+        {"reference": "A", "data": {"name": "Ann", "blocked": False}},
+        {"reference": "B", "data": {"name": "Bob", "blocked": True}},
+    ]}).raise_for_status()
+    flow = {
+        "id": "flow_greet",
+        "name": "Greet customers",
+        "steps": [
+            {"id": "get", "activity": "assets.get", "params": {"name": "Greeting"}, "outputs": {"value": "greet"}},
+            {"id": "each", "activity": "queue.for_each", "params": {"queue": "Customers", "on_failure": "failed"},
+             "blocks": {"body": [
+                 {"id": "check", "activity": "control.if", "params": {"condition": '{{queue_item["blocked"]}} == true'},
+                  "blocks": {"then": [{"id": "stop", "activity": "control.fail",
+                                       "params": {"message": "{{queue_item_reference}} is blocked"}}]}},
+                 {"id": "write", "activity": "files.write_text",
+                  "params": {"file": str(out / "{{queue_item_reference}}.txt"), "text": '{{greet}} {{queue_item["name"]}}'}},
+             ]}},
+        ],
+    }
+    api.post("/api/flows/flow_greet/versions", json={"flow": flow}).raise_for_status()
+    key = api.post("/api/robots/enrollment-keys", json={"pool": "default", "hours": 1}).json()["key"]
+
+    from autoflow_robot.agent import Agent, enroll
+    from autoflow_robot.config import RobotConfig
+
+    enroll(server, key, name="Queue robot")
+    agent = Agent(RobotConfig.load())
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_until_complete, args=(agent.run(),), daemon=True)
+    thread.start()
+    try:
+        _wait(lambda: api.get("/api/robots").json()["robots"][0]["online"], "robot online")
+        job = api.post("/api/flows/flow_greet/run", json={}).json()["job"]
+        _wait(lambda: api.get(f"/api/jobs/{job['id']}").json()["job"]["status"] in ("succeeded", "failed"), "job finished", 60)
+        detail = api.get(f"/api/jobs/{job['id']}").json()
+        assert detail["job"]["status"] == "succeeded", detail["job"]["error"]
+        assert (out / "A.txt").exists(), [e.get("message") for e in detail["events"] if e.get("message")]
+        assert (out / "A.txt").read_text(encoding="utf-8") == "Hello Ann"
+        assert not (out / "B.txt").exists()
+        items = {i["reference"]: i for i in api.get(f"/api/queues/{queue}/items").json()["items"]}
+        assert items["A"]["status"] == "done"
+        assert (items["B"]["status"], items["B"]["error"]) == ("failed", "B is blocked")
+    finally:
+        loop.call_soon_threadsafe(agent.stop)
+        thread.join(5)
+
+
 def _wait(check, what, timeout=20):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

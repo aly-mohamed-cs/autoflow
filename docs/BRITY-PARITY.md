@@ -56,8 +56,8 @@ gaps.
 - [x] AI step (local model): classify, extract fields, summarise, translate; detect language through "Do what I write"
 
 ## Release F - Orchestrator
-- [ ] Shared resources (assets): company-wide values and files that automations read at run time
-- [ ] Queue steps inside automations: add item, get next item, mark done / failed, count
+- [x] Shared resources (assets): company-wide values and files that automations read at run time
+- [x] Queue steps inside automations: add item, get next item, mark done / failed, count; "For each queue item" loop
 - [ ] Event triggers: new email arrives, file appears in a folder
 - [ ] Process flows: chain automations (when A finishes, start B; wait for an event; branch on result)
 - [ ] Live robot screen view and remote stop from the dashboard

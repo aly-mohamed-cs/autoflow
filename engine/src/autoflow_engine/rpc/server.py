@@ -283,6 +283,7 @@ class EngineServer:
         if params.get("repair"):
             options.repair = lambda request: self.request_host("host.repair", request, control, timeout=660)
         options.ai = lambda request: self.request_host("host.ai", request, control, timeout=660)
+        options.orchestrator = lambda request: self.request_host("host.orchestrator", request, control, timeout=120)
         runner = FlowRunner(flow, options, emit=lambda e: self.notify("run.event", e), control=self._control)
         self._run_id = runner.run_id
         self._runner = runner

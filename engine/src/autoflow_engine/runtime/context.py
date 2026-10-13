@@ -186,6 +186,8 @@ class RunOptions:
     repair_attempts: int = 3
     # The AI step (activities/ai.py): a task for the company's AI model, via the Orchestrator.
     ai: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
+    # Shared values and queue steps (activities/orchestrator.py): questions for the Orchestrator.
+    orchestrator: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
 
 
 class RunContext:
