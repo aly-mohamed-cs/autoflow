@@ -8,6 +8,7 @@ import { CredentialsPage } from './pages/CredentialsPage';
 import { EditorPage } from './pages/EditorPage';
 import { HomePage } from './pages/HomePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { WorkPlanPage } from './pages/WorkPlanPage';
 import { useApp, type Route } from './store/app';
 import { useRun } from './store/run';
 
@@ -26,6 +27,7 @@ export function App() {
           {route.page === 'home' && <HomePage />}
           {route.page === 'editor' && <EditorPage key={route.flowId} flowId={route.flowId} />}
           {route.page === 'credentials' && <CredentialsPage />}
+          {route.page === 'workplan' && <WorkPlanPage />}
           {route.page === 'settings' && <SettingsPage />}
         </ErrorBoundary>
         </div>
@@ -74,6 +76,7 @@ function useTheme() {
 
 const NAV: { route: Route; icon: string; label: string; match: Route['page'][] }[] = [
   { route: { page: 'home' }, icon: 'layout-grid', label: 'Automations', match: ['home', 'editor'] },
+  { route: { page: 'workplan' }, icon: 'calendar-clock', label: 'My work plan', match: ['workplan'] },
   { route: { page: 'credentials' }, icon: 'key-round', label: 'Credentials', match: ['credentials'] },
   { route: { page: 'settings' }, icon: 'settings', label: 'Settings', match: ['settings'] },
 ];

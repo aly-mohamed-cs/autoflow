@@ -1,6 +1,6 @@
 import type { RunEvent } from '@autoflow/flow-types';
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { FILE_PROTOCOL, IPC, type EngineStatus, type StudioApi, type UpdateStatus } from '../shared/api';
+import { FILE_PROTOCOL, IPC, type EngineStatus, type StudioApi, type UpdateStatus, type WorkPlanState } from '../shared/api';
 
 const invoke = <T>(channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args) as Promise<T>;
 
@@ -62,6 +62,13 @@ const api: StudioApi = {
     status: () => invoke(IPC.aiStatus),
     draftFlow: (description) => invoke(IPC.aiDraft, description),
     explainError: (input) => invoke(IPC.aiExplain, input),
+  },
+  workPlan: {
+    state: () => invoke(IPC.workPlanState),
+    save: (entries) => invoke(IPC.workPlanSave, entries),
+    run: (entryId) => invoke(IPC.workPlanRun, entryId),
+    stop: () => invoke(IPC.workPlanStop),
+    onChange: (listener) => subscribe<WorkPlanState>(IPC.workPlanChanged, listener),
   },
   quickLaunch: {
     list: () => invoke(IPC.quickList),

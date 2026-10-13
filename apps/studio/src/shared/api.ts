@@ -59,6 +59,46 @@ export interface QuickLaunchEntry {
   flowName: string;
 }
 
+/** When a work plan automation runs on this PC by itself (while Studio is open). */
+export interface WorkPlanSchedule {
+  kind: 'manual' | 'daily' | 'weekdays' | 'every';
+  /** HH:MM for daily / weekdays. */
+  time: string;
+  /** For "every". */
+  minutes: number;
+}
+
+/** A published automation in "My work plan": run on this PC, now or on a schedule. */
+export interface WorkPlanEntry {
+  id: string;
+  flowId: string;
+  flowName: string;
+  schedule: WorkPlanSchedule;
+  enabled: boolean;
+  inputs?: Record<string, string>;
+  nextRunAt?: string | null;
+  lastRunAt?: string;
+  lastStatus?: WorkPlanRun['status'];
+}
+
+export interface WorkPlanRun {
+  id: string;
+  entryId: string;
+  flowName: string;
+  trigger: 'manual' | 'schedule' | 'tray';
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'skipped';
+  error?: string;
+}
+
+export interface WorkPlanState {
+  entries: WorkPlanEntry[];
+  history: WorkPlanRun[];
+  /** The entry running now, if any. */
+  running: string | null;
+}
+
 /** An automation drafted by the AI assistant; the person reviews it in the editor. */
 export interface AiDraft {
   flow: Omit<Flow, 'id'>;
@@ -142,6 +182,13 @@ export interface StudioApi {
     draftFlow(description: string): Promise<AiDraft>;
     explainError(input: { activity: string; message: string; hint?: string | null; params?: Record<string, unknown> }): Promise<string>;
   };
+  workPlan: {
+    state(): Promise<WorkPlanState>;
+    save(entries: WorkPlanEntry[]): Promise<WorkPlanState>;
+    run(entryId: string): Promise<WorkPlanState>;
+    stop(): Promise<void>;
+    onChange(listener: (state: WorkPlanState) => void): () => void;
+  };
   quickLaunch: {
     list(): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
     save(entries: QuickLaunchEntry[]): Promise<{ entries: QuickLaunchEntry[]; unavailable: string[] }>;
@@ -205,6 +252,11 @@ export const IPC = {
   quickList: 'quick:list',
   quickSave: 'quick:save',
   quickRun: 'quick:run',
+  workPlanState: 'workplan:state',
+  workPlanSave: 'workplan:save',
+  workPlanRun: 'workplan:run',
+  workPlanStop: 'workplan:stop',
+  workPlanChanged: 'workplan:changed',
   updateStatus: 'update:status',
   updateInstall: 'update:install',
   updateCheck: 'update:check',

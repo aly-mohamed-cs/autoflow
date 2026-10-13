@@ -4,13 +4,14 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell 
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { FILE_PROTOCOL, IPC, type AiDraft, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions } from '../shared/api';
+import { FILE_PROTOCOL, IPC, type AiDraft, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions, type WorkPlanEntry } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
 import { RunGuard } from './runguard';
 import { QuickLaunch } from './quicklaunch';
 import { Updates } from './updates';
 import { FlowStore, newFlowId, Vault } from './storage';
+import { WorkPlan } from './workplan';
 
 // Tests point Studio at a throwaway folder so they never touch real automations.
 if (process.env.AUTOFLOW_USER_DATA) app.setPath('userData', process.env.AUTOFLOW_USER_DATA);
@@ -24,6 +25,31 @@ let quitting = false;
 const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'build', 'icon.png');
 const quickLaunch = new QuickLaunch(userData, orchestrator, () => showWindow(), iconPath);
 const updates = new Updates(orchestrator, (state) => broadcast(IPC.updateChanged, state));
+const workPlan = new WorkPlan(userData, orchestrator, {
+  start: async (flow, inputs) => {
+    const workDir = join(runsDir, `${Date.now()}`);
+    await fs.mkdir(workDir, { recursive: true });
+    void pruneRuns();
+    await engine.call('run.start', {
+      flow,
+      work_dir: workDir,
+      inputs,
+      breakpoints: [],
+      step_mode: false,
+      headless: false,
+      credentials: await vault.resolve(credentialNames(flow)),
+      repair: false,
+    });
+  },
+  stop: async () => {
+    await engine.call('run.stop').catch(() => undefined);
+  },
+  changed: (state) => {
+    broadcast(IPC.workPlanChanged, state);
+    quickLaunch.refreshTray();
+  },
+});
+quickLaunch.extraItems = () => workPlan.trayItems();
 
 function showWindow(): void {
   if (!mainWindow) createWindow();
@@ -45,7 +71,8 @@ const engine = new EngineProcess(
   findPython(app.getAppPath(), process.resourcesPath),
   (method, params) => {
     if (method === 'run.event') {
-      broadcast(IPC.runEvent, params);
+      // Runs from "My work plan" are not the editor's test runs.
+      if (!workPlan.onEngineEvent(params as { event?: string })) broadcast(IPC.runEvent, params);
       runGuard.onEvent(params as { event?: string });
       if ((params as { event?: string }).event === 'run_finished' && tookQueueItems) {
         // Queue items the test run took but didn't finish go back to the queue.
@@ -140,7 +167,7 @@ function createWindow(): void {
   }
   // With quick-launch hotkeys set up, closing the window keeps Studio in the tray so they keep working.
   mainWindow.on('close', (event) => {
-    if (!quitting && quickLaunch.active) {
+    if (!quitting && (quickLaunch.active || workPlan.scheduled)) {
       event.preventDefault();
       mainWindow?.hide();
     }
@@ -321,6 +348,10 @@ function registerIpc(): void {
     const res = await orchestrator.request<{ explanation: string }>('POST', '/api/ai/explain-error', input, 620_000);
     return res.explanation;
   });
+  handle(IPC.workPlanState, () => workPlan.state());
+  handle(IPC.workPlanSave, (entries: WorkPlanEntry[]) => workPlan.save(entries));
+  handle(IPC.workPlanRun, (entryId: string) => workPlan.run(entryId));
+  handle(IPC.workPlanStop, () => workPlan.stop());
   handle(IPC.quickList, () => quickLaunch.list());
   handle(IPC.quickSave, (entries: QuickLaunchEntry[]) => quickLaunch.save(entries));
   handle(IPC.quickRun, (entry: QuickLaunchEntry) => quickLaunch.run(entry));
@@ -361,7 +392,10 @@ if (!singleInstance) {
   app.on('before-quit', () => {
     quitting = true;
   });
-  app.on('will-quit', () => quickLaunch.dispose());
+  app.on('will-quit', () => {
+    quickLaunch.dispose();
+    workPlan.dispose();
+  });
   app.whenReady().then(() => {
     app.setAppUserModelId('com.autoflow.studio');
     registerFileProtocol();
@@ -369,6 +403,7 @@ if (!singleInstance) {
     engine.start();
     createWindow();
     void quickLaunch.load();
+    void workPlan.load();
     void updates.start();
   });
   app.on('window-all-closed', () => {

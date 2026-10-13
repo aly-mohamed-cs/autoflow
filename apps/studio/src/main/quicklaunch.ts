@@ -1,6 +1,6 @@
 // Quick launch: keyboard shortcuts that start published automations on a robot,
 // from anywhere in Windows, plus a tray menu with the same automations.
-import { app, globalShortcut, Menu, nativeImage, Notification, Tray } from 'electron';
+import { app, globalShortcut, Menu, nativeImage, Notification, Tray, type MenuItemConstructorOptions } from 'electron';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { QuickLaunchEntry } from '../shared/api';
@@ -12,6 +12,8 @@ export class QuickLaunch {
   private tray: Tray | null = null;
   private failed: string[] = [];
   private registered: string[] = [];
+  /** More tray items (the work plan's "Run on this PC"). */
+  extraItems: () => MenuItemConstructorOptions[] = () => [];
 
   constructor(
     userData: string,
@@ -64,6 +66,10 @@ export class QuickLaunch {
     this.updateTray();
   }
 
+  refreshTray(): void {
+    if (this.tray) this.updateTray();
+  }
+
   private updateTray(): void {
     if (!this.tray) {
       const icon = nativeImage.createFromPath(this.iconPath).resize({ width: 16, height: 16 });
@@ -76,8 +82,9 @@ export class QuickLaunch {
         { label: 'Open Autoflow Studio', click: () => this.showWindow() },
         { type: 'separator' },
         ...(this.entries.length
-          ? this.entries.map((e) => ({ label: `Run “${e.flowName}”`, accelerator: e.accelerator, click: () => void this.run(e) }))
+          ? this.entries.map((e) => ({ label: `Run “${e.flowName}” on a robot`, accelerator: e.accelerator, click: () => void this.run(e) }))
           : [{ label: 'No quick-launch automations yet', enabled: false }]),
+        ...this.extraItems(),
         { type: 'separator' },
         { label: 'Quit', click: () => app.quit() },
       ]),

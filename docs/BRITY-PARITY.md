@@ -63,7 +63,7 @@ gaps.
 - [x] Live robot screen view and remote stop from the dashboard
 - [x] Notices for users; API keys for the REST API; server health page
 - [x] Email two-factor sign-in (code by email for administrators or everyone; dashboard and Studio)
-- [ ] Attended "work plans": users run and schedule their own automations from a tray list
+- [x] Attended "work plans": users run and schedule their own automations on their PC (Studio: My work plan, tray)
 
 ## Release G - enterprise apps
 - [ ] SAP GUI: wait for screen, grids and tables (read, select, set), trees, status bar, combo boxes, run script

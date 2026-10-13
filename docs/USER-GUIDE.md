@@ -258,6 +258,12 @@ or email in the steps, give the automation the start value (Studio → **Start v
   `["attachments"]` (file names). To save its attachments, use **Read emails** with **Only this
   message** set to `{{trigger_email["id"]}}`, then **Save email attachments**.
 
+**My work plan** (Studio) is for automations you run yourself, on **your own PC**: add a
+published automation, then **Run on this PC**, start it from the tray icon next to the clock, or
+give it a schedule (every day, Monday to Friday, or every few minutes) — it runs while Studio is
+open, also when its window is closed. It uses the credentials saved in Studio on this PC, and the
+**Pause / Stop** keys work as in a test run. A time that passes while Studio is closed is skipped.
+
 **Then start** chains automations. With *hand over results*, the next automation gets this
 one's results as start values with the same names, and `previous_run` (its automation, status,
 error) if it has such a start value. A person stopping a run doesn't start the next one.

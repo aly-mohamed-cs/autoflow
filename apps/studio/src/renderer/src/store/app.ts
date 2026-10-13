@@ -8,6 +8,7 @@ export type Route =
   | { page: 'home' }
   | { page: 'editor'; flowId: string }
   | { page: 'credentials' }
+  | { page: 'workplan' }
   | { page: 'settings' };
 
 export type Theme = 'light' | 'dark' | 'system';
