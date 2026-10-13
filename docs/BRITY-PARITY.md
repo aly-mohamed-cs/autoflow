@@ -38,12 +38,12 @@ gaps.
 - [x] Element inspector: browse a window's element tree and pick from it
 
 ## Release D - Excel, Word, PowerPoint, PDF depth
-- [ ] Excel (live workbook): open / save / close / activate, sheets (add, rename, copy, move, delete),
+- [x] Excel (live workbook): open / save / close / activate, sheets (add, rename, copy, move, delete),
       clear / copy / paste / merge ranges, colours, borders, number formats, add / delete / hide rows
       and columns, formulas (read / write), find and replace, AutoFilter, run a macro, split a workbook
-- [ ] Word: new / open, insert text, replace text, read text, save (also as PDF)
-- [ ] PowerPoint: open, slides (count, add, delete, copy), save
-- [ ] PDF: search text, pages to images, extract images
+- [x] Word: new / open, insert text, replace text, read text, save (also as PDF)
+- [x] PowerPoint: open, slides (count, add, delete, copy), save
+- [x] PDF: search text, pages to images, extract images
 
 ## Release E - system and integrations
 - [ ] Run a command / PowerShell / Python script (admins decide who may use it)

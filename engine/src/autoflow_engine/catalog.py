@@ -167,6 +167,8 @@ CATEGORIES: list[dict[str, str]] = [
     {"id": "Data", "icon": "table", "description": "Tables and lists"},
     {"id": "Text", "icon": "type", "description": "Text and dates"},
     {"id": "PDF", "icon": "file-text", "description": "PDF documents"},
+    {"id": "Word", "icon": "file-type", "description": "Word documents"},
+    {"id": "PowerPoint", "icon": "presentation", "description": "PowerPoint presentations"},
     {"id": "Email", "icon": "mail", "description": "Send and read email"},
     {"id": "Web & APIs", "icon": "plug", "description": "HTTP requests and web services"},
     {"id": "Database", "icon": "database", "description": "SQL databases"},

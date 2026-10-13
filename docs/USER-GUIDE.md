@@ -144,11 +144,24 @@ More for Windows programs: **Choose menu item** (*File > Save as*), **Read list 
 3. In the main process (or another sub-process), add **Run sub-process**, choose it and fill
    in its inputs. Sub-processes use the same variables as the rest of the automation.
 
+### More with Excel, Word and PowerPoint (no Office needed)
+* **Excel:** add / rename / copy / delete sheets, **Format cells** (bold, colours, number format,
+  borders, column width), **Merge cells**, insert / delete / hide rows and columns, **Copy cells**
+  (formulas follow), **Find and replace**, **Add filter buttons**, **Read cell formula**, and
+  **Split sheet into files** (e.g. one workbook per region).
+* **Word:** **Create Word document** (from a template), **Add text** / **Add table**, **Replace
+  text** to fill in a template (placeholders like `[Customer]`), **Read Word document**.
+* **PowerPoint:** **Add slide**, **Delete slide**, **Replace text**, **Count slides**, **Read**.
+* These need Office on the computer that runs them: **Run Excel macro**, **Recalculate Excel**
+  (fresh formula results and data connections) and **Save Office file as PDF**.
+
 ### Read invoices and other PDFs
 * **Get fields from PDF**: for each field, enter the label printed before it
   (e.g. `Invoice No:`) and what kind of value it is (text, number, date…).
 * **Extract table from PDF** reads item lines. Scanned PDFs are read automatically with
   text recognition (OCR).
+* **Search PDF** tells on which pages a text is; **PDF pages to pictures** and **Save pictures in
+  a PDF** save PNG files.
 
 ### Email
 * **Send email** through the company mail server, with attachments such as a report.

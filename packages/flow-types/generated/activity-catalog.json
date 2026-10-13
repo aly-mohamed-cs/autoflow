@@ -47,6 +47,16 @@
       "description": "PDF documents"
     },
     {
+      "id": "Word",
+      "icon": "file-type",
+      "description": "Word documents"
+    },
+    {
+      "id": "PowerPoint",
+      "icon": "presentation",
+      "description": "PowerPoint presentations"
+    },
+    {
       "id": "Email",
       "icon": "mail",
       "description": "Send and read email"
@@ -5052,6 +5062,929 @@
       "requires": null
     },
     {
+      "id": "excel.add_sheet",
+      "title": "Add sheet",
+      "category": "Excel",
+      "icon": "file-plus",
+      "sentence": "Add sheet {sheet} to {file}",
+      "description": "Add a new, empty sheet. Nothing happens when a sheet with that name exists.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "position": {
+            "default": 0,
+            "description": "1 = first. 0 = last.",
+            "maximum": 1000,
+            "minimum": 0,
+            "title": "Position",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "sheet"
+        ],
+        "title": "AddSheetParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.rename_sheet",
+      "title": "Rename sheet",
+      "category": "Excel",
+      "icon": "pencil",
+      "sentence": "Rename sheet {sheet} to {new_name}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "new_name": {
+            "title": "New name",
+            "type": "string",
+            "x-placeholder": "Invoices 2026"
+          }
+        },
+        "required": [
+          "file",
+          "sheet",
+          "new_name"
+        ],
+        "title": "RenameSheetParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.copy_sheet",
+      "title": "Copy sheet",
+      "category": "Excel",
+      "icon": "copy",
+      "sentence": "Copy sheet {sheet} as {new_name}",
+      "description": "Make a copy of a sheet in the same workbook (values, formulas and formatting).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          },
+          "new_name": {
+            "title": "Name of the copy",
+            "type": "string",
+            "x-placeholder": "Invoices (copy)"
+          }
+        },
+        "required": [
+          "file",
+          "sheet",
+          "new_name"
+        ],
+        "title": "CopySheetParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.delete_sheet",
+      "title": "Delete sheet",
+      "category": "Excel",
+      "icon": "trash",
+      "sentence": "Delete sheet {sheet} of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "Invoices"
+          }
+        },
+        "required": [
+          "file",
+          "sheet"
+        ],
+        "title": "SheetParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.clear_cells",
+      "title": "Clear cells",
+      "category": "Excel",
+      "icon": "eraser",
+      "sentence": "Clear {range} in {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "title": "Cells",
+            "type": "string",
+            "x-placeholder": "A1:D20"
+          },
+          "what": {
+            "default": "contents",
+            "enum": [
+              "contents",
+              "formats",
+              "all"
+            ],
+            "title": "Clear",
+            "type": "string",
+            "x-labels": {
+              "all": "Everything",
+              "contents": "Values only",
+              "formats": "Formatting only"
+            }
+          }
+        },
+        "required": [
+          "file",
+          "range"
+        ],
+        "title": "ClearParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.format_cells",
+      "title": "Format cells",
+      "category": "Excel",
+      "icon": "paintbrush",
+      "sentence": "Format {range} in {file}",
+      "description": "Bold, colours, number format, borders, alignment and column width of a range of cells.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "title": "Cells",
+            "type": "string",
+            "x-placeholder": "A1:D20"
+          },
+          "bold": {
+            "default": "",
+            "enum": [
+              "",
+              "yes",
+              "no"
+            ],
+            "title": "Bold",
+            "type": "string",
+            "x-labels": {
+              "": "Leave as is",
+              "no": "Not bold",
+              "yes": "Bold"
+            }
+          },
+          "italic": {
+            "default": "",
+            "enum": [
+              "",
+              "yes",
+              "no"
+            ],
+            "title": "Italic",
+            "type": "string",
+            "x-advanced": true,
+            "x-labels": {
+              "": "Leave as is",
+              "no": "Not italic",
+              "yes": "Italic"
+            }
+          },
+          "font_color": {
+            "default": "",
+            "title": "Text colour",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "red, #C00000"
+          },
+          "fill_color": {
+            "default": "",
+            "title": "Fill colour",
+            "type": "string",
+            "x-placeholder": "lightyellow, #FFEB9C"
+          },
+          "number_format": {
+            "default": "",
+            "description": "As in Excel's Format Cells > Custom.",
+            "title": "Number format",
+            "type": "string",
+            "x-placeholder": "#,##0.00   or   dd/mm/yyyy"
+          },
+          "border": {
+            "default": "",
+            "enum": [
+              "",
+              "none",
+              "thin",
+              "thick"
+            ],
+            "title": "Borders",
+            "type": "string",
+            "x-labels": {
+              "": "Leave as is",
+              "none": "No borders",
+              "thick": "Thick",
+              "thin": "Thin"
+            }
+          },
+          "align": {
+            "default": "",
+            "enum": [
+              "",
+              "left",
+              "center",
+              "right"
+            ],
+            "title": "Align",
+            "type": "string",
+            "x-advanced": true,
+            "x-labels": {
+              "": "Leave as is",
+              "center": "Centre",
+              "left": "Left",
+              "right": "Right"
+            }
+          },
+          "wrap": {
+            "default": false,
+            "title": "Wrap text",
+            "type": "boolean",
+            "x-advanced": true
+          },
+          "column_width": {
+            "default": "",
+            "description": "A number of characters, or 'auto' to fit the contents.",
+            "title": "Column width",
+            "type": "string",
+            "x-advanced": true,
+            "x-placeholder": "20, or auto"
+          }
+        },
+        "required": [
+          "file",
+          "range"
+        ],
+        "title": "FormatParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.merge_cells",
+      "title": "Merge cells",
+      "category": "Excel",
+      "icon": "table-cells-merge",
+      "sentence": "{action} cells {range} in {file}",
+      "description": "Merge a range into one cell (the top-left value stays), or split merged cells again.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "title": "Cells",
+            "type": "string",
+            "x-placeholder": "A1:D20"
+          },
+          "action": {
+            "default": "merge",
+            "enum": [
+              "merge",
+              "unmerge"
+            ],
+            "title": "Do",
+            "type": "string",
+            "x-labels": {
+              "merge": "Merge",
+              "unmerge": "Unmerge"
+            }
+          }
+        },
+        "required": [
+          "file",
+          "range"
+        ],
+        "title": "MergeParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.insert_lines",
+      "title": "Insert rows or columns",
+      "category": "Excel",
+      "icon": "between-horizontal-start",
+      "sentence": "Insert {count} {what} at {at} in {file}",
+      "description": "Insert empty rows or columns; the ones after them move down / right.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "what": {
+            "default": "rows",
+            "enum": [
+              "rows",
+              "columns"
+            ],
+            "title": "What",
+            "type": "string",
+            "x-labels": {
+              "columns": "Columns",
+              "rows": "Rows"
+            }
+          },
+          "at": {
+            "description": "Row number, or column letter.",
+            "title": "At",
+            "type": "string",
+            "x-placeholder": "5   or   C"
+          },
+          "count": {
+            "default": 1,
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "How many",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "at"
+        ],
+        "title": "LinesParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.delete_lines",
+      "title": "Delete rows or columns",
+      "category": "Excel",
+      "icon": "between-horizontal-end",
+      "sentence": "Delete {count} {what} at {at} in {file}",
+      "description": "Delete rows or columns; the ones after them move up / left.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "what": {
+            "default": "rows",
+            "enum": [
+              "rows",
+              "columns"
+            ],
+            "title": "What",
+            "type": "string",
+            "x-labels": {
+              "columns": "Columns",
+              "rows": "Rows"
+            }
+          },
+          "at": {
+            "description": "Row number, or column letter.",
+            "title": "At",
+            "type": "string",
+            "x-placeholder": "5   or   C"
+          },
+          "count": {
+            "default": 1,
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "How many",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "at"
+        ],
+        "title": "LinesParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.hide_lines",
+      "title": "Hide rows or columns",
+      "category": "Excel",
+      "icon": "eye-off",
+      "sentence": "Hide {what} {which} in {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "what": {
+            "default": "rows",
+            "enum": [
+              "rows",
+              "columns"
+            ],
+            "title": "What",
+            "type": "string",
+            "x-labels": {
+              "columns": "Columns",
+              "rows": "Rows"
+            }
+          },
+          "which": {
+            "title": "Which",
+            "type": "string",
+            "x-placeholder": "2:5   or   B:D   or   C"
+          },
+          "hide": {
+            "default": true,
+            "description": "Untick to show hidden ones again.",
+            "title": "Hide them",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file",
+          "which"
+        ],
+        "title": "HideParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.read_formula",
+      "title": "Read cell formula",
+      "category": "Excel",
+      "icon": "sigma",
+      "sentence": "Read the formula in {cell} of {file}",
+      "description": "The formula in a cell (e.g. =SUM(B2:B9)), or its value when it has none.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "cell": {
+            "title": "Cell",
+            "type": "string",
+            "x-placeholder": "B2"
+          }
+        },
+        "required": [
+          "file",
+          "cell"
+        ],
+        "title": "ReadCellParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "formula",
+          "title": "Formula",
+          "type": "text",
+          "description": "",
+          "default_variable": "formula"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.find_replace",
+      "title": "Find and replace in Excel",
+      "category": "Excel",
+      "icon": "replace",
+      "sentence": "Replace {find} with {replace} in {file}",
+      "description": "Replace text in the cells of a sheet (or all sheets). Formulas are left alone.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(all sheets)"
+          },
+          "find": {
+            "title": "Find",
+            "type": "string",
+            "x-placeholder": "2025"
+          },
+          "replace": {
+            "default": "",
+            "title": "Replace with",
+            "type": "string",
+            "x-placeholder": "2026"
+          },
+          "match_case": {
+            "default": false,
+            "title": "Match upper / lower case",
+            "type": "boolean",
+            "x-advanced": true
+          },
+          "whole_cell": {
+            "default": false,
+            "title": "Only whole cells",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "find"
+        ],
+        "title": "FindReplaceParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Cells changed",
+          "type": "number",
+          "description": "",
+          "default_variable": "replaced"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.filter_buttons",
+      "title": "Add filter buttons",
+      "category": "Excel",
+      "icon": "list-filter",
+      "sentence": "Add filter buttons to {sheet} of {file}",
+      "description": "Put Excel's filter buttons on the header row (to filter the data itself, use 'Filter rows').",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "default": "",
+            "title": "Cells",
+            "type": "string",
+            "x-placeholder": "(all used cells)"
+          },
+          "on": {
+            "default": true,
+            "description": "Untick to remove them.",
+            "title": "Show the filter buttons",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "FilterParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.copy_cells",
+      "title": "Copy cells",
+      "category": "Excel",
+      "icon": "clipboard-copy",
+      "sentence": "Copy {range} to {to_cell}",
+      "description": "Copy values, formulas (adjusted to their new place) and formatting to another place, sheet or file.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "range": {
+            "title": "Cells",
+            "type": "string",
+            "x-placeholder": "A1:D20"
+          },
+          "to_file": {
+            "default": "",
+            "title": "Copy to file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-placeholder": "(the same file)",
+            "x-ui": "save_file"
+          },
+          "to_sheet": {
+            "default": "",
+            "title": "Copy to sheet",
+            "type": "string",
+            "x-placeholder": "(the same sheet)"
+          },
+          "to_cell": {
+            "title": "Top-left cell to copy to",
+            "type": "string",
+            "x-placeholder": "F1"
+          }
+        },
+        "required": [
+          "file",
+          "range",
+          "to_cell"
+        ],
+        "title": "CopyRangeParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.split",
+      "title": "Split sheet into files",
+      "category": "Excel",
+      "icon": "split",
+      "sentence": "Split {file} by {column}",
+      "description": "One workbook per value of a column (e.g. one file per region), each with the header row.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm"
+            ],
+            "x-ui": "file"
+          },
+          "sheet": {
+            "default": "",
+            "title": "Sheet",
+            "type": "string",
+            "x-placeholder": "(first sheet)"
+          },
+          "column": {
+            "title": "Split by column",
+            "type": "string",
+            "x-placeholder": "Region"
+          },
+          "folder": {
+            "title": "Save the files in",
+            "type": "string",
+            "x-ui": "folder"
+          }
+        },
+        "required": [
+          "file",
+          "column",
+          "folder"
+        ],
+        "title": "SplitParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Files",
+          "type": "list",
+          "description": "",
+          "default_variable": "split_files"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
       "id": "files.copy",
       "title": "Copy file",
       "category": "Files",
@@ -5734,6 +6667,666 @@
           "type": "list",
           "description": "",
           "default_variable": "extracted_files"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "word.create",
+      "title": "Create Word document",
+      "category": "Word",
+      "icon": "file-plus",
+      "sentence": "Create Word document {file}",
+      "description": "Create a new Word document, empty or as a copy of another one (Brity NewWord / CreateWord).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Word file",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-placeholder": "C:\\Reports\\letter.docx",
+            "x-ui": "save_file"
+          },
+          "template": {
+            "default": "",
+            "description": "A Word file to copy, e.g. a letter with your logo.",
+            "title": "Start from",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-placeholder": "(an empty document)",
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "CreateWordParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "file",
+          "title": "Document",
+          "type": "file",
+          "description": "",
+          "default_variable": "document"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "word.read_text",
+      "title": "Read Word document",
+      "category": "Word",
+      "icon": "file-text",
+      "sentence": "Read the text of {file}",
+      "description": "All the text of a Word document, paragraph by paragraph (tables included).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Word file",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "WordFileParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "word_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "word.add_text",
+      "title": "Add text to Word",
+      "category": "Word",
+      "icon": "pilcrow",
+      "sentence": "Add {text} to {file}",
+      "description": "Add a paragraph (or heading, or list item) at the end of a Word document (Brity InsertString).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Word file",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-ui": "file"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "style": {
+            "default": "normal",
+            "enum": [
+              "normal",
+              "title",
+              "heading1",
+              "heading2",
+              "heading3",
+              "bullet",
+              "number"
+            ],
+            "title": "Style",
+            "type": "string",
+            "x-labels": {
+              "bullet": "Bullet list",
+              "heading1": "Heading 1",
+              "heading2": "Heading 2",
+              "heading3": "Heading 3",
+              "normal": "Normal text",
+              "number": "Numbered list",
+              "title": "Title"
+            }
+          },
+          "bold": {
+            "default": false,
+            "title": "Bold",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "text"
+        ],
+        "title": "AddTextParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "word.replace_text",
+      "title": "Replace text in Word",
+      "category": "Word",
+      "icon": "replace",
+      "sentence": "Replace {find} with {replace} in {file}",
+      "description": "Fill in a template: replace a placeholder everywhere (text, tables, headers and footers).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "find": {
+            "title": "Find",
+            "type": "string",
+            "x-placeholder": "[Customer]"
+          },
+          "replace": {
+            "default": "",
+            "title": "Replace with",
+            "type": "string",
+            "x-placeholder": "{{row[\"Customer\"]}}"
+          },
+          "file": {
+            "title": "Word file",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-ui": "file"
+          },
+          "save_as": {
+            "default": "",
+            "description": "Fill a template and save the result as a new file.",
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-placeholder": "(the same file)",
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "find",
+          "file"
+        ],
+        "title": "WordReplaceParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Replaced",
+          "type": "number",
+          "description": "",
+          "default_variable": "replaced"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "word.add_table",
+      "title": "Add table to Word",
+      "category": "Word",
+      "icon": "table",
+      "sentence": "Add {table} to {file}",
+      "description": "Add a table (e.g. read from Excel) at the end of a Word document, with a header row.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Word file",
+            "type": "string",
+            "x-file-types": [
+              "docx"
+            ],
+            "x-ui": "file"
+          },
+          "table": {
+            "title": "Table",
+            "x-ui": "variable"
+          },
+          "style": {
+            "default": "Table Grid",
+            "title": "Table style",
+            "type": "string",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "table"
+        ],
+        "title": "AddTableParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ppt.read_text",
+      "title": "Read PowerPoint",
+      "category": "PowerPoint",
+      "icon": "presentation",
+      "sentence": "Read the text of {file}",
+      "description": "All the text of a presentation, slide by slide.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PowerPoint file",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "PptFileParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "text",
+          "title": "Text",
+          "type": "text",
+          "description": "",
+          "default_variable": "slides_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ppt.slide_count",
+      "title": "Count slides",
+      "category": "PowerPoint",
+      "icon": "gallery-horizontal",
+      "sentence": "Count the slides of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PowerPoint file",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-ui": "file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "PptFileParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Slides",
+          "type": "number",
+          "description": "",
+          "default_variable": "slide_count"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ppt.add_slide",
+      "title": "Add slide",
+      "category": "PowerPoint",
+      "icon": "square-plus",
+      "sentence": "Add slide {title} to {file}",
+      "description": "Add a slide at the end with a title and bullet points (Brity AddNewSlide).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PowerPoint file",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-ui": "file"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "One bullet point per line.",
+            "title": "Text",
+            "type": "string",
+            "x-ui": "multiline"
+          },
+          "layout": {
+            "default": "title_content",
+            "enum": [
+              "title_content",
+              "title",
+              "title_only",
+              "blank"
+            ],
+            "title": "Layout",
+            "type": "string",
+            "x-advanced": true,
+            "x-labels": {
+              "blank": "Blank",
+              "title": "Title slide",
+              "title_content": "Title and content",
+              "title_only": "Title only"
+            }
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "AddSlideParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "number",
+          "title": "Slide number",
+          "type": "number",
+          "description": "",
+          "default_variable": "slide_number"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ppt.delete_slide",
+      "title": "Delete slide",
+      "category": "PowerPoint",
+      "icon": "trash",
+      "sentence": "Delete slide {slide} of {file}",
+      "description": "",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PowerPoint file",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-ui": "file"
+          },
+          "slide": {
+            "minimum": 1,
+            "title": "Slide number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "slide"
+        ],
+        "title": "SlideParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "ppt.replace_text",
+      "title": "Replace text in PowerPoint",
+      "category": "PowerPoint",
+      "icon": "replace",
+      "sentence": "Replace {find} with {replace} in {file}",
+      "description": "Fill in a presentation template: replace a placeholder on every slide.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "find": {
+            "title": "Find",
+            "type": "string",
+            "x-placeholder": "[Customer]"
+          },
+          "replace": {
+            "default": "",
+            "title": "Replace with",
+            "type": "string",
+            "x-placeholder": "{{row[\"Customer\"]}}"
+          },
+          "file": {
+            "title": "PowerPoint file",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-ui": "file"
+          },
+          "save_as": {
+            "default": "",
+            "title": "Save as",
+            "type": "string",
+            "x-file-types": [
+              "pptx"
+            ],
+            "x-placeholder": "(the same file)",
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "find",
+          "file"
+        ],
+        "title": "PptReplaceParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "count",
+          "title": "Replaced",
+          "type": "number",
+          "description": "",
+          "default_variable": "replaced"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.run_macro",
+      "title": "Run Excel macro",
+      "category": "Excel",
+      "icon": "square-code",
+      "sentence": "Run macro {macro} in {file}",
+      "description": "Open the workbook in Excel and run one of its macros (Brity ExecuteMacro). Needs Excel.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsm",
+              "xlsx",
+              "xls",
+              "xlsb"
+            ],
+            "x-ui": "file"
+          },
+          "macro": {
+            "title": "Macro",
+            "type": "string",
+            "x-placeholder": "Module1.FormatReport"
+          },
+          "arguments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Values to hand to it",
+            "type": "array",
+            "x-advanced": true
+          },
+          "save": {
+            "default": true,
+            "title": "Save the workbook afterwards",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file",
+          "macro"
+        ],
+        "title": "MacroParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "result",
+          "title": "Result",
+          "type": "any",
+          "description": "",
+          "default_variable": "macro_result"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "excel.recalculate",
+      "title": "Recalculate Excel",
+      "category": "Excel",
+      "icon": "calculator",
+      "sentence": "Recalculate {file}",
+      "description": "Open the workbook in Excel, recalculate every formula (and refresh data), and save - so steps reading it afterwards see up-to-date results. Needs Excel.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "Excel file",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm",
+              "xls",
+              "xlsb"
+            ],
+            "x-ui": "file"
+          },
+          "refresh_data": {
+            "default": false,
+            "title": "Also refresh data connections and pivot tables",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "RefreshParams",
+        "type": "object"
+      },
+      "outputs": [],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.from_office",
+      "title": "Save Office file as PDF",
+      "category": "PDF",
+      "icon": "file-output",
+      "sentence": "Save {file} as PDF",
+      "description": "Turn an Excel workbook, Word document or PowerPoint presentation into a PDF. Needs Office.",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string",
+            "x-file-types": [
+              "xlsx",
+              "xlsm",
+              "xls",
+              "docx",
+              "doc",
+              "pptx",
+              "ppt"
+            ],
+            "x-ui": "file"
+          },
+          "pdf": {
+            "default": "",
+            "title": "Save the PDF as",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-placeholder": "(next to the file)",
+            "x-ui": "save_file"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "ToPdfParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "pdf",
+          "title": "PDF file",
+          "type": "file",
+          "description": "",
+          "default_variable": "pdf_file"
         }
       ],
       "blocks": [],
@@ -6565,6 +8158,168 @@
           "type": "text",
           "description": "",
           "default_variable": "image_text"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.search_text",
+      "title": "Search PDF",
+      "category": "PDF",
+      "icon": "file-search",
+      "sentence": "Search {file} for {text}",
+      "description": "On which pages a word or phrase appears (Brity SearchTextFromPdf).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string",
+            "x-placeholder": "Invoice total"
+          },
+          "match_case": {
+            "default": false,
+            "title": "Match upper / lower case",
+            "type": "boolean",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "text"
+        ],
+        "title": "SearchParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "pages",
+          "title": "Pages",
+          "type": "list",
+          "description": "",
+          "default_variable": "pages_found"
+        },
+        {
+          "name": "count",
+          "title": "Times found",
+          "type": "number",
+          "description": "",
+          "default_variable": "times_found"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.to_images",
+      "title": "PDF pages to pictures",
+      "category": "PDF",
+      "icon": "file-image",
+      "sentence": "Save the pages of {file} as pictures",
+      "description": "Save PDF pages as PNG pictures, e.g. to attach to an email (Brity ExportPdfToImage).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "folder": {
+            "title": "Save the pictures in",
+            "type": "string",
+            "x-ui": "folder"
+          },
+          "pages": {
+            "default": "all",
+            "title": "Pages",
+            "type": "string",
+            "x-placeholder": "all, 1, 1-3, 2,5"
+          },
+          "resolution": {
+            "default": 150,
+            "maximum": 600,
+            "minimum": 50,
+            "title": "Sharpness (dpi)",
+            "type": "integer",
+            "x-advanced": true
+          }
+        },
+        "required": [
+          "file",
+          "folder"
+        ],
+        "title": "ToImagesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Pictures",
+          "type": "list",
+          "description": "",
+          "default_variable": "page_images"
+        }
+      ],
+      "blocks": [],
+      "block_list": null,
+      "advanced": false,
+      "requires": null
+    },
+    {
+      "id": "pdf.extract_images",
+      "title": "Save pictures in a PDF",
+      "category": "PDF",
+      "icon": "images",
+      "sentence": "Save the pictures inside {file}",
+      "description": "Save the pictures a PDF contains (logos, photos, stamps) as files (Brity ExtractImageFromPdf).",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "title": "PDF file",
+            "type": "string",
+            "x-file-types": [
+              "pdf"
+            ],
+            "x-ui": "file"
+          },
+          "folder": {
+            "title": "Save the pictures in",
+            "type": "string",
+            "x-ui": "folder"
+          }
+        },
+        "required": [
+          "file",
+          "folder"
+        ],
+        "title": "ExtractImagesParams",
+        "type": "object"
+      },
+      "outputs": [
+        {
+          "name": "files",
+          "title": "Pictures",
+          "type": "list",
+          "description": "",
+          "default_variable": "pdf_images"
         }
       ],
       "blocks": [],

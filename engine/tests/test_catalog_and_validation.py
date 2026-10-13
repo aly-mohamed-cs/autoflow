@@ -31,7 +31,7 @@ def test_catalog_exports_as_json():
 def test_activity_contract(adef):
     assert re.fullmatch(r"[a-z]+\.[a-z_]+", adef.id)
     assert adef.id.split(".")[0] in {"control", "files", "data", "text", "excel", "browser", "desktop", "pdf",
-                                     "email", "http", "db", "screen"}
+                                     "email", "http", "db", "screen", "word", "ppt"}
     assert adef.title and adef.title[0].isupper()
     assert adef.icon and adef.sentence
     fields = adef.params.model_fields
