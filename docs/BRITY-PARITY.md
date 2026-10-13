@@ -62,7 +62,7 @@ gaps.
 - [x] Process flows: chain automations (when A succeeds / fails / finishes, start B with A's results); waiting for an event = event triggers
 - [x] Live robot screen view and remote stop from the dashboard
 - [x] Notices for users; API keys for the REST API; server health page
-- [ ] Email two-factor sign-in
+- [x] Email two-factor sign-in (code by email for administrators or everyone; dashboard and Studio)
 - [ ] Attended "work plans": users run and schedule their own automations from a tray list
 
 ## Release G - enterprise apps

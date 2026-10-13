@@ -2,6 +2,7 @@
 //   node dist/index.js                       start the server
 //   node dist/index.js backup <file.db>      consistent copy of the database
 //   node dist/index.js reset-password <user> set a new password for a local user (prints it)
+//   node dist/index.js sign-in-codes off     turn off sign-in codes by email (e.g. mail server down)
 import { randomBytes } from 'node:crypto';
 import { readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,6 +22,13 @@ async function main(argv: string[]): Promise<void> {
     if (!arg) throw new Error('Usage: backup <target-file>');
     db.backupTo(arg);
     console.log(`Database copied to ${arg}`);
+    return;
+  }
+  if (command === 'sign-in-codes') {
+    // Break-glass: e.g. the mail server is down and nobody can get a code.
+    if (arg !== 'off') throw new Error('Usage: sign-in-codes off');
+    db.run(`INSERT INTO settings (key, value) VALUES ('signin', '{"codes":"off"}') ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
+    console.log('Sign-in codes by email are off. Turn them on again in the dashboard (Settings → Sign-in).');
     return;
   }
   if (command === 'reset-password') {

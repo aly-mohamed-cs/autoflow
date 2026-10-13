@@ -18,6 +18,11 @@ interface Saved extends OrchestratorInfo {
   fingerprint?: string; // pinned self-signed certificate
 }
 
+interface SignedIn {
+  token: string;
+  user: { username: string; displayName: string; role: string };
+}
+
 export class UntrustedCertificateError extends Error {
   constructor(readonly fingerprint: string) {
     super('UNTRUSTED_CERTIFICATE');
@@ -26,6 +31,8 @@ export class UntrustedCertificateError extends Error {
 
 export class Orchestrator {
   private readonly file: string;
+  /** A sign-in waiting for the code from the email (kept in memory only). */
+  private pending: { url: string; fingerprint?: string; ticket: string } | null = null;
 
   constructor(
     userData: string,
@@ -45,14 +52,40 @@ export class Orchestrator {
     return saved ? { url: saved.url, fingerprint: saved.fingerprint } : null;
   }
 
-  async connect(rawUrl: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo> {
+  async connect(rawUrl: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo | { codeSentTo: string }> {
     const url = normalize(rawUrl);
-    const res = await this.call<{ token: string; user: { username: string; displayName: string; role: string } }>(
+    this.pending = null;
+    const res = await this.call<SignedIn | { twoFactor: true; ticket: string; sentTo: string }>(
       { url, fingerprint: trustFingerprint },
       'POST',
       '/api/auth/login',
       { username, password, client: 'studio' },
     );
+    if ('twoFactor' in res) {
+      this.pending = { url, fingerprint: trustFingerprint, ticket: res.ticket };
+      return { codeSentTo: res.sentTo };
+    }
+    return this.save(url, trustFingerprint, res);
+  }
+
+  async connectCode(code: string): Promise<OrchestratorInfo> {
+    const pending = this.pending;
+    if (!pending) throw new Error('Sign in again to get a new code.');
+    try {
+      const res = await this.call<SignedIn>({ url: pending.url, fingerprint: pending.fingerprint }, 'POST', '/api/auth/login/code', {
+        ticket: pending.ticket,
+        code,
+        client: 'studio',
+      });
+      this.pending = null;
+      return await this.save(pending.url, pending.fingerprint, res);
+    } catch (err) {
+      if (/expired|Too many/.test((err as Error).message)) this.pending = null;
+      throw err;
+    }
+  }
+
+  private async save(url: string, trustFingerprint: string | undefined, res: SignedIn): Promise<OrchestratorInfo> {
     const saved: Saved = {
       url,
       username: res.user.username,

@@ -97,6 +97,123 @@ export function ApiKeys() {
   );
 }
 
+interface SignIn {
+  codes: 'off' | 'admins' | 'everyone';
+  smtp: { host: string; port: number; security: 'starttls' | 'tls' | 'none'; from: string; username: string; password: string; hasPassword: boolean; allowInvalidCert: boolean };
+  withoutEmail: { displayName: string; role: string }[];
+}
+
+/** Two-step sign-in: a code by email after the password, and the mail server that sends it. */
+export function SignInCodes() {
+  const { data, reload } = useApi<SignIn>('/api/settings/signin');
+  const [form, setForm] = useState<SignIn | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (data && !form) setForm(data);
+  if (!form) return null;
+  const smtp = form.smtp;
+  const setSmtp = (patch: Partial<SignIn['smtp']>) => setForm({ ...form, smtp: { ...smtp, ...patch } });
+  const body = (codes: SignIn['codes']) => ({
+    codes,
+    smtp: { host: smtp.host, port: Number(smtp.port), security: smtp.security, from: smtp.from, username: smtp.username, allowInvalidCert: smtp.allowInvalidCert, ...(smtp.password ? { password: smtp.password } : {}) },
+  });
+  const save = async (codes: SignIn['codes']) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const saved = await api<SignIn>('/api/settings/signin', { method: 'PUT', body: body(codes) });
+      setForm(saved);
+      reload();
+      setMessage({ ok: true, text: 'Saved.' });
+    } catch (e) {
+      setMessage({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const affected = form.withoutEmail.filter((u) => form.codes === 'everyone' || (form.codes === 'admins' && u.role === 'admin'));
+  return (
+    <Card title="Sign-in">
+      <div className="max-w-3xl space-y-4">
+        <p className="text-[13px] text-muted">
+          After the password, Autoflow can ask for a 6-digit code it sends by email — so a stolen password alone isn't enough. Robots and API keys
+          are not affected. If the mail server is ever down, an administrator can turn this off on the server with{' '}
+          <code className="rounded bg-surface-2 px-1">node apps\server\dist\index.js sign-in-codes off</code>.
+        </p>
+        <Field label="Ask for a code by email" htmlFor="sc">
+          <Select
+            id="sc"
+            value={form.codes}
+            onChange={(codes) => setForm({ ...form, codes: codes as SignIn['codes'] })}
+            options={[
+              { value: 'off', label: 'Never' },
+              { value: 'admins', label: 'For administrators' },
+              { value: 'everyone', label: 'For everyone' },
+            ]}
+            className="w-64"
+          />
+        </Field>
+        {affected.length > 0 && (
+          <p className="text-[13px] text-warning" role="alert">
+            These people have no email address and could not sign in: {affected.map((u) => u.displayName).join(', ')}. Add it under Users (directory
+            users get it from Active Directory).
+          </p>
+        )}
+        <fieldset className="space-y-4 rounded-md border border-border p-4">
+          <legend className="px-1 text-[13px] font-medium">Mail server (SMTP)</legend>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Server" htmlFor="mh">
+              <Input id="mh" value={smtp.host} onChange={(e) => setSmtp({ host: e.target.value })} placeholder="mail.company.local" />
+            </Field>
+            <Field label="Port" htmlFor="mp">
+              <Input id="mp" type="number" value={smtp.port} onChange={(e) => setSmtp({ port: Number(e.target.value) })} />
+            </Field>
+            <Field label="Encryption" htmlFor="ms">
+              <Select id="ms" value={smtp.security} onChange={(security) => setSmtp({ security: security as SignIn['smtp']['security'] })} options={[{ value: 'starttls', label: 'STARTTLS (port 25/587)' }, { value: 'tls', label: 'TLS (port 465)' }, { value: 'none', label: 'None (internal relay only)' }]} />
+            </Field>
+            <Field label="From address" htmlFor="mf">
+              <Input id="mf" value={smtp.from} onChange={(e) => setSmtp({ from: e.target.value })} placeholder="autoflow@company.com" />
+            </Field>
+            <Field label="Username" htmlFor="mu" help="Empty if the server needs no sign-in.">
+              <Input id="mu" autoComplete="off" value={smtp.username} onChange={(e) => setSmtp({ username: e.target.value })} />
+            </Field>
+            <Field label="Password" htmlFor="mpw" help={smtp.hasPassword ? 'Saved. Type to replace it.' : undefined}>
+              <Input id="mpw" type="password" autoComplete="new-password" value={smtp.password} onChange={(e) => setSmtp({ password: e.target.value })} />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={() => void save(form.codes)} variant="primary">Save</Button>
+            <Button
+              disabled={busy || !smtp.host}
+              icon={<Icon name="send" size={14} />}
+              onClick={async () => {
+                setBusy(true);
+                setMessage(null);
+                try {
+                  await api('/api/settings/signin', { method: 'PUT', body: body(data?.codes ?? 'off') }); // test what is on screen
+                  const r = await api<{ ok: boolean; sentTo?: string; error?: string }>('/api/settings/signin/test', { body: {} });
+                  setMessage(r.ok ? { ok: true, text: `Test email sent to ${r.sentTo}. Check that it arrived before turning codes on.` } : { ok: false, text: r.error ?? 'Failed.' });
+                } catch (e) {
+                  setMessage({ ok: false, text: (e as Error).message });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Send me a test email
+            </Button>
+          </div>
+        </fieldset>
+        {message && (
+          <p className={message.ok ? 'text-[13px] text-success' : 'text-[13px] text-danger'} role="status">
+            {message.text}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 interface Notice {
   id: string;
   message: string;

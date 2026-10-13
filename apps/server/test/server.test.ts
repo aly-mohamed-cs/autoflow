@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -840,6 +841,112 @@ describe('API keys, notices, server health and the live screen view', () => {
     const viewer = (await api('POST', '/api/api-keys', { name: 'Screen peek', role: 'viewer' })).body.key;
     expect((await api('GET', `/api/robots/${robotId}/screen`, undefined, viewer)).status).toBe(403);
     ws.close();
+  });
+});
+
+/** Just enough of an SMTP server to receive the Orchestrator's emails. */
+function fakeSmtp() {
+  const mails: string[] = [];
+  const server = createNetServer((socket) => {
+    let data = false;
+    let buffer = '';
+    socket.write('220 fake ESMTP\r\n');
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString();
+      let end: number;
+      while ((end = data ? buffer.indexOf('\r\n.\r\n') : buffer.indexOf('\r\n')) >= 0) {
+        if (data) {
+          mails.push(buffer.slice(0, end));
+          buffer = buffer.slice(end + 5);
+          data = false;
+          socket.write('250 queued\r\n');
+          continue;
+        }
+        const line = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const verb = line.slice(0, 4).toUpperCase();
+        if (verb === 'EHLO' || verb === 'HELO') socket.write('250-fake\r\n250 OK\r\n');
+        else if (verb === 'DATA') {
+          data = true;
+          socket.write('354 go ahead\r\n');
+        } else if (verb === 'QUIT') socket.end('221 bye\r\n');
+        else socket.write('250 OK\r\n');
+      }
+    });
+  });
+  return { server, mails };
+}
+
+describe('sign-in codes by email', () => {
+  let smtp: ReturnType<typeof fakeSmtp>;
+  let smtpPort: number;
+  const login = (username: string, password: string) =>
+    app.inject({ method: 'POST', url: '/api/auth/login', payload: { username, password } }).then((r) => ({ status: r.statusCode, body: r.json() }));
+  const enterCode = (ticket: string, code: string) =>
+    app.inject({ method: 'POST', url: '/api/auth/login/code', payload: { ticket, code } }).then((r) => ({ status: r.statusCode, body: r.json() }));
+  const codeIn = (mail: string) => /code is (\d{6})/.exec(mail.replace(/=\r\n/g, ''))?.[1] ?? '';
+  const settingsBody = (codes: string) => ({ codes, smtp: { host: '127.0.0.1', port: smtpPort, security: 'none', from: 'autoflow@company.local', username: '' } });
+
+  beforeAll(async () => {
+    smtp = fakeSmtp();
+    await new Promise<void>((r) => smtp.server.listen(0, '127.0.0.1', r));
+    smtpPort = (smtp.server.address() as { port: number }).port;
+  });
+  afterAll(async () => {
+    await api('PUT', '/api/settings/signin', settingsBody('off'));
+    smtp.server.close();
+  });
+
+  it('can only be turned on with a working mail server and an email address for the administrator', async () => {
+    expect((await api('PUT', '/api/settings/signin', { codes: 'admins', smtp: { host: '', port: 25, security: 'none', from: '' } })).body.error).toMatch(/mail server/);
+    expect((await api('PUT', '/api/settings/signin', settingsBody('admins'))).body.error).toMatch(/your own email address/);
+    expect((await api('POST', '/api/settings/signin/test')).body.error).toMatch(/your own email address/);
+    const me = (await api('GET', '/api/auth/me')).body.user;
+    expect((await api('PATCH', `/api/users/${me.id}`, { email: 'not an email' })).status).toBe(400);
+    expect((await api('PATCH', `/api/users/${me.id}`, { email: 'admin@company.local' })).status).toBe(200);
+    await api('PUT', '/api/settings/signin', settingsBody('off'));
+    const test = (await api('POST', '/api/settings/signin/test')).body;
+    expect(test).toEqual({ ok: true, sentTo: 'admin@company.local' });
+    expect(smtp.mails.at(-1)).toContain('Subject: Autoflow test email');
+    const saved = (await api('PUT', '/api/settings/signin', { ...settingsBody('admins'), smtp: { ...settingsBody('admins').smtp, password: 'smtp secret' } })).body;
+    expect(saved).toMatchObject({ codes: 'admins', smtp: { host: '127.0.0.1', password: '', hasPassword: true } });
+    expect(JSON.stringify(svc.db.get('SELECT value FROM settings WHERE key = ?', 'smtp'))).not.toContain('smtp secret');
+    // Remove it again: the fake mail server has no sign-in.
+    await api('PUT', '/api/settings/signin', { ...settingsBody('admins'), smtp: { ...settingsBody('admins').smtp, password: '' } });
+  });
+
+  it('asks administrators for the code from the email, and nobody else', async () => {
+    const first = await login('admin', 'correct horse battery');
+    expect(first.body).toEqual({ twoFactor: true, ticket: expect.stringMatching(/^afl_/), sentTo: 'a***@company.local' });
+    expect(first.body.token).toBeUndefined();
+    const code = codeIn(smtp.mails.at(-1)!);
+    expect(code).toMatch(/^\d{6}$/);
+    const wrong = code === '000000' ? '111111' : '000000';
+    expect((await enterCode(first.body.ticket, wrong)).body.error).toBe('That code is not right. Check the newest email.');
+    expect((await enterCode(first.body.ticket, 'abc')).status).toBe(400);
+    const ok = await enterCode(first.body.ticket, code);
+    expect(ok.status).toBe(200);
+    expect((await api('GET', '/api/auth/me', undefined, ok.body.token)).body.user.username).toBe('admin');
+    expect((await enterCode(first.body.ticket, code)).status).toBe(401); // used up
+
+    // Five wrong codes end the attempt.
+    const again = (await login('admin', 'correct horse battery')).body;
+    for (let i = 0; i < 4; i++) await enterCode(again.ticket, wrong);
+    expect((await enterCode(again.ticket, wrong)).body.error).toMatch(/Too many wrong codes/);
+    expect((await enterCode(again.ticket, codeIn(smtp.mails.at(-1)!))).status).toBe(401);
+
+    // Builders sign in with their password only while codes are for administrators.
+    await api('POST', '/api/users', { username: 'bea', displayName: 'Bea', role: 'builder', password: 'a long password 1' });
+    expect((await login('bea', 'a long password 1')).body.token).toMatch(/^afs_/);
+  });
+
+  it('turned on for everyone, people without an email address are told what to do', async () => {
+    await api('PUT', '/api/settings/signin', settingsBody('everyone'));
+    expect((await api('GET', '/api/settings/signin')).body.withoutEmail).toEqual(expect.arrayContaining([{ displayName: 'Bea', role: 'builder' }]));
+    const denied = await login('bea', 'a long password 1');
+    expect(denied.status).toBe(403);
+    expect(denied.body.error).toMatch(/no email address/);
+    expect((await login('bea', 'wrong password!!')).status).toBe(401); // the password is still checked first
   });
 });
 

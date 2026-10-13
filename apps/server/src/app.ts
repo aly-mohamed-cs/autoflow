@@ -27,6 +27,7 @@ import { EventTriggers } from './services/eventTriggers.js';
 import { Gateway } from './services/gateway.js';
 import { AiService } from './services/ai.js';
 import { Jobs } from './services/jobs.js';
+import { Mailer } from './services/mailer.js';
 import { Repairs } from './services/repairs.js';
 import { RobotReleases } from './services/robotReleases.js';
 import { Queues, Scheduler } from './services/triggers.js';
@@ -47,6 +48,7 @@ export interface Services {
   assets: Assets;
   eventTriggers: EventTriggers;
   chains: Chains;
+  mailer: Mailer;
   ai: AiService;
   repairs: Repairs;
   robotReleases: RobotReleases;
@@ -94,6 +96,7 @@ export function createServices(config: Config, db: Db, vault: Vault): Services {
     assets: new Assets(db, join(config.dataDir, 'assets')),
     eventTriggers: new EventTriggers(db, jobs, gateway),
     chains: new Chains(db, jobs),
+    mailer: new Mailer(settings, (sealed) => vault.decrypt(sealed)),
     ai,
     repairs,
     robotReleases,

@@ -227,7 +227,9 @@ Settings → Security**. Disabled steps don't count.
 
 ## 4. Running automations without you
 
-Open the **dashboard** (address from your administrator) and choose the automation:
+Open the **dashboard** (address from your administrator) and choose the automation. If your
+company turned on sign-in codes, you get a 6-digit code by email after your password (also
+when you connect Studio); it works for 10 minutes.
 
 | You want it to run… | Do this |
 |---|---|

@@ -51,6 +51,7 @@ const api: StudioApi = {
   orchestrator: {
     info: () => invoke(IPC.orchInfo),
     connect: (url, username, password, trustFingerprint) => invoke(IPC.orchConnect, url, username, password, trustFingerprint),
+    connectCode: (code) => invoke(IPC.orchConnectCode, code),
     disconnect: () => invoke(IPC.orchDisconnect),
     publish: (flow, notes) => invoke(IPC.orchPublish, flow, notes),
     flows: () => invoke(IPC.orchFlows),

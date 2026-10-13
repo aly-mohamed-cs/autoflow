@@ -9,6 +9,8 @@ import { json, now } from '../db.js';
 import { hashPassword, newId } from '../security.js';
 import { HttpError, notFound } from '../services/core.js';
 import { ownCertificate } from '../services/health.js';
+import { SmtpBody, type SmtpSettings } from '../services/mailer.js';
+import { DEFAULT_SIGNIN, type SignInSettings } from './auth.js';
 
 const CredentialBody = z.object({
   name: z.string().trim().min(1).max(100),
@@ -16,12 +18,20 @@ const CredentialBody = z.object({
   password: z.string().max(2000).optional(),
   description: z.string().max(500).default(''),
 });
-const UserPatch = z.object({ role: z.enum(ROLES).optional(), disabled: z.boolean().optional(), password: z.string().min(10).max(500).optional() });
+const Email = z.string().trim().max(200).email('Enter a valid email address.');
+const UserPatch = z.object({
+  role: z.enum(ROLES).optional(),
+  disabled: z.boolean().optional(),
+  password: z.string().min(10).max(500).optional(),
+  email: Email.or(z.literal('')).optional(),
+});
+const SignInBody = z.object({ codes: z.enum(['off', 'admins', 'everyone']), smtp: SmtpBody });
 const LocalUser = z.object({
   username: z.string().trim().min(2).max(64).regex(/^[\w.@-]+$/),
   displayName: z.string().trim().min(1).max(100),
   role: z.enum(ROLES),
   password: z.string().min(10).max(500),
+  email: Email.or(z.literal('')).default(''),
 });
 const roleList = z.array(z.string().trim().min(1)).default([]);
 const LdapBody = z.object({
@@ -36,7 +46,7 @@ const LdapBody = z.object({
 });
 
 export async function adminRoutes(app: FastifyInstance) {
-  const { db, vault, settings, audit, config } = app.svc;
+  const { db, vault, settings, audit, config, mailer } = app.svc;
   const actor = (r: { user?: { id: string; username: string } }) => ({ id: r.user!.id, name: r.user!.username });
 
   // -- credentials (vault) ---------------------------------------------------------------
@@ -102,10 +112,11 @@ export async function adminRoutes(app: FastifyInstance) {
     if (db.get('SELECT 1 FROM users WHERE username = ?', body.username)) throw new HttpError(409, 'That username is taken.');
     const id = newId('usr');
     db.run(
-      `INSERT INTO users (id, username, display_name, role, source, password_hash, created_at) VALUES (?, ?, ?, ?, 'local', ?, ?)`,
+      `INSERT INTO users (id, username, display_name, email, role, source, password_hash, created_at) VALUES (?, ?, ?, ?, ?, 'local', ?, ?)`,
       id,
       body.username,
       body.displayName,
+      body.email || null,
       body.role,
       hashPassword(body.password),
       now(),
@@ -127,12 +138,16 @@ export async function adminRoutes(app: FastifyInstance) {
       db.run('UPDATE users SET disabled = ? WHERE id = ?', body.disabled ? 1 : 0, id);
       if (body.disabled) db.run('DELETE FROM sessions WHERE user_id = ?', id);
     }
+    if (body.email !== undefined) {
+      if (user.source !== 'local') throw new HttpError(400, "Directory users' email addresses come from Active Directory.");
+      db.run('UPDATE users SET email = ? WHERE id = ?', body.email || null, id);
+    }
     if (body.password) {
       if (user.source !== 'local') throw new HttpError(400, 'Directory users change their password in Windows.');
       db.run('UPDATE users SET password_hash = ? WHERE id = ?', hashPassword(body.password), id);
       db.run('DELETE FROM sessions WHERE user_id = ?', id);
     }
-    audit.record(actor(request), 'user.updated', id, { role: body.role, disabled: body.disabled, passwordReset: !!body.password });
+    audit.record(actor(request), 'user.updated', id, { role: body.role, disabled: body.disabled, passwordReset: !!body.password, emailChanged: body.email !== undefined });
     return { ok: true };
   });
 
@@ -158,6 +173,49 @@ export async function adminRoutes(app: FastifyInstance) {
       return { ok: true, user: { ...user, groups: user.groups.slice(0, 50) } };
     } catch (err) {
       return { ok: false, error: err instanceof LdapError ? err.message : `Could not connect: ${(err as Error).message}` };
+    }
+  });
+
+  // -- two-step sign-in (codes by email) and the mail server -------------------------------
+
+  const signInView = () => {
+    const smtp = mailer.config();
+    const { codes } = settings.get<SignInSettings>('signin', DEFAULT_SIGNIN);
+    const withoutEmail = db.all<{ display_name: string; role: string }>(
+      `SELECT display_name, role FROM users WHERE disabled = 0 AND (email IS NULL OR email = '') ORDER BY display_name COLLATE NOCASE`,
+    );
+    return { codes, smtp: { ...smtp, password: '', hasPassword: !!smtp.password }, withoutEmail: withoutEmail.map((u) => ({ displayName: u.display_name, role: u.role })) };
+  };
+
+  app.get('/api/settings/signin', { preHandler: requireRole('admin') }, async () => signInView());
+
+  app.put('/api/settings/signin', { preHandler: requireRole('admin') }, async (request) => {
+    const body = SignInBody.parse(request.body);
+    const before = mailer.config();
+    const smtp: SmtpSettings = {
+      ...body.smtp,
+      password: body.smtp.password === undefined ? before.password : body.smtp.password ? vault.encrypt(body.smtp.password) : '',
+    };
+    if (body.codes !== 'off') {
+      if (!smtp.host || !smtp.from) throw new HttpError(400, 'Set up the mail server first, and send a test email.');
+      const self = db.get<{ email: string | null }>('SELECT email FROM users WHERE id = ?', request.user!.id);
+      if (!self?.email) throw new HttpError(400, 'Add your own email address first (Users), so you can still sign in.');
+    }
+    settings.set('smtp', smtp);
+    settings.set('signin', { codes: body.codes } satisfies SignInSettings);
+    audit.record(actor(request), 'settings.signin_updated', undefined, { codes: body.codes, smtpHost: smtp.host });
+    return signInView();
+  });
+
+  /** Send a test email to the signed-in administrator (with the saved mail server settings). */
+  app.post('/api/settings/signin/test', { preHandler: requireRole('admin'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request) => {
+    const self = db.get<{ email: string | null }>('SELECT email FROM users WHERE id = ?', request.user!.id);
+    if (!self?.email) throw new HttpError(400, 'Add your own email address first (Users).');
+    try {
+      await mailer.send({ to: self.email, subject: 'Autoflow test email', text: 'The Orchestrator can send email: sign-in codes will arrive like this one.' });
+      return { ok: true, sentTo: self.email };
+    } catch (err) {
+      return { ok: false, error: `Could not send: ${(err as Error).message}` };
     }
   });
 

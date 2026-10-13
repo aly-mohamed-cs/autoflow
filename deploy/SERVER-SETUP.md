@@ -129,6 +129,8 @@ release has finished building before running `-Installers`, or run it again afte
 | Watch a robot | Dashboard → **Robots → Screen** (operators and up; recorded in the audit log). To turn it off on a robot, set `"screen_view": false` in its `robot.json` and restart it |
 | Backup now | `.\deploy\windows\backup-server.ps1` |
 | Restore a backup | Stop the service, copy `data\backups\<date>\autoflow.db` over `data\autoflow.db`, start it |
+| Sign-in codes by email | Dashboard → **Settings → Sign-in**: set up the mail server, **Send me a test email**, then ask for a code *for administrators* or *for everyone*. People need an email address (Users; directory users get it from AD) |
+| Mail server down, nobody gets a code | `$env:AUTOFLOW_DATA_DIR="C:\RPA-Server\data"; node apps\server\dist\index.js sign-in-codes off` |
 | Forgotten admin password | `$env:AUTOFLOW_DATA_DIR="C:\RPA-Server\data"; node apps\server\dist\index.js reset-password admin` |
 | Run history retention | 90 days (set `"retentionDays"` in `data\config.json`, then restart) |
 

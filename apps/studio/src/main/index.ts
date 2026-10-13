@@ -274,10 +274,15 @@ function registerIpc(): void {
   });
 
   handle(IPC.orchInfo, () => orchestrator.info());
+  handle(IPC.orchConnectCode, async (code: string) => {
+    const info = await orchestrator.connectCode(code);
+    void updates.start();
+    return info;
+  });
   handle(IPC.orchConnect, async (url: string, username: string, password: string, fingerprint?: string) => {
     try {
       const info = await orchestrator.connect(url, username, password, fingerprint);
-      void updates.start();
+      if (!('codeSentTo' in info)) void updates.start();
       return info;
     } catch (err) {
       if (err instanceof UntrustedCertificateError) throw new Error(`UNTRUSTED_CERTIFICATE ${err.fingerprint}`);

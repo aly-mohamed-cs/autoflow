@@ -242,6 +242,52 @@ function LoginScreen({ ldap, onDone }: { ldap: boolean; onDone: () => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [codeStep, setCodeStep] = useState<{ ticket: string; sentTo: string } | null>(null);
+  const [code, setCode] = useState('');
+
+  if (codeStep) {
+    return (
+      <AuthLayout title="Enter the code" subtitle={`We sent a 6-digit code to ${codeStep.sentTo}. It works for 10 minutes.`}>
+        <form
+          className="space-y-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError('');
+            try {
+              await api('/api/auth/login/code', { body: { ticket: codeStep.ticket, code } });
+              onDone();
+            } catch (err) {
+              setError((err as Error).message);
+              if (/expired|Too many/.test((err as Error).message)) setCodeStep(null);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Field label="Code from the email" htmlFor="c" error={error || undefined}>
+            <Input
+              id="c"
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              className="text-center font-mono text-lg tracking-[0.4em]"
+            />
+          </Field>
+          <Button type="submit" variant="primary" className="w-full justify-center" size="lg" loading={busy} disabled={code.length !== 6}>
+            Sign in
+          </Button>
+          <button type="button" className="w-full text-center text-[13px] text-muted hover:text-fg" onClick={() => { setCodeStep(null); setCode(''); setError(''); }}>
+            Start again
+          </button>
+        </form>
+      </AuthLayout>
+    );
+  }
+
   return (
     <AuthLayout title="Sign in" subtitle={ldap ? 'Use your Windows username and password.' : 'Sign in with your Autoflow account.'}>
       <form
@@ -251,8 +297,12 @@ function LoginScreen({ ldap, onDone }: { ldap: boolean; onDone: () => void }) {
           setBusy(true);
           setError('');
           try {
-            await api('/api/auth/login', { body: { username, password } });
-            onDone();
+            const result = await api<{ twoFactor?: boolean; ticket?: string; sentTo?: string }>('/api/auth/login', { body: { username, password } });
+            if (result.twoFactor && result.ticket) {
+              setPassword('');
+              setCode('');
+              setCodeStep({ ticket: result.ticket, sentTo: result.sentTo ?? 'your email' });
+            } else onDone();
           } catch (err) {
             setError((err as Error).message);
           } finally {

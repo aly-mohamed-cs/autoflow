@@ -322,4 +322,15 @@ export const MIGRATIONS: string[] = [
     created_at  TEXT NOT NULL
   );
   `,
+  /* 6: sign-in codes by email (two-step sign-in) */ `
+  CREATE TABLE login_codes (
+    ticket_hash  TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash    TEXT NOT NULL,
+    client       TEXT NOT NULL DEFAULT 'dashboard',
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    expires_at   TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  `,
 ];

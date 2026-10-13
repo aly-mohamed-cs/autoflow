@@ -123,7 +123,10 @@ export interface StudioApi {
   orchestrator: {
     info(): Promise<OrchestratorInfo | null>;
     /** Rejects with "UNTRUSTED_CERTIFICATE <fingerprint>" for self-signed servers until trusted. */
-    connect(url: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo>;
+    /** Signs in; when the Orchestrator sends a code by email, returns where it went instead. */
+    connect(url: string, username: string, password: string, trustFingerprint?: string): Promise<OrchestratorInfo | { codeSentTo: string }>;
+    /** The second step: the code from the email. */
+    connectCode(code: string): Promise<OrchestratorInfo>;
     disconnect(): Promise<void>;
     publish(flow: Flow, notes: string): Promise<{ version: number; url: string }>;
     flows(): Promise<PublishedFlow[]>;
@@ -190,6 +193,7 @@ export const IPC = {
   dialogSaveFile: 'dialog:save-file',
   orchInfo: 'orch:info',
   orchConnect: 'orch:connect',
+  orchConnectCode: 'orch:connect-code',
   orchDisconnect: 'orch:disconnect',
   orchPublish: 'orch:publish',
   orchFlows: 'orch:flows',

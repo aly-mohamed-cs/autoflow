@@ -29,6 +29,7 @@ export function UsersPage() {
   const { data, error, reload } = useApi<{ users: User[] }>('/api/users');
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<User | null>(null);
+  const [emailing, setEmailing] = useState<User | null>(null);
   return (
     <>
       <PageHeader
@@ -62,6 +63,7 @@ export function UsersPage() {
                   </td>
                   <td className="px-4 py-2 text-muted">{relative(u.lastLoginAt)}</td>
                   <td className="px-4 py-2 text-right">
+                    {u.source === 'local' && <Button size="sm" variant="ghost" onClick={() => setEmailing(u)}>{u.email ? 'Change email' : 'Add email'}</Button>}
                     {u.source === 'local' && <Button size="sm" variant="ghost" onClick={() => setResetting(u)}>Reset password</Button>}
                     {u.id !== me.id && (
                       <Button size="sm" variant="ghost" onClick={async () => { await api(`/api/users/${u.id}`, { method: 'PATCH', body: { disabled: !u.disabled } }); reload(); }}>
@@ -77,24 +79,45 @@ export function UsersPage() {
       )}
       <AddUserDialog open={adding} onClose={() => { setAdding(false); reload(); }} />
       <ResetDialog user={resetting} onClose={() => setResetting(null)} />
+      <EmailDialog user={emailing} onClose={() => { setEmailing(null); reload(); }} />
     </>
   );
 }
 
 function AddUserDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ username: '', displayName: '', role: 'viewer', password: '' });
+  const [form, setForm] = useState({ username: '', displayName: '', email: '', role: 'viewer', password: '' });
   const [error, setError] = useState('');
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()} title="Add local user" description="For people without a Windows account in the company directory. Prefer directory sign-in where possible."
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!form.username || !form.displayName || form.password.length < 10} onClick={async () => {
-        try { await api('/api/users', { body: form }); setForm({ username: '', displayName: '', role: 'viewer', password: '' }); onClose(); } catch (e) { setError((e as Error).message); }
+        try { await api('/api/users', { body: form }); setForm({ username: '', displayName: '', email: '', role: 'viewer', password: '' }); onClose(); } catch (e) { setError((e as Error).message); }
       }}>Add user</Button></>}>
       <div className="space-y-4">
         <Field label="Username" htmlFor="nu"><Input id="nu" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
         <Field label="Display name" htmlFor="nd"><Input id="nd" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></Field>
+        <Field label="Email" htmlFor="ne" help="For sign-in codes, if they are turned on."><Input id="ne" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
         <Field label="Role"><Select value={form.role} onChange={(role) => setForm({ ...form, role })} options={ROLE_OPTIONS} /></Field>
         <Field label="Password" htmlFor="np" help="At least 10 characters." error={error || undefined}><Input id="np" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
       </div>
+    </Dialog>
+  );
+}
+
+function EmailDialog({ user, onClose }: { user: User | null; onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [last, setLast] = useState<User | null>(null);
+  const [error, setError] = useState('');
+  if (user !== last) {
+    setLast(user);
+    setEmail(user?.email ?? '');
+    setError('');
+  }
+  return (
+    <Dialog open={!!user} onOpenChange={(o) => !o && onClose()} title={`Email of ${user?.displayName}`} description="Used for sign-in codes, if they are turned on (Settings → Sign-in)."
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={async () => {
+        try { await api(`/api/users/${user!.id}`, { method: 'PATCH', body: { email: email.trim() } }); onClose(); } catch (e) { setError((e as Error).message); }
+      }}>Save</Button></>}>
+      <Field label="Email" htmlFor="ue" error={error || undefined}><Input id="ue" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
     </Dialog>
   );
 }
