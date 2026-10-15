@@ -70,6 +70,8 @@ export interface ActivityDef {
   block_list?: { param: string; prefix: string } | null;
   advanced: boolean;
   requires: string | null;
+  /** Flowchart only: the ways out of the step, e.g. a Decision's Yes and No. */
+  ports?: { name: string; title: string }[];
 }
 
 /** The step lists a step has: one per item of its block_list setting, then the fixed ones. */

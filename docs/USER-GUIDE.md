@@ -102,6 +102,26 @@ The preview shows the result using values from your last test run.
 | Check a value while testing | Press **F9** on a step to pause there, start **Test run**, open **Console** and type a formula. |
 | Slow a run down | **Pause after every step** in the automation's settings (click an empty spot). |
 
+### Connect steps your way (free connections)
+New automations start with **Free connections** on (the switch above the flowchart): the
+steps run in the order you connect them, from **Start**.
+
+* **Connect**: drag from the dot on the right of a step (or of Start) to another step.
+  Dragging from a dot to an empty spot adds a new step there, already connected.
+* **Leave a step on its own**: a step nothing leads to shows **not connected** and does not
+  run. Drop a step from the library onto an empty spot to add it unconnected.
+* **Disconnect**: point at a connector and click **×**. The **+** on a connector adds a step
+  in between.
+* Clicking a step in the library connects it after the selected step (or to Start, if
+  nothing is connected to Start yet).
+* **Decision**: two ways out, a green **Yes** and a red **No**. Connect **No** back to an
+  earlier step to repeat steps until something is true (a run that never ends this way is
+  stopped after 100,000 steps).
+* What is inside a loop, If or Try box still runs in order. **Tidy up** lines everything up in
+  the order it runs. Turning the switch off puts the steps one after the other again, once
+  they are all connected in one line.
+* Robots run free connections once they have the release that adds them (they update themselves).
+
 ### Choose between several paths, retry, check
 * **Switch / case** — one path per value (e.g. *Paid*, *Overdue*) plus **Otherwise**. Add cases in its
   settings; each gets its own lane.

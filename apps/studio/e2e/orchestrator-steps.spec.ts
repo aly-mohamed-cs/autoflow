@@ -47,6 +47,7 @@ test('shared values and queue items in a test run, picked from the Orchestrator'
         (r) => r.json() as Promise<any>,
       );
     await call('PUT', '/api/assets', { name: 'Portal address', kind: 'text', value: 'https://vendors.example' });
+    await call('PUT', '/api/credentials', { name: 'Vendor portal', username: 'robot', password: 'test-only-password' });
     const { id: queueId } = await call('POST', '/api/queues', { name: 'Customers' });
     await call('POST', `/api/queues/${queueId}/items`, { items: [{ reference: 'C-1', data: { name: 'Ann' } }] });
     await call('POST', '/api/notices', { message: 'Robots are updated tonight at 22:00.', tone: 'warning' });
@@ -62,6 +63,17 @@ test('shared values and queue items in a test run, picked from the Orchestrator'
     await win.getByLabel('Password').fill('a long test password');
     await win.getByRole('button', { name: 'Connect' }).click();
     await expect(win.getByText('Connected', { exact: true })).toBeVisible();
+
+    // Credentials robots use are listed, so the same one can be added on this PC to test.
+    await win.getByRole('button', { name: 'Credentials' }).click();
+    const onlyRemote = win.getByRole('region', { name: 'Only on the Orchestrator' });
+    await expect(onlyRemote).toContainText('Vendor portal');
+    await onlyRemote.getByRole('button', { name: 'Add on this PC' }).click();
+    await expect(win.locator('#cred-name')).toHaveValue('Vendor portal');
+    await expect(win.locator('#cred-user')).toHaveValue('robot');
+    await win.locator('#cred-pass').fill('test-only-password');
+    await win.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+    await expect(onlyRemote).toHaveCount(0);
 
     await win.getByRole('button', { name: 'Automations' }).click();
     await expect(win.getByRole('region', { name: 'Notices' })).toContainText('Robots are updated tonight at 22:00.');
@@ -80,7 +92,7 @@ test('shared values and queue items in a test run, picked from the Orchestrator'
     await win.getByRole('option', { name: 'Customers' }).click();
     await library.getByRole('button', { name: 'Write to log' }).click();
     await props.getByRole('textbox', { name: 'Message' }).fill('Open {{shared_value}} for {{queue_item["name"]}}');
-    await expect(win.getByText('Saved')).toBeVisible({ timeout: 5_000 });
+    await expect(win.getByText('Saved', { exact: true })).toBeVisible({ timeout: 5_000 });
 
     await win.getByRole('button', { name: 'Test run' }).click();
     await expect(win.getByText('Finished successfully')).toBeVisible({ timeout: 30_000 });

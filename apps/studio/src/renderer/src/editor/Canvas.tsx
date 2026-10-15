@@ -12,7 +12,8 @@ import {
   Tooltip,
 } from '@autoflow/ui';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { chartOf, runOrder } from '../lib/flowchart';
 import {
   getList,
   listKey,
@@ -89,8 +90,11 @@ export function Canvas() {
 function ListCanvas() {
   const processId = useEditor((s) => s.processId);
   const steps = useEditor((s) => (s.flow ? processSteps(s.flow, processId) : NO_STEPS));
+  const chart = useEditor((s) => (s.flow ? chartOf(s.flow, processId) : null));
   const select = useEditor((s) => s.select);
   const reveal = useEditor((s) => s.reveal);
+  // Free connections: the steps in the order they run, then the ones that don't.
+  const order = useMemo(() => (chart ? runOrder(steps, chart) : null), [chart, steps]);
   useEffect(() => {
     if (!reveal) return;
     const t = setTimeout(
@@ -115,6 +119,22 @@ function ListCanvas() {
       >
         {steps.length === 0 ? (
           <EmptyCanvas />
+        ) : order ? (
+          <>
+            <p className="mb-3 flex items-center gap-1.5 text-xs text-muted">
+              <Icon name="cable" size={13} /> Free connections: the steps in the order they run. Connect them in the
+              Flow view.
+            </p>
+            {order.connected.length > 0 && <StepList steps={order.connected} listRef={rootRef(processId)} />}
+            {order.loose.length > 0 && (
+              <section className="mt-6" aria-label="Not connected">
+                <h3 className="mb-2 text-xs font-semibold tracking-wide text-subtle uppercase">
+                  Not connected - these don't run
+                </h3>
+                <StepList steps={order.loose} listRef={rootRef(processId)} />
+              </section>
+            )}
+          </>
         ) : (
           <StepList steps={steps} listRef={rootRef(processId)} />
         )}

@@ -3,7 +3,9 @@ import { Badge, Button, Dialog, Field, Icon, IconTile, Input, Menu, Spinner, Too
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createStep } from '../lib/catalog';
-import { duplicateStep, findStep, flatIds, getList, insertStep, listKey, locate, moveStep, parseListKey } from '../lib/flowOps';
+import { duplicateStep, findStep, flatIds, getList, insertStep, listKey, locate, moveStep, parseListKey, processSteps, rootRef } from '../lib/flowOps';
+import { insertOnLink, setPosition } from '../lib/flowchart';
+import { SIZES } from '../lib/flowLayout';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Canvas } from '../editor/Canvas';
 import { openFind } from '../editor/FindSteps';
@@ -543,6 +545,18 @@ function EditorDnd({ children }: { children: React.ReactNode }) {
       target = { listKey: data.listKey, index: getList(flow, ref)?.length ?? 0 };
     } else if (data?.kind === 'slot') {
       target = { listKey: data.listKey, index: data.index };
+    } else if (data?.kind === 'canvas' || data?.kind === 'link') {
+      // Free connections: to the process's top level, at the pointer or on the connector.
+      const { processId } = useEditor.getState();
+      const root = rootRef(processId);
+      target = { listKey: listKey(root), index: processSteps(flow, processId).length };
+      if (data.kind === 'link') target.link = data.link;
+      else {
+        const start = e.activatorEvent as PointerEvent;
+        const point = { x: (start?.clientX ?? 0) + e.delta.x, y: (start?.clientY ?? 0) + e.delta.y };
+        const at = useDnd.getState().chartPoint?.(point);
+        if (at) target.at = at;
+      }
     }
     if (target && item.kind === 'step') {
       // A step can't be dropped inside itself.
@@ -563,15 +577,24 @@ function EditorDnd({ children }: { children: React.ReactNode }) {
     useDnd.getState().setTarget(null);
     if (!target) return;
     const ref = parseListKey(target.listKey);
-    const { change, select } = useEditor.getState();
+    const { change, select, processId } = useEditor.getState();
+    // Free connections: where it was let go, or on the connector it was dropped on.
+    const place = (f: Flow, id: string): Flow => {
+      if (target.link) return insertOnLink(f, processId, target.link, findStep(f, id)!);
+      if (target.at) {
+        const { x = 0, y = 0 } = target.at;
+        return setPosition(f, processId, id, { x: x - SIZES.node.w / 2, y: y - SIZES.node.h / 2 });
+      }
+      return f;
+    };
     if (item.kind === 'new') {
       const def = index.get(item.activity);
       if (!def) return;
       const step = createStep(def, index, new Set(variables.map((v) => v.name)));
-      change((f) => insertStep(f, ref, target.index, step));
+      change((f) => place(insertStep(f, ref, target.index, step), step.id));
       select(step.id);
     } else {
-      change((f) => moveStep(f, item.stepId, ref, target.index));
+      change((f) => place(moveStep(f, item.stepId, ref, target.index), item.stepId));
       select(item.stepId);
     }
   };

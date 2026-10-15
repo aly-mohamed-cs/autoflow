@@ -9,7 +9,7 @@ from ..errors import ActivityError, BreakLoop, ContinueLoop, StepFailed, StopFlo
 from ..runtime.conditions import Condition, evaluate_condition
 from ..runtime.context import RunContext
 from ..runtime.expressions import to_number
-from ..runtime.interpreter import BlockRunner
+from ..runtime.interpreter import DECISIONS_KEY, BlockRunner
 from ..values import Table, to_text, type_name
 
 C = "Control"
@@ -133,6 +133,28 @@ def if_else(ctx: RunContext, p: IfParams, blocks: BlockRunner) -> None:
         blocks.run("then")
     else:
         blocks.run("else")
+
+
+class DecisionParams(Params):
+    condition: Condition = Param(title="Condition")
+
+
+
+@activity(
+    "control.decision",
+    title="Decision",
+    category=C,
+    icon="git-fork",
+    sentence="Decide: {condition}",
+    description="In a flowchart with free connections: continue on the Yes or the No connector, depending on "
+    "a condition. Connect No back to an earlier step to repeat steps.",
+    params=DecisionParams,
+    ports=(("yes", "Yes"), ("no", "No")),
+)
+def decision(ctx: RunContext, p: DecisionParams) -> None:
+    # The flowchart runner reads the answer to pick the connector (runtime/interpreter.py).
+    answers = ctx.resources.setdefault(DECISIONS_KEY, {})
+    answers[ctx.current_step_id] = bool(evaluate_condition(p.condition, ctx.variables))
 
 
 # -- Loops -------------------------------------------------------------------

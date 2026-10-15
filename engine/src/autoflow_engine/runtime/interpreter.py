@@ -33,7 +33,7 @@ from ..errors import (
     StopFlow,
     friendly,
 )
-from ..flow import Flow, Step, Variable
+from ..flow import START, Flow, Flowchart, Step, Variable
 from ..values import Table, to_jsonable, to_text
 from . import repair
 from .context import Emit, RunContext, RunControl, RunOptions, log, set_active_control
@@ -41,6 +41,11 @@ from .expressions import to_date, to_number, truthy
 from .templates import resolve
 
 MAX_PROCESS_DEPTH = 20
+# Flowcharts may connect back to earlier steps (to repeat them): stop one that never ends.
+MAX_CHART_STEPS = 100_000
+DECISION = "control.decision"
+# Where a Decision step leaves its answer for the flowchart runner (activities/control.py).
+DECISIONS_KEY = "flowchart.decisions"
 
 
 @dataclass
@@ -105,7 +110,7 @@ class FlowRunner:
         set_active_control(self.control)  # lets waits inside steps be stopped and paused
         try:
             self._init_variables()
-            self.run_steps(self.flow.steps)
+            self.run_process_steps(self.flow.steps, self.flow.flowchart)
         except StopFlow as stop:
             if not stop.succeeded:
                 status = "failed"
@@ -164,6 +169,38 @@ class FlowRunner:
         for step in steps:
             self.run_step(step)
 
+    def run_process_steps(self, steps: list[Step], chart: Flowchart | None) -> None:
+        """A process's steps: one after the other, or along the connectors of its flowchart."""
+        if chart is None:
+            self.run_steps(steps)
+        else:
+            self.run_chart(steps, chart)
+
+    def run_chart(self, steps: list[Step], chart: Flowchart) -> None:
+        """Follow the connectors from Start. Steps nothing leads to don't run; the run ends at a
+        step with no connector going on."""
+        by_id = {step.id: step for step in steps}
+        current = chart.next_of(START)
+        visits = 0
+        while current is not None:
+            step = by_id.get(current)
+            if step is None:
+                raise AutoflowError("A connector leads to a step that no longer exists.",
+                                    "Connect the step before it again in the Flow view.")
+            visits += 1
+            if visits > MAX_CHART_STEPS:
+                raise AutoflowError(
+                    f"The flowchart ran {MAX_CHART_STEPS:,} steps and was stopped.",
+                    "A connector probably goes back to an earlier step without a Decision that ever ends it.",
+                )
+            port = "next"
+            self.run_step(step)
+            if step.activity == DECISION:
+                answers: dict[str, bool] = self.ctx.resources.get(DECISIONS_KEY, {})
+                # A turned-off Decision is not asked: it goes on along No.
+                port = "yes" if answers.pop(step.id, False) else "no"
+            current = chart.next_of(step.id, port)
+
     def run_process(self, process_id: str, inputs: dict[str, Any]) -> None:
         """Run a sub-process: its inputs become variables, then its steps run."""
         ctx = self.ctx
@@ -188,7 +225,7 @@ class FlowRunner:
         ctx.log(f"Running sub-process '{process.name}'")
         self._process_depth += 1
         try:
-            self.run_steps(process.steps)
+            self.run_process_steps(process.steps, process.flowchart)
         except (BreakLoop, ContinueLoop):
             pass  # "Exit loop" outside a loop ends the sub-process, not the caller's loop
         finally:

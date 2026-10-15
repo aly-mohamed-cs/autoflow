@@ -1,6 +1,7 @@
 import type { Flow, ValidationIssue } from '@autoflow/flow-types';
 import { create } from 'zustand';
 import { processOfStep } from '../lib/flowOps';
+import { normalizeCharts } from '../lib/flowchart';
 
 const HISTORY_LIMIT = 200;
 const COALESCE_MS = 800;
@@ -95,7 +96,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   change: (fn, coalesceKey) => {
     const { flow, past, lastKey, lastAt } = get();
     if (!flow) return;
-    const next = fn(flow);
+    // Connectors of a flowchart only for steps still at its top level (deleted / moved steps lose theirs).
+    const next = normalizeCharts(fn(flow));
     if (next === flow) return;
     const now = Date.now();
     const coalesce = !!coalesceKey && coalesceKey === lastKey && now - lastAt < COALESCE_MS;

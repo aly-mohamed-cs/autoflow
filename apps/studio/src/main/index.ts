@@ -327,6 +327,13 @@ function registerIpc(): void {
     if (!(await orchestrator.info())) return { assets: [], queues: [] };
     return orchestrator.request<{ assets: string[]; queues: string[] }>('GET', '/api/run/names').catch(() => ({ assets: [], queues: [] }));
   });
+  handle(IPC.orchCredentials, async () => {
+    if (!(await orchestrator.info())) return [];
+    return orchestrator
+      .request<{ credentials: { name: string; username: string }[] }>('GET', '/api/credentials')
+      .then((r) => r.credentials.map(({ name, username }) => ({ name, username })))
+      .catch(() => []); // e.g. operators and viewers may not list them
+  });
   handle(IPC.orchNotices, async () => {
     if (!(await orchestrator.info())) return [];
     return orchestrator

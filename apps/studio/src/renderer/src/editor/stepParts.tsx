@@ -6,20 +6,26 @@ import { createStep, exprLabel, sentence, type SentencePart } from '../lib/catal
 import {
   duplicateStep,
   insertStep,
+  listKey,
   locate,
   moveStep,
   NO_PROCESSES,
   removeStep,
+  rootRef,
   updateStep,
   type ListRef,
 } from '../lib/flowOps';
+import { chartOf, placeNewStep } from '../lib/flowchart';
 import { useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { useRun, type StepRunStatus } from '../store/run';
 import { Thumbnail } from './fields/ElementInput';
 import { useElements, useFlowVariables } from './hooks';
 
-/** Insert a new step from the catalog and select it. */
+/**
+ * Insert a new step from the catalog and select it. At the top level of a process with free
+ * connections, it is connected after the selected step (or to Start) - see placeNewStep.
+ */
 export function useAddStep() {
   const index = useApp((s) => s.index);
   const change = useEditor((s) => s.change);
@@ -27,7 +33,14 @@ export function useAddStep() {
   const variables = useFlowVariables();
   return (def: ActivityDef, ref: ListRef, position: number) => {
     const step = createStep(def, index, new Set(variables.map((v) => v.name)));
-    change((f) => insertStep(f, ref, position, step));
+    const { processId, selectedId } = useEditor.getState();
+    const atTop = listKey(ref) === listKey(rootRef(processId));
+    change((f) => {
+      const next = insertStep(f, ref, position, step);
+      return atTop && chartOf(next, processId)
+        ? placeNewStep(next, processId, step, selectedId, next.layout?.direction === 'vertical')
+        : next;
+    });
     select(step.id);
   };
 }

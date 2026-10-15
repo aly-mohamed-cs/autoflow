@@ -90,6 +90,29 @@
       "title": "FlowSettings",
       "type": "object"
     },
+    "Flowchart": {
+      "additionalProperties": false,
+      "description": "Free connections (like Brity's and UiPath's flowcharts): steps run in the order they are\nconnected, beginning at Start; a step nothing leads to doesn't run. A process without a\nflowchart runs its steps one after the other.\n\nOnly the process's own (top-level) steps are connected this way; what is inside a loop,\nIf or Try still runs in order.",
+      "properties": {
+        "links": {
+          "items": {
+            "$ref": "#/$defs/Link"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "positions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Point"
+          },
+          "description": "Where each step (and 'start') is drawn. Never affects a run.",
+          "title": "Positions",
+          "type": "object"
+        }
+      },
+      "title": "Flowchart",
+      "type": "object"
+    },
     "Layout": {
       "additionalProperties": false,
       "description": "How the Flow view draws the flowchart. Never affects how a flow runs.",
@@ -121,6 +144,37 @@
         }
       },
       "title": "Layout",
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "description": "A connector drawn by hand in a flowchart: after `source` (a step, or \"start\"), run `target`.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "port": {
+          "default": "next",
+          "description": "Which way out of the source: 'next', or 'yes' / 'no' for a Decision.",
+          "enum": [
+            "next",
+            "yes",
+            "no"
+          ],
+          "title": "Port",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "title": "Link",
       "type": "object"
     },
     "Offset": {
@@ -169,6 +223,23 @@
         }
       },
       "title": "OnError",
+      "type": "object"
+    },
+    "Point": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "default": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "default": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "title": "Point",
       "type": "object"
     },
     "ProcessInput": {
@@ -347,6 +418,17 @@
           },
           "title": "Steps",
           "type": "array"
+        },
+        "flowchart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Flowchart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -456,6 +538,18 @@
       },
       "title": "Steps",
       "type": "array"
+    },
+    "flowchart": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Flowchart"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The main process's free connections, if it uses them."
     },
     "processes": {
       "items": {

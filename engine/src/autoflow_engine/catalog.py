@@ -125,6 +125,8 @@ class ActivityDef:
     uses_runner: bool = False
     # One extra block per item of a list setting (Switch: one per case): (setting, block prefix).
     block_list: tuple[str, str] | None = None
+    # Flowchart only: the ways out of the step, (port, title), e.g. Decision's Yes / No.
+    ports: tuple[tuple[str, str], ...] = ()
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -151,6 +153,7 @@ class ActivityDef:
             ),
             "advanced": self.advanced,
             "requires": self.requires,
+            "ports": [{"name": name, "title": title} for name, title in self.ports],
         }
 
 
@@ -196,6 +199,7 @@ def activity(
     requires: str | None = None,
     uses_runner: bool = False,
     block_list: tuple[str, str] | None = None,
+    ports: tuple[tuple[str, str], ...] = (),
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Register an activity. The function receives ``(ctx, params)``, plus a
     ``BlockRunner`` when the activity has blocks or ``uses_runner`` (it runs other
@@ -232,6 +236,7 @@ def activity(
             text_fields=text,
             uses_runner=uses_runner,
             block_list=block_list,
+            ports=ports,
         )
         return func
 

@@ -56,6 +56,29 @@ export interface ProcessInput {
   description?: string;
 }
 
+/** A connector drawn by hand in a flowchart: after `source` (a step, or "start"), run `target`. */
+export interface Link {
+  source: string;
+  target: string;
+  /** "next", or "yes" / "no" out of a Decision. */
+  port?: 'next' | 'yes' | 'no';
+}
+
+export interface Point {
+  x?: number;
+  y?: number;
+}
+
+/**
+ * Free connections: steps run in the order they are connected, beginning at Start; a step
+ * nothing leads to doesn't run. Without it, a process runs its steps one after the other.
+ */
+export interface Flowchart {
+  links?: Link[];
+  /** Where each step (and "start") is drawn; never affects a run. */
+  positions?: Record<string, Point>;
+}
+
 /** A named part of a flow (Brity "task"), started by "Run sub-process" steps. */
 export interface SubProcess {
   id: string;
@@ -63,6 +86,7 @@ export interface SubProcess {
   description?: string;
   inputs?: ProcessInput[];
   steps?: Step[];
+  flowchart?: Flowchart | null;
 }
 
 export interface Offset {
@@ -95,6 +119,8 @@ export interface Flow {
   variables?: Variable[];
   elements?: Element[];
   steps?: Step[];
+  /** The main process's free connections, if it uses them. */
+  flowchart?: Flowchart | null;
   processes?: SubProcess[];
   settings?: FlowSettings;
   layout?: Layout;
@@ -103,8 +129,8 @@ export interface Flow {
 /** Property names per model, checked against the engine's JSON Schema in tests. */
 export const MODEL_KEYS = {
   Flow: [
-    'schema_version', 'id', 'name', 'description', 'variables', 'elements', 'steps', 'processes',
-    'settings', 'layout',
+    'schema_version', 'id', 'name', 'description', 'variables', 'elements', 'steps', 'flowchart',
+    'processes', 'settings', 'layout',
   ],
   Variable: ['name', 'type', 'default', 'description', 'is_input', 'is_output', 'sensitive'],
   Selector: ['strategy', 'value', 'options'],
@@ -113,7 +139,10 @@ export const MODEL_KEYS = {
   Step: ['id', 'activity', 'label', 'params', 'outputs', 'blocks', 'on_error', 'disabled'],
   FlowSettings: ['default_timeout', 'screenshot_each_step', 'screenshot_on_error', 'step_delay'],
   ProcessInput: ['name', 'type', 'default', 'description'],
-  SubProcess: ['id', 'name', 'description', 'inputs', 'steps'],
+  SubProcess: ['id', 'name', 'description', 'inputs', 'steps', 'flowchart'],
+  Link: ['source', 'target', 'port'],
+  Point: ['x', 'y'],
+  Flowchart: ['links', 'positions'],
   Offset: ['x', 'y'],
   Layout: ['direction', 'offsets', 'collapsed'],
 } as const satisfies Record<string, readonly string[]>;

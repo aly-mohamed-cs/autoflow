@@ -172,6 +172,8 @@ export interface StudioApi {
     flows(): Promise<PublishedFlow[]>;
     /** Shared values and queues on the Orchestrator, for the step pickers (empty when not connected). */
     names(): Promise<{ assets: string[]; queues: string[] }>;
+    /** Names of the credentials in the Orchestrator's vault (no passwords; empty when not connected). */
+    credentials(): Promise<{ name: string; username: string }[]>;
     /** Notices from the Orchestrator's administrators (empty when not connected). */
     notices(): Promise<{ id: string; message: string; tone: 'info' | 'warning' }[]>;
   };
@@ -246,6 +248,7 @@ export const IPC = {
   orchFlows: 'orch:flows',
   orchNames: 'orch:names',
   orchNotices: 'orch:notices',
+  orchCredentials: 'orch:credentials',
   aiStatus: 'ai:status',
   aiDraft: 'ai:draft',
   aiExplain: 'ai:explain',

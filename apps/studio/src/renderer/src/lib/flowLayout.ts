@@ -15,7 +15,7 @@
 // The layout is computed along a main axis (m: the direction of the flow) and a cross
 // axis (c), then turned into x / y for the chosen direction.
 // Every connector knows where a step dropped on it would go ("slot": list + position).
-import { blocksOf, type ActivityDef, type Offset, type Step } from '@autoflow/flow-types';
+import { blocksOf, type ActivityDef, type Link, type Offset, type Step } from '@autoflow/flow-types';
 import { listKey, parseListKey, ROOT, type ListRef } from './flowOps';
 
 export const SIZES = {
@@ -59,6 +59,14 @@ export interface LayoutNode {
   handles?: string[];
   /** Boxes shown folded (just their title). */
   collapsed?: boolean;
+  /** Free connections: the top-level step this node is part of (it moves with it). */
+  block?: string;
+  /** Free connections: connectors can be drawn into this node (a block's way in). */
+  connectIn?: boolean;
+  /** Free connections: ways out connectors can be drawn from ("out", or "yes" / "no"). */
+  ports?: string[];
+  /** Free connections: nothing leads to this step, so it doesn't run. */
+  loose?: boolean;
 }
 
 export interface Slot {
@@ -77,7 +85,9 @@ export interface LayoutEdge {
   /** Decision lanes: "Yes" / "No" for If, the case for Switch. */
   label?: string;
   tone?: 'yes' | 'no' | 'case';
-  kind: 'flow' | 'loop';
+  /** flow / loop: the tidy chart; link: a connector drawn by hand (free connections). */
+  kind: 'flow' | 'loop' | 'link';
+  link?: Link;
   /** Loop arrows: how far beside the lane's line they run back to its start. */
   drop?: number;
 }
@@ -204,6 +214,34 @@ export function layoutFlow(steps: Step[], defOf: DefOf, options: LayoutOptions =
   return layout;
 }
 
+/** One top-level step of a flowchart with free connections, laid out on its own at 0, 0. */
+export interface BlockLayout {
+  nodes: LayoutNode[];
+  edges: LayoutEdge[];
+  entry: { node: string; handle: string };
+  exit: { node: string; handle: string };
+  w: number;
+  h: number;
+}
+
+export function layoutBlock(
+  step: Step,
+  defOf: DefOf,
+  options: { direction?: Direction; collapsed?: Iterable<string> } = {},
+): BlockLayout {
+  const direction = options.direction ?? 'horizontal';
+  const box = new Builder(direction, defOf, new Set(options.collapsed ?? [])).item(step, 0);
+  const vertical = direction === 'vertical';
+  return {
+    nodes: box.items.map((item) => ({ ...toNode(item, direction), block: step.id })),
+    edges: box.edges,
+    entry: box.entry,
+    exit: box.exit,
+    w: vertical ? box.c : box.m,
+    h: vertical ? box.m : box.c,
+  };
+}
+
 class Builder {
   constructor(
     private readonly direction: Direction,
@@ -250,7 +288,7 @@ class Builder {
     return box;
   }
 
-  private item(step: Step, depth: number): Box {
+  item(step: Step, depth: number): Box {
     const def = this.defOf(step.activity);
     if (def && blocksOf(def, step.params).length > 0) {
       return DECISIONS.has(step.activity)

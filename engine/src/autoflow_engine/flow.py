@@ -88,6 +88,41 @@ class ProcessInput(Model):
     description: str = ""
 
 
+class Link(Model):
+    """A connector drawn by hand in a flowchart: after `source` (a step, or "start"), run `target`."""
+
+    source: str
+    target: str
+    port: Literal["next", "yes", "no"] = Field(
+        "next", description="Which way out of the source: 'next', or 'yes' / 'no' for a Decision."
+    )
+
+
+class Point(Model):
+    x: float = 0
+    y: float = 0
+
+
+START = "start"
+
+
+class Flowchart(Model):
+    """Free connections (like Brity's and UiPath's flowcharts): steps run in the order they are
+    connected, beginning at Start; a step nothing leads to doesn't run. A process without a
+    flowchart runs its steps one after the other.
+
+    Only the process's own (top-level) steps are connected this way; what is inside a loop,
+    If or Try still runs in order."""
+
+    links: list[Link] = Field(default_factory=list)
+    positions: dict[str, Point] = Field(
+        default_factory=dict, description="Where each step (and 'start') is drawn. Never affects a run."
+    )
+
+    def next_of(self, source: str, port: str = "next") -> str | None:
+        return next((link.target for link in self.links if link.source == source and link.port == port), None)
+
+
 class SubProcess(Model):
     """A named part of a flow (Brity RPA calls them tasks), started by "Run sub-process" steps.
 
@@ -99,6 +134,7 @@ class SubProcess(Model):
     description: str = ""
     inputs: list[ProcessInput] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
+    flowchart: Flowchart | None = None
 
 
 class Offset(Model):
@@ -134,6 +170,7 @@ class Flow(Model):
     variables: list[Variable] = Field(default_factory=list)
     elements: list[Element] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
+    flowchart: Flowchart | None = Field(None, description="The main process's free connections, if it uses them.")
     processes: list[SubProcess] = Field(default_factory=list)
     settings: FlowSettings = Field(default_factory=FlowSettings)
     layout: Layout = Field(default_factory=Layout)

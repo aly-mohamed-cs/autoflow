@@ -245,6 +245,8 @@ export function newProcessId(flow: Flow): string {
 export function addProcess(flow: Flow, name: string): { flow: Flow; id: string } {
   const id = newProcessId(flow);
   const process: SubProcess = { id, name, description: '', inputs: [], steps: [] };
+  // Like the main process: free connections when it uses them.
+  if (flow.flowchart) process.flowchart = { links: [], positions: { start: { x: 0, y: 0 } } };
   return { flow: { ...flow, processes: [...(flow.processes ?? []), process] }, id };
 }
 

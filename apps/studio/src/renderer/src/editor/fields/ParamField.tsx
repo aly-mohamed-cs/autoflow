@@ -1,7 +1,8 @@
 // Renders one activity setting with the right widget, chosen from the catalog schema.
 import type { Condition } from '@autoflow/flow-types';
 import { Field, Input, Select, Switch, Textarea } from '@autoflow/ui';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { CredentialDialog } from '../../components/CredentialDialog';
 import { referencedVariable } from '../../lib/scope';
 import type { FieldInfo } from '../../lib/catalog';
 import type { VariableInfo } from '../../lib/scope';
@@ -331,19 +332,61 @@ function OrchestratorNameInput({ id, kind, value, onChange }: { id: string; kind
   );
 }
 
+/**
+ * A saved credential: the ones on this PC (test runs use them), and the Orchestrator's (robots use
+ * them; they need the same name on this PC to test). A new one can be added right here.
+ */
 function CredentialInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
   const [names, setNames] = useState<string[]>([]);
-  useEffect(() => {
+  const [remote, setRemote] = useState<{ name: string; username: string }[]>([]);
+  const [adding, setAdding] = useState<{ name: string; username: string } | null>(null);
+  const load = useCallback(() => {
     void window.autoflow.vault.list().then((list) => setNames(list.map((c) => c.name)));
+    void window.autoflow.orchestrator.credentials().then(setRemote);
   }, []);
-  const options = [...new Set([...names, ...(value ? [value] : [])])].map((n) => ({
-    value: n,
-    label: names.includes(n) ? n : `${n} (not on this computer)`,
-  }));
+  useEffect(load, [load]);
+  const local = new Set(names.map((n) => n.toLowerCase()));
+  const onlyRemote = remote.filter((r) => !local.has(r.name.toLowerCase()));
+  const options = [
+    ...names.map((n) => ({ value: n, label: n })),
+    ...onlyRemote.map((r) => ({ value: r.name, label: `${r.name} (Orchestrator only)` })),
+  ];
+  if (value && !options.some((o) => o.value.toLowerCase() === value.toLowerCase())) {
+    options.push({ value, label: `${value} (not on this computer)` });
+  }
+  const missingHere = !!value && !local.has(value.toLowerCase());
   return (
     <div className="space-y-1">
       <Select id={id} value={value} onChange={onChange} options={options} placeholder="Choose a saved credential" />
-      {names.length === 0 && <p className="text-xs text-subtle">Add credentials on the Credentials page first.</p>}
+      {missingHere && (
+        <p className="text-xs text-warning">
+          Test runs on this PC need “{value}” saved here too (robots get it from the Orchestrator).
+        </p>
+      )}
+      <div className="flex flex-wrap gap-x-3">
+        {missingHere ? (
+          <button
+            type="button"
+            className="text-xs text-primary hover:underline"
+            onClick={() => setAdding({ name: value, username: remote.find((r) => r.name.toLowerCase() === value.toLowerCase())?.username ?? '' })}
+          >
+            Add “{value}” on this PC
+          </button>
+        ) : null}
+        <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAdding({ name: '', username: '' })}>
+          Add a credential
+        </button>
+      </div>
+      <CredentialDialog
+        value={adding ? 'new' : null}
+        preset={adding ?? undefined}
+        onClose={() => setAdding(null)}
+        onSaved={(name) => {
+          setAdding(null);
+          load();
+          onChange(name);
+        }}
+      />
     </div>
   );
 }

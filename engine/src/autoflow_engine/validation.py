@@ -9,8 +9,10 @@ from pydantic import ValidationError
 
 from . import catalog
 from .errors import ExpressionError, friendly
-from .flow import Flow, Step
+from .flow import START, Flow, Flowchart, Step
 from .runtime.templates import has_template, referenced_variables
+
+DECISION = "control.decision"
 
 
 @dataclass
@@ -94,7 +96,55 @@ def validate_flow(document: Flow | dict[str, Any]) -> list[Issue]:
             if name not in output_names:
                 issues.append(Issue("warning", f"'{adef.title}' has no result called '{name}'.", step.id))
         issues.extend(_check_params(step, adef, known_vars, element_ids, process_ids))
+    issues.extend(_check_chart(flow.steps, flow.flowchart))
+    for process in flow.processes:
+        issues.extend(_check_chart(process.steps, process.flowchart))
     return issues
+
+
+def _check_chart(steps: list[Step], chart: Flowchart | None) -> list[Issue]:
+    """Connectors of a flowchart; Decisions only work as flowchart steps."""
+    issues: list[Issue] = []
+    top = {step.id: step for step in steps}
+    for step in _walk_all(steps):
+        if step.activity == DECISION and (chart is None or step.id not in top):
+            issues.append(Issue(
+                "error",
+                "A Decision only works between connectors in a flowchart. Use 'If / Otherwise' here.",
+                step.id,
+            ))
+    if chart is None:
+        return issues
+    used: set[tuple[str, str]] = set()
+    for link in chart.links:
+        if link.source != START and link.source not in top:
+            issues.append(Issue("error", "A connector starts at a step that no longer exists."))
+            continue
+        if link.target not in top:
+            issues.append(Issue("error", "A connector leads to a step that no longer exists.",
+                                link.source if link.source != START else None))
+            continue
+        source = top.get(link.source)
+        allowed = {"yes", "no"} if source is not None and source.activity == DECISION else {"next"}
+        if link.port not in allowed:
+            issues.append(Issue("error", f"A connector leaves this step on '{link.port}', which it doesn't have.",
+                                link.source if source else None))
+        if (link.source, link.port) in used:
+            issues.append(Issue(
+                "error",
+                "Two connectors go out of the same place. A step continues with one step only - "
+                "use a Decision to choose between two.",
+                link.source if source else None,
+            ))
+        used.add((link.source, link.port))
+    return issues
+
+
+def _walk_all(steps: list[Step]):
+    for step in steps:
+        yield step
+        for children in step.blocks.values():
+            yield from _walk_all(children)
 
 
 def _known_variables(flow: Flow, steps: list[Step]) -> set[str]:

@@ -10,7 +10,7 @@ export interface Template {
   description: string;
   icon: string;
   category: string;
-  build(): Pick<Flow, 'steps' | 'variables'>;
+  build(): Pick<Flow, 'steps' | 'variables' | 'flowchart'>;
 }
 
 const s = (
@@ -28,10 +28,11 @@ export const TEMPLATES: Template[] = [
   {
     id: 'blank',
     title: 'Start from scratch',
-    description: 'An empty automation. Add steps from the panel on the left.',
+    description: 'An empty automation. Add steps from the panel on the left and connect them as you like.',
     icon: 'plus',
     category: 'Control',
-    build: () => ({ steps: [], variables: [] }),
+    // Free connections: steps are connected by hand (and may stay unconnected).
+    build: () => ({ steps: [], variables: [], flowchart: { links: [], positions: { start: { x: 0, y: 0 } } } }),
   },
   {
     id: 'excel-to-web',
