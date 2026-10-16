@@ -101,11 +101,12 @@ sent to the model.
 
 ## 4. Updating
 
-When a new version is pushed to GitHub:
+When a new version is pushed to GitHub, in PowerShell started with **Run as administrator**:
 
 ```powershell
 cd C:\RPA-Server
-.\deploy\windows\update-server.ps1            # add -Installers to also fetch Studio/Robot installers
+Set-ExecutionPolicy -Scope Process Bypass -Force   # allows scripts in this window only
+.\deploy\windows\update-server.ps1                 # add -Installers to also fetch Studio/Robot installers
 ```
 
 It backs up the database first, pulls the latest code, rebuilds and restarts the service.
