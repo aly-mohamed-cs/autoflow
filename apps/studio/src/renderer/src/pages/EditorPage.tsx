@@ -28,7 +28,9 @@ import { StepLibrary } from '../editor/StepLibrary';
 import { errorMessage, useApp } from '../store/app';
 import { useEditor } from '../store/editor';
 import { formatDuration, isActive, useRun } from '../store/run';
-import { aiEnabled, aiRepairWanted } from '../lib/ai';
+import { aiEnabled, aiRepairWanted, useAiEnabled } from '../lib/ai';
+import { AssistantPanel } from '../editor/AssistantPanel';
+import { useAssistant } from '../store/assistant';
 
 export function EditorPage({ flowId }: { flowId: string }) {
   const flow = useEditor((s) => s.flow);
@@ -38,6 +40,8 @@ export function EditorPage({ flowId }: { flowId: string }) {
   const navigate = useApp((s) => s.navigate);
   const [panelHeight, setPanelHeight] = useState(240);
   const selectedId = useEditor((s) => s.selectedId);
+  const aiOn = useAiEnabled();
+  const assistantOpen = useAssistant((s) => s.open) && aiOn;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,9 +75,15 @@ export function EditorPage({ flowId }: { flowId: string }) {
       <Toolbar />
       <EditorDnd>
         <div className="flex min-h-0 flex-1">
-          <ErrorBoundary area="the step library">
-            <StepLibrary />
-          </ErrorBoundary>
+          {assistantOpen ? (
+            <ErrorBoundary area="the AI assistant">
+              <AssistantPanel />
+            </ErrorBoundary>
+          ) : (
+            <ErrorBoundary area="the step library">
+              <StepLibrary />
+            </ErrorBoundary>
+          )}
           <div className="flex min-w-0 flex-1 flex-col">
             <ErrorBoundary area="the step list">
               <Canvas />
@@ -290,6 +300,8 @@ function Toolbar() {
   const phase = useRun((s) => s.phase);
   const startedAt = useRun((s) => s.startedAt);
   const errors = issues.filter((i) => i.severity === 'error').length;
+  const aiOn = useAiEnabled();
+  const assistantOpen = useAssistant((s) => s.open);
   useRecordRunResult();
 
   return (
@@ -321,6 +333,16 @@ function Toolbar() {
         )}
       </span>
       <div className="flex-1" />
+      {aiOn && (
+        <Button
+          variant={assistantOpen ? 'secondary' : 'ghost'}
+          aria-pressed={assistantOpen}
+          icon={<Icon name="sparkles" size={15} />}
+          onClick={() => useAssistant.getState().setOpen(!assistantOpen)}
+        >
+          AI assistant
+        </Button>
+      )}
       <Tooltip content="Undo (Ctrl+Z)">
         <Button variant="ghost" size="icon" aria-label="Undo" disabled={!canUndo} onClick={undo}>
           <Icon name="undo-2" size={17} />

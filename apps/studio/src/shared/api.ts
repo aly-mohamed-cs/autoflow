@@ -1,6 +1,6 @@
 // The bridge between the renderer (UI) and the main process, exposed as window.autoflow.
 // The renderer never touches Node, the file system or the engine directly.
-import type { Flow, RunEvent } from '@autoflow/flow-types';
+import type { Flow, RunEvent, Step } from '@autoflow/flow-types';
 
 export interface FlowSummary {
   id: string;
@@ -100,9 +100,25 @@ export interface WorkPlanState {
 }
 
 /** An automation drafted by the AI assistant; the person reviews it in the editor. */
-export interface AiDraft {
-  flow: Omit<Flow, 'id'>;
-  /** Step types the model suggested that Autoflow doesn't have (left out of the draft). */
+/** One change the AI assistant asks for (checked by the Orchestrator; applied by Studio). */
+export type AssistantAction =
+  | { type: 'add_steps'; after?: string; inside?: { step: string; block: string }; steps: Step[] }
+  | { type: 'update_step'; step: string; params?: Record<string, unknown>; label?: string }
+  | { type: 'remove_steps'; steps: string[] }
+  | { type: 'connect'; from: string; to: string; port: 'next' | 'yes' | 'no' }
+  | { type: 'add_variable'; name: string; variableType: string; is_input: boolean; default?: unknown; description: string }
+  | { type: 'rename'; name: string; description?: string }
+  | { type: 'new_automation'; name: string; description: string };
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AssistantReply {
+  message: string;
+  actions: AssistantAction[];
+  /** Step types the model named that Autoflow doesn't have (left out). */
   dropped: string[];
 }
 
@@ -181,7 +197,8 @@ export interface StudioApi {
   ai: {
     /** enabled is false when Studio isn't connected or the assistant is off. */
     status(): Promise<{ enabled: boolean; model: string | null }>;
-    draftFlow(description: string): Promise<AiDraft>;
+    /** The assistant chat: an answer plus changes to the open automation (null: none open). */
+    assistant(input: { messages: AssistantMessage[]; flow: Flow | null; processId: string | null }): Promise<AssistantReply>;
     explainError(input: { activity: string; message: string; hint?: string | null; params?: Record<string, unknown> }): Promise<string>;
   };
   workPlan: {
@@ -250,7 +267,7 @@ export const IPC = {
   orchNotices: 'orch:notices',
   orchCredentials: 'orch:credentials',
   aiStatus: 'ai:status',
-  aiDraft: 'ai:draft',
+  aiAssistant: 'ai:assistant',
   aiExplain: 'ai:explain',
   quickList: 'quick:list',
   quickSave: 'quick:save',

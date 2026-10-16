@@ -4,7 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell 
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { FILE_PROTOCOL, IPC, type AiDraft, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions, type WorkPlanEntry } from '../shared/api';
+import { FILE_PROTOCOL, IPC, type AssistantMessage, type AssistantReply, type EngineStatus, type PublishedFlow, type QuickLaunchEntry, type RunStartOptions, type WorkPlanEntry } from '../shared/api';
 import { EngineError, EngineProcess, findPython } from './engine';
 import { Orchestrator, UntrustedCertificateError } from './orchestrator';
 import { RunGuard } from './runguard';
@@ -186,6 +186,19 @@ function createWindow(): void {
   loadRenderer(mainWindow);
 }
 
+/**
+ * What the assistant needs of an automation: its steps and the names of its screen elements. No
+ * pictures or selectors of elements, no start values, no layout.
+ */
+function forAssistant(flow: Flow): Flow {
+  return {
+    ...flow,
+    elements: (flow.elements ?? []).map((e) => ({ id: e.id, name: e.name, kind: e.kind, selectors: [] })),
+    variables: (flow.variables ?? []).map(({ default: _value, ...v }) => v),
+    layout: undefined,
+  };
+}
+
 /** Only files inside the runs folder (screenshots, downloads) may be shown in the UI. */
 function registerFileProtocol(): void {
   protocol.handle(FILE_PROTOCOL, (request) => {
@@ -350,7 +363,9 @@ function registerIpc(): void {
     if (!(await orchestrator.info())) return { enabled: false, model: null };
     return orchestrator.request<{ enabled: boolean; model: string | null }>('GET', '/api/ai/status').catch(() => ({ enabled: false, model: null }));
   });
-  handle(IPC.aiDraft, (description: string) => orchestrator.request<AiDraft>('POST', '/api/ai/draft-flow', { description }, 620_000));
+  handle(IPC.aiAssistant, (input: { messages: AssistantMessage[]; flow: Flow | null; processId: string | null }) =>
+    orchestrator.request<AssistantReply>('POST', '/api/ai/assistant', { ...input, flow: input.flow && forAssistant(input.flow) }, 620_000),
+  );
   handle(IPC.aiExplain, async (input: Record<string, unknown>) => {
     const res = await orchestrator.request<{ explanation: string }>('POST', '/api/ai/explain-error', input, 620_000);
     return res.explanation;

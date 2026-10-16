@@ -198,6 +198,7 @@ function AiAssistant() {
   const { data, reload } = useApi<{ ai: Ai }>('/api/settings/ai');
   const [form, setForm] = useState<Ai | null>(null);
   const [status, setStatus] = useState('');
+  const [warning, setWarning] = useState('');
   useEffect(() => {
     if (data) setForm(data.ai);
   }, [data]);
@@ -205,6 +206,7 @@ function AiAssistant() {
   const set = (patch: Partial<Ai>) => {
     setForm({ ...form, ...patch });
     setStatus('');
+    setWarning('');
   };
   const save = async () => {
     await api('/api/settings/ai', { method: 'PUT', body: { ...form, timeoutS: Number(form.timeoutS) || 120 } });
@@ -214,20 +216,21 @@ function AiAssistant() {
   return (
     <Card title="AI assistant (local model)" actions={<Switch checked={form.enabled} onChange={(enabled) => set({ enabled })} label="Turn on the AI assistant" />}>
       <p className="mb-4 max-w-2xl text-[13px] text-muted">
-        Lets builders describe an automation in plain words to get a first draft, and explains failed steps. It only talks to a model server
-        on your own network (Ollama, LM Studio or vLLM), so nothing is sent outside the company. Drafts are always reviewed by a person before they run.
+        Gives builders an assistant in Studio that builds and changes automations in a chat, explains failed steps and fixes them. It only
+        talks to a model server on your own network (Ollama, LM Studio, llama.cpp or vLLM), so nothing is sent outside the company. What it
+        builds is always tested and published by a person. Give the model a context of at least 16,384 tokens.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field label="Model server address" help="OpenAI-compatible. Ollama: http://<server>:11434/v1 · LM Studio: http://<server>:1234/v1" htmlFor="ai-url">
           <Input id="ai-url" value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="http://gpu-server:11434/v1" />
         </Field>
-        <Field label="Model" help="For example qwen2.5:7b-instruct on a CPU, or a larger model once there's a GPU." htmlFor="ai-model">
+        <Field label="Model" help="The name the model server shows, e.g. qwen3-vl-30b-a3b-instruct. Larger models choose better steps." htmlFor="ai-model">
           <Input id="ai-model" value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder="qwen2.5:7b-instruct" />
         </Field>
         <Field label="Access key (optional)" help="Only if the model server asks for one. Stored encrypted." htmlFor="ai-key">
           <Input id="ai-key" type="password" autoComplete="off" value={form.apiKey} onChange={(e) => set({ apiKey: e.target.value })} placeholder="Not needed for Ollama" />
         </Field>
-        <Field label="Wait for an answer (seconds)" help="Models without a GPU can be slow." htmlFor="ai-timeout">
+        <Field label="Wait for an answer (seconds)" help="Models without a GPU can be slow: 300 is a good start." htmlFor="ai-timeout">
           <Input id="ai-timeout" type="number" min={10} max={600} value={form.timeoutS} onChange={(e) => set({ timeoutS: Number(e.target.value) })} />
         </Field>
       </div>
@@ -242,16 +245,25 @@ function AiAssistant() {
         }}>Save AI settings</Button>
         <Button disabled={!form.enabled} onClick={async () => {
           setStatus('Saving and asking the model a test question…');
+          setWarning('');
           try {
             await save();
-            const r = await api<{ ok: boolean; ms?: number; error?: string }>('/api/settings/ai/test', { method: 'POST', body: {} });
-            setStatus(r.ok ? `The model answered in ${((r.ms ?? 0) / 1000).toFixed(1)} s. The assistant is ready.` : `Failed: ${r.error}`);
+            const r = await api<{ ok: boolean; ms?: number; error?: string; warning?: string | null }>('/api/settings/ai/test', { method: 'POST', body: {} });
+            setStatus(
+              !r.ok ? `Failed: ${r.error}` : r.warning ? `The model answered in ${((r.ms ?? 0) / 1000).toFixed(1)} s, but see below.` : `The model answered in ${((r.ms ?? 0) / 1000).toFixed(1)} s. The assistant is ready.`,
+            );
+            setWarning(r.ok && r.warning ? r.warning : '');
           } catch (e) {
             setStatus((e as Error).message);
           }
         }}>Save and test</Button>
         {status && <span className="text-[13px] text-muted" role="status">{status}</span>}
       </div>
+      {warning && (
+        <p className="mt-4 max-w-2xl rounded-lg bg-warning-soft px-4 py-2.5 text-[13px] text-warning" role="alert">
+          {warning}
+        </p>
+      )}
     </Card>
   );
 }

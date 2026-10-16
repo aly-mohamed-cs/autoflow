@@ -6,7 +6,15 @@ import { blocksOf, normalizeCondition, type ActivityDef, type Catalog, type Flow
 import catalogJson from '@autoflow/flow-types/activity-catalog.json';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { assistantPrompt, parseAssistantReply, type AssistantInput, type AssistantReply } from './assistant.js';
 import { HttpError, type Settings } from './core.js';
+
+type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+/** Qwen3 and other "thinking" models may write <think>...</think> before the answer. */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*?<\/think>/i, '');
+}
 
 export interface AiSettings {
   enabled: boolean;
@@ -121,6 +129,9 @@ export interface RepairReply {
 }
 
 export class AiService {
+  /** Model servers that refuse the JSON answer mode (some only take a JSON schema): asked without it. */
+  private readonly noJsonMode = new Set<string>();
+
   constructor(
     private readonly settings: Settings,
     private readonly decrypt: (sealed: string) => string,
@@ -130,14 +141,19 @@ export class AiService {
     return this.settings.get<AiSettings>('ai', DEFAULT_AI);
   }
 
-  private async chat(messages: { role: 'system' | 'user'; content: string }[], json: boolean): Promise<string> {
+  private async chat(messages: ChatMessage[], json: boolean): Promise<string> {
+    return (await this.call(messages, json)).content;
+  }
+
+  /** One request to the model server; also how much of the prompt it read (if it says). */
+  private async call(messages: ChatMessage[], json: boolean): Promise<{ content: string; promptTokens: number | null }> {
     const cfg = this.config();
     if (!cfg.enabled) throw new HttpError(404, 'The AI assistant is not set up. An administrator can enable it under Settings.');
     const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), cfg.timeoutS * 1000);
-    try {
-      const res = await fetch(url, {
+    const post = (jsonMode: boolean) =>
+      fetch(url, {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -148,14 +164,25 @@ export class AiService {
           model: cfg.model,
           messages,
           temperature: 0.2,
-          ...(json ? { response_format: { type: 'json_object' } } : {}),
+          ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         }),
       });
-      if (!res.ok) throw new HttpError(502, `The AI model server answered ${res.status}. Check Settings → AI assistant.`);
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const content = data.choices?.[0]?.message?.content;
+    try {
+      const jsonMode = json && !this.noJsonMode.has(url);
+      let res = await post(jsonMode);
+      if (jsonMode && res.status === 400) {
+        // The prompts ask for JSON anyway, and answers are read leniently.
+        this.noJsonMode.add(url);
+        res = await post(false);
+      }
+      if (!res.ok) {
+        const detail = await errorDetail(res);
+        throw new HttpError(502, `The AI model server answered ${res.status}${detail ? `: ${detail}` : ''}. Check Settings → AI assistant.`);
+      }
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number } };
+      const content = stripThinking(data.choices?.[0]?.message?.content ?? '').trim();
       if (!content) throw new HttpError(502, 'The AI model returned an empty answer.');
-      return content;
+      return { content, promptTokens: typeof data.usage?.prompt_tokens === 'number' ? data.usage.prompt_tokens : null };
     } catch (err) {
       if (err instanceof HttpError) throw err;
       if ((err as Error).name === 'AbortError') throw new HttpError(504, 'The AI model took too long to answer.');
@@ -163,6 +190,36 @@ export class AiService {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** The assistant chat in Studio: an answer plus actions that change the open automation. */
+  async assistant(input: AssistantInput): Promise<AssistantReply & { considered: string[] }> {
+    const { system, considered } = assistantPrompt(input);
+    // The newest messages; long ones shortened so the step details always fit.
+    const history = input.messages.slice(-12).map((m) => ({ role: m.role, content: m.content.slice(0, 6000) }));
+    const answer = await this.chat([{ role: 'system', content: system }, ...history], true);
+    return { ...parseAssistantReply(answer, input.flow), considered };
+  }
+
+  /**
+   * Whether the model server reads a whole assistant request: some cut every prompt to a small
+   * context (Ollama: 2,048-4,096 tokens unless told otherwise) and the model then misses most of it.
+   */
+  async contextCheck(): Promise<{ sent: number; read: number | null; enough: boolean }> {
+    const { system } = assistantPrompt({
+      messages: [{ role: 'user', content: 'Read the invoices from Excel and type each row into the vendor web portal, then email a summary.' }],
+      flow: null,
+      processId: null,
+    });
+    const sent = Math.round(system.length / 3.6); // a rough count of tokens
+    const { promptTokens } = await this.call(
+      [
+        { role: 'system', content: system },
+        { role: 'user', content: 'This is a connection test. Reply {"message":"OK","actions":[]}' },
+      ],
+      true,
+    );
+    return { sent, read: promptTokens, enough: promptTokens === null || promptTokens >= sent * 0.7 };
   }
 
   /** Describe a task in plain words -> a draft automation built only from known steps. */
@@ -353,12 +410,13 @@ export function pickCategory(answer: string, categories: string[]): string {
 }
 
 /** Keep only known, non-advanced step types and their known settings; give every step a fresh id. */
-export function sanitizeSteps(value: unknown, dropped: string[], depth = 0): Step[] {
+/** Steps from a model: known types and settings only, fresh ids (`aliases` maps the model's own ids to them). */
+export function sanitizeSteps(value: unknown, dropped: string[], depth = 0, aliases?: Map<string, string>): Step[] {
   if (!Array.isArray(value) || depth > 6) return [];
   const out: Step[] = [];
   for (const raw of value.slice(0, 200)) {
     if (!raw || typeof raw !== 'object') continue;
-    const s = raw as { activity?: unknown; label?: unknown; params?: unknown; outputs?: unknown; blocks?: unknown };
+    const s = raw as { id?: unknown; activity?: unknown; label?: unknown; params?: unknown; outputs?: unknown; blocks?: unknown };
     const def = ACTIVITIES.get(String(s.activity));
     // Advanced steps (scripts, raw SQL changes) are never offered to the model; a person adds them.
     if (!def || def.advanced) {
@@ -380,12 +438,13 @@ export function sanitizeSteps(value: unknown, dropped: string[], depth = 0): Ste
     );
     for (const o of def.outputs) outputs[o.name] ??= o.default_variable;
     const step: Step = { id: `s${randomBytes(6).toString('hex')}`, activity: def.id, params };
+    if (aliases && typeof s.id === 'string' && s.id.trim()) aliases.set(s.id.trim().slice(0, 64), step.id);
     if (typeof s.label === 'string' && s.label.trim()) step.label = s.label.trim().slice(0, 120);
     if (def.outputs.length) step.outputs = outputs;
     const sections = blocksOf(def, params);
     if (sections.length) {
       const blocks = s.blocks && typeof s.blocks === 'object' ? (s.blocks as Record<string, unknown>) : {};
-      step.blocks = Object.fromEntries(sections.map((b) => [b.name, sanitizeSteps(blocks[b.name], dropped, depth + 1)]));
+      step.blocks = Object.fromEntries(sections.map((b) => [b.name, sanitizeSteps(blocks[b.name], dropped, depth + 1, aliases)]));
     }
     out.push(step);
   }
@@ -453,6 +512,23 @@ function unreachable(url: string, err: unknown): string {
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return `Can't find the AI model server "${new URL(url).hostname}". Check the address under Settings → AI assistant.`;
   if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return `The AI model server at ${host} did not respond. Check the network and its firewall.`;
   return `Could not reach the AI model server at ${host}: ${(err as Error).message}`;
+}
+
+/** The model server's own reason for refusing a request (e.g. "the request exceeds the available context size"). */
+async function errorDetail(res: Response): Promise<string> {
+  try {
+    const text = await res.text();
+    let message = text;
+    try {
+      const body = JSON.parse(text) as { error?: string | { message?: string }; message?: string };
+      message = (typeof body.error === 'string' ? body.error : body.error?.message) ?? body.message ?? '';
+    } catch {
+      // not JSON: the text itself
+    }
+    return message.replace(/\s+/g, ' ').trim().slice(0, 200);
+  } catch {
+    return '';
+  }
 }
 
 /** Models sometimes wrap JSON in ```json fences or add a sentence; take the JSON object. */

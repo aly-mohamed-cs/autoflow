@@ -10,7 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
-import { extractJson, pickCategory, sanitizeSteps } from '../src/services/ai.js';
+import { extractJson, pickCategory, sanitizeSteps, stripThinking } from '../src/services/ai.js';
+import { describeFlow, parseAssistantReply, relevantActivities } from '../src/services/assistant.js';
 import { applyPatches } from '../src/services/repairs.js';
 import { compareVersions } from '../src/services/robotReleases.js';
 import type { Config } from '../src/config.js';
@@ -271,7 +272,7 @@ describe('AI assistant (local model)', () => {
   let model: Server;
   let modelUrl: string;
   const received: { auth?: string; body: any }[] = [];
-  let reply: (body: any) => { status?: number; content: string } = () => ({ content: '' });
+  let reply: (body: any) => { status?: number; content: string; promptTokens?: number } = () => ({ content: '' });
 
   beforeAll(async () => {
     model = createServer((req, res) => {
@@ -282,7 +283,8 @@ describe('AI assistant (local model)', () => {
         received.push({ auth: req.headers.authorization, body });
         const r = reply(body);
         res.writeHead(r.status ?? 200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: r.content } }] }));
+        const usage = r.promptTokens === undefined ? {} : { usage: { prompt_tokens: r.promptTokens } };
+        res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: r.content } }], ...usage }));
       });
     });
     await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
@@ -560,6 +562,168 @@ describe('AI assistant (local model)', () => {
     expect(pickCategory('ORDER', ['Order', 'Purchase order'])).toBe('Order');
     expect(pickCategory('It is a purchase order', ['Order', 'Purchase order'])).toBe('Purchase order');
     expect(pickCategory('No idea', ['Order'])).toBe('No idea');
+  });
+
+  const CHAT_FLOW = {
+    id: 'flow_chat',
+    name: 'Vendor entry',
+    description: 'Types invoices into the portal',
+    variables: [{ name: 'invoices', type: 'table' }],
+    elements: [{ id: 'el1', name: 'Amount field', kind: 'web', selectors: [] }],
+    steps: [
+      { id: 'a1', activity: 'excel.read', params: { file: 'C:/data/inv.xlsx', sheet: 'Invoices' }, outputs: { table: 'invoices' } },
+      {
+        id: 'a2',
+        activity: 'control.for_each',
+        params: { items: '{{invoices}}', item_variable: 'row' },
+        blocks: {
+          body: [
+            { id: 'a3', activity: 'browser.type', params: { element: 'el1', text: '{{row["Amount"]}}' } },
+            { id: 'a4', activity: 'browser.type', params: { element: 'el1', text: 'Jane Doe 555-1234' } },
+          ],
+        },
+      },
+    ],
+  };
+
+  it('offers the chat the steps that matter for what the person asks', () => {
+    const ask = (content: string, earlier: string[] = []) =>
+      relevantActivities([...earlier.map((c) => ({ role: 'user', content: c })), { role: 'user', content }], null).map((a) => a.id);
+    const web = ask('Open the vendor website, log in and type each row of the Excel file');
+    expect(web).toEqual(expect.arrayContaining(['browser.open', 'browser.type', 'browser.click', 'excel.read', 'control.for_each', 'control.get_credential']));
+    expect(web.length).toBeLessThanOrEqual(32);
+    expect(web).not.toContain('browser.run_script'); // advanced steps are never offered
+    expect(web.some((id) => id.startsWith('sap.'))).toBe(false);
+    expect(ask('Open our ERP desktop program and enter each order from the CSV')).toEqual(expect.arrayContaining(['desktop.launch', 'desktop.type', 'files.read_csv']));
+    // The newest message counts most; the automation's own steps stay in view.
+    const mail = ask('Now also email a summary to my manager', ['Open the vendor website']);
+    expect(mail.indexOf('email.send')).toBeLessThan(mail.indexOf('browser.open'));
+    expect(relevantActivities([{ role: 'user', content: 'hello' }], CHAT_FLOW as never).map((a) => a.id)).toEqual(expect.arrayContaining(['excel.read', 'browser.type']));
+  });
+
+  it('describes the open automation to the model without what is typed into screens', () => {
+    const text = describeFlow(CHAT_FLOW as never, null);
+    expect(text).toContain('Automation "Vendor entry" - Types invoices into the portal');
+    expect(text).toContain('Steps run one after the other.');
+    expect(text).toContain('Variables: invoices (table)');
+    expect(text).toContain('[a1] excel.read file=C:/data/inv.xlsx sheet=Invoices => table->invoices');
+    expect(text).toContain('  body:');
+    expect(text).toContain('[a3] browser.type element=(picked: Amount field) text={{row["Amount"]}}');
+    expect(text).toContain('[a4] browser.type element=(picked: Amount field) text=(typed text, not shown)');
+    expect(text).not.toContain('Jane Doe');
+    const chart = describeFlow({ ...CHAT_FLOW, flowchart: { links: [{ source: 'start', target: 'a1', port: 'next' }], positions: {} } } as never, null);
+    expect(chart).toContain('Free connections');
+    expect(chart).toContain('Connectors: start->a1');
+  });
+
+  it('keeps only actions that fit the automation', () => {
+    const answer =
+      '<think>The person wants a log step.</think>' +
+      JSON.stringify({
+        message: 'Added the steps.',
+        actions: [
+          { type: 'add_steps', after: 'a1', steps: [{ activity: 'control.log', params: { message: 'Read {{invoices}}' } }, { activity: 'shell.format_disk' }] },
+          { type: 'add_steps', inside: { step: 'a2', block: 'body' }, steps: [{ activity: 'browser.click', params: {} }] },
+          { type: 'add_steps', after: 'ghost', steps: [{ activity: 'control.wait', params: { seconds: 1 } }] },
+          { type: 'update_step', step: 'a1', params: { sheet: 'Invoices 2026', evil: 1 }, label: 'Read invoices' },
+          { type: 'update_step', step: 'nope', params: { sheet: 'x' } },
+          { type: 'remove_steps', steps: ['a4', 'ghost'] },
+          { type: 'connect', from: 'start', to: 'a1', port: 'maybe' },
+          { type: 'connect', from: 'a1', to: 'ghost' },
+          { type: 'add_variable', name: 'total amount', variable_type: 'number' },
+          { type: 'add_variable', name: 'total', variable_type: 'money', default: 0 },
+          { type: 'add_variable', name: 'invoice_count', variable_type: 'number', is_input: true },
+          { type: 'rename', name: 'Vendor invoices' },
+          { type: 'explode' },
+        ],
+      });
+    const reply = parseAssistantReply(answer, CHAT_FLOW as never);
+    expect(reply.message).toBe('Added the steps.');
+    expect(reply.dropped).toEqual(['shell.format_disk']);
+    expect(reply.actions.map((a) => a.type)).toEqual(['add_steps', 'add_steps', 'add_steps', 'update_step', 'remove_steps', 'connect', 'add_variable', 'add_variable', 'rename']);
+    const [after, inside, unknownPlace, update, remove, connect, variable, counted] = reply.actions as any[];
+    expect(after).toMatchObject({ after: 'a1', steps: [{ activity: 'control.log', params: { message: 'Read {{invoices}}' } }] });
+    expect(after.steps[0].id).toMatch(/^s[0-9a-f]+$/);
+    expect(inside).toMatchObject({ inside: { step: 'a2', block: 'body' }, steps: [{ activity: 'browser.click' }] });
+    expect(unknownPlace.after).toBe('end');
+    expect(update).toEqual({ type: 'update_step', step: 'a1', params: { sheet: 'Invoices 2026' }, label: 'Read invoices' });
+    expect(remove.steps).toEqual(['a4']);
+    expect(connect).toEqual({ type: 'connect', from: 'start', to: 'a1', port: 'next' });
+    expect(variable).toEqual({ type: 'add_variable', name: 'total', variableType: 'any', is_input: false, default: 0, description: '' });
+    expect(counted).toMatchObject({ name: 'invoice_count', variableType: 'number', is_input: true });
+
+    // Steps the model names itself can be used by later actions of the same reply.
+    const branched = parseAssistantReply(
+      JSON.stringify({
+        message: 'Added a decision.',
+        actions: [
+          { type: 'add_steps', after: 'a1', steps: [{ id: 'big', activity: 'control.decision', params: { condition: '{{amount}} > 100' } }, { id: 'yes', activity: 'control.log', params: { message: 'Big' } }] },
+          { type: 'add_steps', after: 'big', steps: [{ id: 'no', activity: 'control.log', params: { message: 'Small' } }] },
+          { type: 'connect', from: 'big', to: 'no', port: 'no' },
+          { type: 'update_step', step: 'yes', label: 'Log big ones' },
+          { type: 'add_steps', inside: { step: 'big', block: 'body' }, steps: [{ activity: 'control.log', params: { message: 'x' } }] },
+        ],
+      }),
+      CHAT_FLOW as never,
+    );
+    const [first, second, link, rename] = branched.actions as any[];
+    const [decisionId, yesId] = first.steps.map((s: { id: string }) => s.id);
+    expect(decisionId).toMatch(/^s[0-9a-f]+$/);
+    expect(first.steps[0].params.condition).toEqual({ match: 'all', rules: [], expression: '{{amount > 100}}' });
+    expect(second.after).toBe(decisionId);
+    expect(link).toEqual({ type: 'connect', from: decisionId, to: second.steps[0].id, port: 'no' });
+    expect(rename).toEqual({ type: 'update_step', step: yesId, label: 'Log big ones' });
+    expect(branched.actions).toHaveLength(5); // a Decision has no sections: those steps go after it (Studio decides)
+
+    // A plain answer (a question back) is a message without changes.
+    expect(parseAssistantReply('<think>hm</think>Which website should I open?', null)).toEqual({ message: 'Which website should I open?', actions: [], dropped: [] });
+    expect(stripThinking('reasoning that lost its opening tag</think>Answer')).toBe('Answer');
+  });
+
+  it('chats about the open automation and answers with actions', async () => {
+    reply = () => ({
+      content: JSON.stringify({ message: 'Added a log step at the end.', actions: [{ type: 'add_steps', after: 'end', steps: [{ activity: 'control.log', params: { message: 'Done' } }] }] }),
+    });
+    const res = await api('POST', '/api/ai/assistant', { messages: [{ role: 'user', content: 'Add a log step at the end that says Done' }], flow: CHAT_FLOW, processId: null });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Added a log step at the end.');
+    expect(res.body.actions).toMatchObject([{ type: 'add_steps', after: 'end', steps: [{ activity: 'control.log', params: { message: 'Done' } }] }]);
+    expect(res.body.considered).toContain('control.log');
+    const sent = received.at(-1)!.body;
+    expect(sent.response_format).toEqual({ type: 'json_object' });
+    expect(sent.messages[0].role).toBe('system');
+    expect(sent.messages[0].content).toContain('[a4] browser.type');
+    expect(sent.messages[0].content).toContain('- control.log - ');
+    expect(JSON.stringify(sent)).not.toContain('Jane Doe');
+    expect(sent.messages.slice(1)).toEqual([{ role: 'user', content: 'Add a log step at the end that says Done' }]);
+    expect((await api('POST', '/api/ai/assistant', { messages: [], flow: null })).status).toBe(400);
+    expect((await api('GET', '/api/audit')).body.entries.map((e: any) => e.action)).toContain('ai.assistant');
+  });
+
+  it('works with model servers that refuse the JSON answer mode', async () => {
+    const before = received.length;
+    reply = (body) => (body.response_format ? { status: 400, content: '' } : { content: '{"message":"Hello.","actions":[]}' });
+    const ask = () => api('POST', '/api/ai/assistant', { messages: [{ role: 'user', content: 'Hi' }], flow: null });
+    expect((await ask()).body).toMatchObject({ message: 'Hello.', actions: [] });
+    expect(received.length - before).toBe(2); // refused, then asked without it
+    expect((await ask()).body.message).toBe('Hello.');
+    expect(received.length - before).toBe(3); // remembered
+    expect(received.at(-1)!.body.response_format).toBeUndefined();
+  });
+
+  it('warns when the model server reads only part of a long request', async () => {
+    const answer = (promptTokens?: number) => (body: any) =>
+      String(body.messages[0].content).startsWith('You are the assistant inside Autoflow') ? { content: '{"message":"OK","actions":[]}', promptTokens } : { content: 'OK' };
+    reply = answer(2048);
+    const small = (await api('POST', '/api/settings/ai/test')).body;
+    expect(small).toMatchObject({ ok: true, context: { read: 2048, enough: false } });
+    expect(small.context.sent).toBeGreaterThan(4000);
+    expect(small.warning).toContain('only read 2048 of about');
+    expect(small.warning).toContain('16,384');
+    reply = answer(100_000);
+    expect((await api('POST', '/api/settings/ai/test')).body).toMatchObject({ ok: true, context: { enough: true }, warning: null });
+    reply = answer(undefined); // servers that don't say how much they read
+    expect((await api('POST', '/api/settings/ai/test')).body).toMatchObject({ ok: true, context: { read: null, enough: true }, warning: null });
   });
 });
 

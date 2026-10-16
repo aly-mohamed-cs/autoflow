@@ -61,7 +61,7 @@ const api: StudioApi = {
   },
   ai: {
     status: () => invoke(IPC.aiStatus),
-    draftFlow: (description) => invoke(IPC.aiDraft, description),
+    assistant: (input) => invoke(IPC.aiAssistant, input),
     explainError: (input) => invoke(IPC.aiExplain, input),
   },
   workPlan: {

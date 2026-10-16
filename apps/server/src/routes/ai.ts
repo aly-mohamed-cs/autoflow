@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/sessions.js';
+import type { Flow } from '@autoflow/flow-types';
 import { AiTaskBody, DEFAULT_AI, type AiSettings, type RepairRequest } from '../services/ai.js';
+import { AssistantBody } from '../services/assistant.js';
 import { HttpError } from '../services/core.js';
 
 /** What the engine sends when a step fails (see engine/runtime/repair.py). */
@@ -40,6 +42,21 @@ export async function aiRoutes(app: FastifyInstance) {
     audit.record(actor(request), 'ai.draft', undefined, { steps: result.flow.steps?.length ?? 0, dropped: result.dropped.length });
     return result;
   });
+
+  /** The assistant chat in Studio: an answer and changes for the open automation (Studio applies them). */
+  app.post(
+    '/api/ai/assistant',
+    { preHandler: requireRole('builder'), bodyLimit: 4 * 1024 * 1024, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request) => {
+      const body = AssistantBody.parse(request.body);
+      const reply = await ai.assistant({ messages: body.messages, flow: (body.flow as Flow | null) ?? null, processId: body.processId });
+      audit.record(actor(request), 'ai.assistant', (body.flow as { id?: string } | null)?.id, {
+        actions: reply.actions.map((a) => a.type),
+        dropped: reply.dropped.length,
+      });
+      return reply;
+    },
+  );
 
   app.post('/api/ai/explain-error', { preHandler: requireRole('operator'), config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
     const body = z
@@ -82,7 +99,15 @@ export async function aiRoutes(app: FastifyInstance) {
     const started = Date.now();
     try {
       const explanation = await ai.explainError({ activity: 'control.log', message: 'Connection test - reply OK.' });
-      return { ok: true, ms: Date.now() - started, sample: explanation.slice(0, 200) };
+      const ms = Date.now() - started;
+      // The assistant sends long requests: check the model server reads them whole.
+      const context = await ai.contextCheck().catch(() => null);
+      const warning =
+        context && !context.enough
+          ? `The model server only read ${context.read} of about ${context.sent} tokens of a test request, so the assistant would miss most of what it needs. ` +
+            'Give the model a larger context: at least 16,384 (LM Studio: Context Length; llama.cpp: -c 32768; Ollama: OLLAMA_CONTEXT_LENGTH=32768 or num_ctx), then restart the model server.'
+          : null;
+      return { ok: true, ms, sample: explanation.slice(0, 200), context, warning };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }

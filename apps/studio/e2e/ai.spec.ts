@@ -28,17 +28,31 @@ function fakeModel(dataDir: string) {
     req.on('end', () => {
       const body = JSON.parse(raw) as { messages: { content: string }[] };
       const [system, user] = body.messages.map((m) => m.content);
+      const last = body.messages.at(-1)!.content;
       let content: unknown = 'The file was not found.';
-      if (system!.startsWith('You design automations')) {
-        content = {
-          name: 'Read the orders file',
-          description: 'Reads the daily orders file and logs it.',
-          variables: [],
-          steps: [
-            { activity: 'files.read_text', label: 'Read orders', params: { file: join(dataDir, 'orders.txt') }, outputs: { text: 'orders' } },
-            { activity: 'control.log', params: { message: 'Orders: {{orders}}' } },
-          ],
-        };
+      if (system!.startsWith('You are the assistant inside Autoflow')) {
+        const broken = /\[(s[0-9a-z]+)\] message:/.exec(last);
+        if (last.startsWith('Studio checked the steps') && broken) {
+          // The check found the formula typo below: fix that step.
+          content = { message: 'Fixed the log message.', actions: [{ type: 'update_step', step: broken[1], params: { message: 'Orders: {{orders}}' } }] };
+        } else if (last.includes('Done')) {
+          content = { message: 'Added it.', actions: [{ type: 'add_steps', after: 'end', steps: [{ activity: 'control.log', label: 'Say done', params: { message: 'Done' } }] }] };
+        } else {
+          content = {
+            message: 'I added the steps. Check the file name, then test it.',
+            actions: [
+              { type: 'new_automation', name: 'Read the orders file', description: 'Reads the daily orders file and logs it.' },
+              {
+                type: 'add_steps',
+                after: 'start',
+                steps: [
+                  { activity: 'files.read_text', label: 'Read orders', params: { file: join(dataDir, 'orders.txt') }, outputs: { text: 'orders' } },
+                  { activity: 'control.log', label: 'Log orders', params: { message: 'Orders: {{orders +}}' } },
+                ],
+              },
+            ],
+          };
+        }
       } else if (system!.startsWith('You repair failed steps')) {
         const folder = JSON.parse(user!).screen.paths.file.folder as string;
         content = { fixable: true, explanation: 'The file is called orders-2026.txt.', params: { file: join(folder, 'orders-2026.txt') } };
@@ -51,7 +65,7 @@ function fakeModel(dataDir: string) {
   });
 }
 
-test('describe an automation, let the AI fix a failing step, then use the AI step', async () => {
+test('build an automation in the AI chat, let the AI fix a failing step, then use the AI step', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'autoflow-ai-'));
   const dataDir = join(dir, 'data');
   mkdirSync(dataDir);
@@ -101,14 +115,31 @@ test('describe an automation, let the AI fix a failing step, then use the AI ste
     await expect(win.getByText('Connected', { exact: true })).toBeVisible();
     await expect(win.getByText('Let the AI fix failed steps during test runs')).toBeVisible();
 
-    // Describe it -> a draft built only from real steps.
+    // Build with AI -> the assistant builds the automation in the chat; Studio's check sends its
+    // formula typo back and the assistant fixes it.
     await win.getByRole('button', { name: 'Automations' }).click();
-    await win.getByRole('button', { name: 'Describe it' }).click();
+    await win.getByRole('button', { name: 'Build with AI' }).click();
     await win.getByLabel('What should it do?').fill('Every morning read the orders file in the data folder and write it to the log.');
-    await win.getByRole('button', { name: 'Draft it' }).click();
-    await expect(win.getByText('Draft ready')).toBeVisible({ timeout: 15_000 });
+    await win.getByRole('button', { name: 'Start building' }).click();
+    const chat = win.getByRole('complementary', { name: 'AI assistant' });
+    await expect(chat.getByText('I added the steps.')).toBeVisible({ timeout: 15_000 });
+    await expect(chat.getByText('Studio checked the new steps')).toBeVisible();
+    await expect(chat.getByText('Fixed the log message.')).toBeVisible({ timeout: 15_000 });
+    await expect(win.getByLabel('Automation name')).toHaveValue('Read the orders file');
     const canvas = win.getByRole('main');
-    await expect(canvas.getByText('Read orders')).toBeVisible();
+    await expect(canvas.getByText('Read orders', { exact: true })).toBeVisible();
+    await expect(canvas.getByText('Log orders', { exact: true })).toBeVisible();
+
+    // Another change, then Undo from the chat.
+    await chat.getByLabel('Message to the AI assistant').fill('Also log Done at the end');
+    await chat.getByLabel('Message to the AI assistant').press('Enter');
+    const added = chat.getByRole('group', { name: 'Assistant answer' }).filter({ hasText: 'Added it.' });
+    await expect(added).toBeVisible({ timeout: 15_000 });
+    await expect(canvas.getByText('Say done', { exact: true })).toBeVisible();
+    await added.getByRole('button', { name: 'Undo' }).click();
+    await expect(canvas.getByText('Say done', { exact: true })).toHaveCount(0);
+    await expect(added.getByText('Undone')).toBeVisible();
+    await chat.getByRole('button', { name: 'Close the AI assistant' }).click();
 
     // The drafted file name is wrong; the AI fixes the step during the test run.
     await win.getByRole('button', { name: 'Test run' }).click();

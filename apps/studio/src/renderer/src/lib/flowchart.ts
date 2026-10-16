@@ -116,7 +116,7 @@ export function insertOnLink(flow: Flow, processId: string | null, link: Link, s
 }
 
 /** Where to draw a new step: after `source`, or right of / below everything. */
-function besides(chart: Flowchart, source: string | null, steps: Step[], vertical: boolean): Point {
+export function besides(chart: Flowchart, source: string | null, steps: Step[], vertical: boolean): Point {
   const positions = chart.positions ?? {};
   const from = source ? positions[source] : undefined;
   if (from) {

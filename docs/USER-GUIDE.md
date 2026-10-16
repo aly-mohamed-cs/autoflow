@@ -316,10 +316,21 @@ error) if it has such a start value. A person stopping a run doesn't start the n
 Your administrator can connect Autoflow to an AI model that runs **on the company's own
 network** — nothing is sent to the internet. When it is on you get:
 
-* **Describe it** (Studio → Automations): write what the automation should do in plain words,
-  e.g. *“Open the invoices Excel file, type each row into the vendor portal and save the
-  reference number back”*. The assistant drafts the steps. Fill in what it can't know (web
-  addresses, pick the screen elements), then test it as usual.
+* **The AI assistant chat** (editor toolbar → **AI assistant**, or **Build with AI** on the
+  Automations page for a new one): talk with the assistant and it changes the automation for
+  you.
+  * Describe the job in plain words, e.g. *“Open the invoices Excel file, type each row into
+    the vendor portal and save the reference number back”*. The assistant picks the steps,
+    fills in their settings, adds variables and connects the steps (also with free
+    connections).
+  * Keep talking to change it: *“If a row fails, log it and continue”*, *“Read the file from
+    the Reports folder instead”*, *“Explain what this automation does”*.
+  * Each answer lists what changed, with **Undo**. Studio checks the new steps and lets the
+    assistant fix its own mistakes (a wrong formula, a variable that's never set) before you see
+    them; what only you can do is listed under **Still to do** — click a line to go to the step,
+    e.g. to pick a screen element with *Pick on screen* or enter a web address.
+  * It never sees passwords or the text your automation types into screens. Always test what
+    it builds before publishing; it can be wrong.
 * **Explain this error**: on a failed step (Studio) or a failed run (dashboard), the assistant
   explains in plain words what probably went wrong and what to change.
 * **The AI step** (**Ask the AI assistant**, in the *AI* group of the step library) lets an
