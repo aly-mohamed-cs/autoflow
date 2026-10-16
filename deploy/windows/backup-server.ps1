@@ -9,6 +9,9 @@
   Note: the credential-vault key is protected for THIS computer only. To move to a
   new server, re-enter credentials there (or ask IT to transfer the key securely).
 #>
+
+#Requires -RunAsAdministrator
+# The data folder is for administrators and SYSTEM only: start PowerShell with "Run as administrator".
 [CmdletBinding()]
 param(
     [string]$DataDir = "",

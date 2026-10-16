@@ -27,6 +27,9 @@
 .PARAMETER DataDir
   Where the database, screenshots and keys live. Default: <repo>\data.
 #>
+
+#Requires -RunAsAdministrator
+# The data folder is for administrators and SYSTEM only: start PowerShell with "Run as administrator".
 [CmdletBinding()]
 param(
     [int]$Port = 8443,

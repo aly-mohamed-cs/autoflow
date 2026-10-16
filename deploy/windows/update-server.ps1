@@ -12,6 +12,9 @@
   With -Installers it also downloads the latest Studio and Robot installers from
   the GitHub release into the Downloads page (needs the GitHub CLI signed in).
 #>
+
+#Requires -RunAsAdministrator
+# The data folder is for administrators and SYSTEM only: start PowerShell with "Run as administrator".
 [CmdletBinding()]
 param(
     [string]$DataDir = "",
