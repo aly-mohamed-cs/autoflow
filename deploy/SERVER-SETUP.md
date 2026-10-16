@@ -81,14 +81,16 @@ until you set it up.
 **Context size matters most.** Each chat request carries the rules, the open automation and
 the step types that fit the request (about 6,000–10,000 tokens). Give the model a context of
 **at least 16,384 tokens (32,768 is better)**; with the default of many servers (2,048–4,096)
-the model never sees most of it and builds poor automations. **Save and test** in the dashboard
-warns when the model server cuts requests short.
+the model never sees most of it and builds poor automations. With **Ollama**, Autoflow asks for
+a large enough context itself. With other model servers, **Save and test** in the dashboard
+warns when they cut requests short, and so does the chat.
 
 ### Qwen3-VL-30B-A3B-Instruct (GGUF)
 
 This model works well for the assistant: only about 3 B of its 30 B parameters are active per
-token, so it answers at a usable speed even on a CPU (it needs about 20 GB of free memory for a
-Q4_K_M file, more for larger quantizations). Only the main `.gguf` file is needed; the vision
+token, so it answers at a usable speed even on a CPU. It needs about 20 GB of free memory for a
+Q4_K_M file (more for larger quantizations), so use a machine with **32 GB of RAM or more**; on a
+16 GB PC use a smaller model such as `qwen2.5:7b-instruct` (it works, but picks steps less well). Only the main `.gguf` file is needed; the vision
 file (`mmproj-…`) is not used by Autoflow. Run it with one of these on the model server:
 
 - **llama.cpp** (`llama-server`):
@@ -114,13 +116,16 @@ reasoning is removed from answers) but is slower; the *Instruct* one is the bett
    ```
    To reach it from the Orchestrator over the network, set the environment variable
    `OLLAMA_HOST=0.0.0.0` on that machine, restart Ollama and allow port 11434 in its firewall
-   (only from the Orchestrator server). Also set `OLLAMA_CONTEXT_LENGTH=32768`: Ollama
-   otherwise cuts every request to a few thousand tokens.
+   (only from the Orchestrator server). Autoflow asks Ollama for a 16,384-token context with
+   each request (Ollama's own default is only a few thousand), so nothing else needs setting.
+   For Qwen3-VL in Ollama: `ollama pull qwen3-vl:30b` (see ollama.com/library/qwen3-vl for the
+   exact names); for a `.gguf` file you downloaded, llama.cpp or LM Studio (above) is simpler.
 
    Ollama runs while someone is signed in to that machine (it starts from the Startup folder).
    On a dedicated model server, set it to sign in automatically like a robot PC, so the
    assistant is back after a restart. If an NVIDIA GPU makes Ollama crash with a "CUDA error",
    set the environment variable `OLLAMA_LLM_LIBRARY=cuda_v12` and restart Ollama.
+
 ### Turn it on
 
 1. Dashboard → **Settings → AI assistant (local model)**: turn it on, enter the address

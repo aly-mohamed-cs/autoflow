@@ -128,9 +128,32 @@ export interface RepairReply {
   element_name?: string;
 }
 
+/** The model server cut a request to a smaller context than it needs: what to tell people. */
+export function contextWarning(read: number, sent: number): string {
+  return (
+    `The AI model server only read ${read} of about ${sent} tokens of this request, so the model missed part of its instructions. ` +
+    'An administrator needs to give the model a larger context: at least 16,384 tokens (LM Studio: Context Length; llama.cpp: -c 32768; Ollama is set by Autoflow), then restart the model server.'
+  );
+}
+
+/** The address without its OpenAI-style /v1 ending (Ollama's own API lives at the root). */
+const serverRoot = (baseUrl: string) => baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+
+/**
+ * The context Ollama is asked for. Unless told per request, Ollama cuts every prompt to a few
+ * thousand tokens and the model never sees the start (the rules) - and its OpenAI-style address
+ * can't be told. A fixed size keeps Ollama from reloading the model between requests.
+ */
+export function ollamaContext(messages: ChatMessage[]): number {
+  const tokens = messages.reduce((n, m) => n + m.content.length, 0) / 3.2; // generous
+  return tokens + 3072 <= 16_384 ? 16_384 : 32_768;
+}
+
 export class AiService {
   /** Model servers that refuse the JSON answer mode (some only take a JSON schema): asked without it. */
   private readonly noJsonMode = new Set<string>();
+  /** Whether an address is Ollama (asked once per address). */
+  private readonly ollama = new Map<string, boolean>();
 
   constructor(
     private readonly settings: Settings,
@@ -145,10 +168,30 @@ export class AiService {
     return (await this.call(messages, json)).content;
   }
 
+  /** Ollama answers /api/version; anything else is spoken to the OpenAI way. */
+  private async isOllama(baseUrl: string, headers: Record<string, string>): Promise<boolean> {
+    const known = this.ollama.get(baseUrl);
+    if (known !== undefined) return known;
+    try {
+      const res = await fetch(`${serverRoot(baseUrl)}/api/version`, { headers, signal: AbortSignal.timeout(5000) });
+      const body = res.ok ? ((await res.json().catch(() => ({}))) as { version?: unknown }) : {};
+      const yes = typeof body.version === 'string';
+      this.ollama.set(baseUrl, yes);
+      return yes;
+    } catch {
+      return false; // not reachable now: the request itself reports it (and it is asked again next time)
+    }
+  }
+
   /** One request to the model server; also how much of the prompt it read (if it says). */
   private async call(messages: ChatMessage[], json: boolean): Promise<{ content: string; promptTokens: number | null }> {
     const cfg = this.config();
     if (!cfg.enabled) throw new HttpError(404, 'The AI assistant is not set up. An administrator can enable it under Settings.');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(cfg.apiKey ? { Authorization: `Bearer ${this.decrypt(cfg.apiKey)}` } : {}),
+    };
+    if (await this.isOllama(cfg.baseUrl, headers)) return this.callOllama(cfg, headers, messages, json);
     const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), cfg.timeoutS * 1000);
@@ -156,10 +199,7 @@ export class AiService {
       fetch(url, {
         method: 'POST',
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(cfg.apiKey ? { Authorization: `Bearer ${this.decrypt(cfg.apiKey)}` } : {}),
-        },
+        headers,
         body: JSON.stringify({
           model: cfg.model,
           messages,
@@ -192,13 +232,56 @@ export class AiService {
     }
   }
 
+  /** Ollama's own API, which takes the context size per request (it reports no reliable prompt size then). */
+  private async callOllama(
+    cfg: AiSettings,
+    headers: Record<string, string>,
+    messages: ChatMessage[],
+    json: boolean,
+  ): Promise<{ content: string; promptTokens: number | null }> {
+    const url = `${serverRoot(cfg.baseUrl)}/api/chat`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), cfg.timeoutS * 1000);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers,
+        body: JSON.stringify({
+          model: cfg.model,
+          messages,
+          stream: false,
+          ...(json ? { format: 'json' } : {}),
+          options: { temperature: 0.2, num_ctx: ollamaContext(messages) },
+        }),
+      });
+      if (!res.ok) {
+        const detail = await errorDetail(res);
+        throw new HttpError(502, `The AI model server answered ${res.status}${detail ? `: ${detail}` : ''}. Check Settings → AI assistant.`);
+      }
+      const data = (await res.json()) as { message?: { content?: string } };
+      const content = stripThinking(data.message?.content ?? '').trim();
+      if (!content) throw new HttpError(502, 'The AI model returned an empty answer.');
+      return { content, promptTokens: null };
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      if ((err as Error).name === 'AbortError') throw new HttpError(504, 'The AI model took too long to answer.');
+      throw new HttpError(502, unreachable(url, err));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** The assistant chat in Studio: an answer plus actions that change the open automation. */
   async assistant(input: AssistantInput): Promise<AssistantReply & { considered: string[] }> {
     const { system, considered } = assistantPrompt(input);
     // The newest messages; long ones shortened so the step details always fit.
     const history = input.messages.slice(-12).map((m) => ({ role: m.role, content: m.content.slice(0, 6000) }));
-    const answer = await this.chat([{ role: 'system', content: system }, ...history], true);
-    return { ...parseAssistantReply(answer, input.flow), considered };
+    const { content, promptTokens } = await this.call([{ role: 'system', content: system }, ...history], true);
+    const sent = Math.round((system.length + history.reduce((n, m) => n + m.content.length, 0)) / 3.6);
+    const reply = parseAssistantReply(content, input.flow);
+    if (promptTokens !== null && promptTokens < sent * 0.7) reply.warning = contextWarning(promptTokens, sent);
+    return { ...reply, considered };
   }
 
   /**
@@ -410,22 +493,40 @@ export function pickCategory(answer: string, categories: string[]): string {
 }
 
 /** Keep only known, non-advanced step types and their known settings; give every step a fresh id. */
+const STEP_KEYS = new Set(['id', 'activity', 'type', 'label', 'params', 'settings', 'outputs', 'blocks']);
+
+/** A step type by its id, or by a longer name a model made up from it ("browser.open_url" -> browser.open). */
+export function activityNamed(name: string): ActivityDef | undefined {
+  const exact = ACTIVITIES.get(name);
+  if (exact) return exact;
+  const parts = name.split('_');
+  for (let n = parts.length - 1; n > 0; n--) {
+    const def = ACTIVITIES.get(parts.slice(0, n).join('_'));
+    if (def) return def;
+  }
+  return undefined;
+}
+
 /** Steps from a model: known types and settings only, fresh ids (`aliases` maps the model's own ids to them). */
 export function sanitizeSteps(value: unknown, dropped: string[], depth = 0, aliases?: Map<string, string>): Step[] {
   if (!Array.isArray(value) || depth > 6) return [];
   const out: Step[] = [];
   for (const raw of value.slice(0, 200)) {
     if (!raw || typeof raw !== 'object') continue;
-    const s = raw as { id?: unknown; activity?: unknown; label?: unknown; params?: unknown; outputs?: unknown; blocks?: unknown };
-    const def = ACTIVITIES.get(String(s.activity));
+    const s = raw as { id?: unknown; activity?: unknown; type?: unknown; label?: unknown; params?: unknown; settings?: unknown; outputs?: unknown; blocks?: unknown };
+    const named = String(s.activity ?? s.type ?? '');
+    const def = activityNamed(named);
     // Advanced steps (scripts, raw SQL changes) are never offered to the model; a person adds them.
     if (!def || def.advanced) {
-      dropped.push(String(s.activity));
+      dropped.push(named);
       continue;
     }
     const known = new Set(Object.keys(def.params.properties ?? {}));
+    const given = [s.params, s.settings].find((v) => v && typeof v === 'object') as Record<string, unknown> | undefined;
+    // Small models often write the settings on the step itself.
+    const flat = Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([k]) => !STEP_KEYS.has(k)));
     const params = Object.fromEntries(
-      Object.entries(s.params && typeof s.params === 'object' ? (s.params as Record<string, unknown>) : {})
+      Object.entries({ ...flat, ...given })
         .filter(([k]) => known.has(k))
         // Models often write a condition as text; store the proper shape (a rule set or a formula).
         .map(([k, v]) => [k, isConditionParam(def, k) ? normalizeCondition(v) : v]),

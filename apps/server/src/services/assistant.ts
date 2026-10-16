@@ -285,7 +285,9 @@ How Autoflow works:
   Excel rows into a website: control.get_credential -> browser.open (url) -> browser.type / browser.click to log in with {{login.username}} / {{login.password}} -> excel.read (file, sheet) -> control.for_each {"items":"{{excel_data}}","item_variable":"row","index_variable":"row_number"} with body: browser.type text {{row["Column"]}} ..., browser.click, browser.get_text, excel.update_row {"row_number":"{{row_number}}","values":{"Result":"{{page_text}}"}}.
   One failing item must not stop the rest: put the body's steps in control.try (blocks "try" / "catch"; the catch gets {{error}}) and log the error in "catch".
   Files of a folder: files.list (folder, pattern "*.pdf") -> control.for_each over {{files}}; PDF values: pdf.extract_fields, or pdf.read_text and text.extract_between.
-  Email with a file: email.send (to, subject, body, attachments as a {{variable}}). Write a results table: excel.append_row per row, or excel.write_table.
+  Email with a file: email.send (to, subject, body, attachments as a {{variable}}).
+  Sending email is most reliable with email.send ("via": "exchange", or "smtp" with the mail server's address) instead of typing into a webmail site: Gmail, Outlook.com and the like often refuse sign-in from automated browsers. Build what the person asks, and mention this in one sentence when they ask for webmail.
+  Websites the person signs in to: browser.open with a "profile" name (e.g. "gmail") keeps the login between runs; type the login with control.get_credential, never the password itself. Write a results table: excel.append_row per row, or excel.write_table.
 - Change only what was asked; keep the person's work. Refer to existing steps by their [id]. Values shown as (hidden) or (typed text, not shown) stay private: leave them as they are.
 - If the request is unclear, ask ONE short question and send no actions.`;
 
@@ -329,6 +331,47 @@ export interface AssistantReply {
   actions: AssistantAction[];
   /** Step types the model used that don't exist (or can't be added by the assistant). */
   dropped: string[];
+  /** The model's own answer when it could not be used (shown to help find out why). */
+  raw?: string;
+  /** Something about the model server the person should know (e.g. it cut the request short). */
+  warning?: string;
+}
+
+const ACTION_TYPES = new Set(['add_steps', 'update_step', 'remove_steps', 'connect', 'add_variable', 'rename', 'new_automation']);
+/** Names small models use for the actions. */
+const ACTION_ALIASES: Record<string, string> = {
+  add_step: 'add_steps',
+  insert_steps: 'add_steps',
+  remove_step: 'remove_steps',
+  delete_step: 'remove_steps',
+  delete_steps: 'remove_steps',
+  update_steps: 'update_step',
+  change_step: 'update_step',
+  create_automation: 'new_automation',
+  create_variable: 'add_variable',
+};
+const MESSAGE_KEYS = ['message', 'reply', 'response', 'answer', 'text', 'explanation'];
+
+const actionKind = (x: Record<string, unknown>) => {
+  for (const v of [x.type, x.action]) {
+    const k = typeof v === 'string' ? (ACTION_ALIASES[v] ?? v) : '';
+    if (ACTION_TYPES.has(k)) return k;
+  }
+  return '';
+};
+
+/** What small models write instead of the asked-for shape: a bare action, a list of steps, other key names. */
+function normalizeReply(raw: Record<string, unknown>, flow: Flow | null): { message: string; actions: Record<string, unknown>[] } {
+  const message = MESSAGE_KEYS.map((k) => raw[k]).find((v): v is string => typeof v === 'string' && !!v.trim()) ?? '';
+  const list = [raw.actions, raw.changes].find(Array.isArray) as unknown[] | undefined;
+  let actions = (list ?? []).filter((a): a is Record<string, unknown> => !!a && typeof a === 'object');
+  if (!actions.length && actionKind(raw)) actions = [raw];
+  if (!actions.length && Array.isArray(raw.steps)) {
+    // A whole automation, the way drafts used to be written.
+    if (typeof raw.name === 'string' && raw.name.trim() && !(flow?.steps ?? []).length) actions.push({ type: 'rename', name: raw.name, description: raw.description });
+    actions.push({ type: 'add_steps', after: 'end', steps: raw.steps });
+  }
+  return { message, actions };
 }
 
 const VARIABLE_TYPES = new Set(['text', 'number', 'table', 'list', 'file', 'boolean', 'date', 'any']);
@@ -336,13 +379,14 @@ const str = (v: unknown, max = 200) => (typeof v === 'string' ? v.trim().slice(0
 
 /** Keep only well-formed actions with known step types and settings; new steps get fresh ids. */
 export function parseAssistantReply(answer: string, flow: Flow | null): AssistantReply {
-  let raw: { message?: unknown; actions?: unknown };
+  let parsed: unknown;
   try {
-    raw = JSON.parse(extractJson(stripThinking(answer)));
+    parsed = JSON.parse(extractJson(stripThinking(answer)));
   } catch {
     // Not JSON: take it as a plain answer without changes.
     return { message: stripThinking(answer).trim().slice(0, 3000) || 'The AI model gave no answer.', actions: [], dropped: [] };
   }
+  const raw = normalizeReply(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : { actions: parsed }, flow);
   const dropped: string[] = [];
   const actions: AssistantAction[] = [];
   const stepById = new Map([...walk([...(flow?.steps ?? []), ...(flow?.processes ?? []).flatMap((p) => p.steps ?? [])])].map((s) => [s.id, s]));
@@ -352,15 +396,14 @@ export function parseAssistantReply(answer: string, flow: Flow | null): Assistan
     const id = str(v, 64);
     return aliases.get(id) ?? id;
   };
-  for (const a of Array.isArray(raw.actions) ? raw.actions.slice(0, 30) : []) {
-    if (!a || typeof a !== 'object') continue;
-    const x = a as Record<string, unknown>;
-    switch (x.type) {
+  for (const x of raw.actions.slice(0, 30)) {
+    switch (actionKind(x)) {
       case 'add_steps': {
         const inside = x.inside && typeof x.inside === 'object' ? (x.inside as Record<string, unknown>) : null;
         const parent = inside ? ref(inside.step) : '';
         const after = ref(x.after);
-        const steps = sanitizeSteps(x.steps, dropped, 0, aliases);
+        const given = Array.isArray(x.steps) ? x.steps : x.step && typeof x.step === 'object' ? [x.step] : [];
+        const steps = sanitizeSteps(given, dropped, 0, aliases);
         if (!steps.length) break;
         for (const s of walk(steps)) stepById.set(s.id, s);
         if (inside && stepById.has(parent)) {
@@ -386,7 +429,7 @@ export function parseAssistantReply(answer: string, flow: Flow | null): Assistan
         break;
       }
       case 'remove_steps': {
-        const ids = (Array.isArray(x.steps) ? x.steps : []).map(ref).filter((s) => stepById.has(s));
+        const ids = (Array.isArray(x.steps) ? x.steps : [x.step]).map(ref).filter((s) => stepById.has(s));
         if (ids.length) actions.push({ type: 'remove_steps', steps: ids });
         break;
       }
@@ -400,7 +443,7 @@ export function parseAssistantReply(answer: string, flow: Flow | null): Assistan
       case 'add_variable': {
         const name = str(x.name, 64);
         if (!IDENT.test(name)) break;
-        const given = String(x.variable_type ?? x.var_type ?? '');
+        const given = String(x.variable_type ?? x.var_type ?? (x.type !== 'add_variable' && !ACTION_TYPES.has(String(x.type)) ? x.type : ''));
         const type = VARIABLE_TYPES.has(given) ? given : 'any';
         actions.push({ type: 'add_variable', name, variableType: type, is_input: x.is_input === true, ...(x.default !== undefined ? { default: x.default } : {}), description: str(x.description, 300) });
         break;
@@ -417,7 +460,16 @@ export function parseAssistantReply(answer: string, flow: Flow | null): Assistan
       }
     }
   }
-  // Steps of a new automation: if the model forgot new_automation, Studio creates one anyway.
-  return { message: str(raw.message, 3000) || (actions.length ? 'Done.' : 'I have no changes to make.'), actions, dropped: [...new Set(dropped)] };
+  const message = str(raw.message, 3000);
+  if (!actions.length && !message) {
+    // Nothing usable: say so (instead of "no changes") and show what came back.
+    return {
+      message: "The AI model's answer didn't fit what Autoflow expects, so nothing was changed. Try asking again in other words; if it keeps happening, an administrator can check the model under Settings → AI assistant → Save and test.",
+      actions: [],
+      dropped: [...new Set(dropped)],
+      raw: stripThinking(answer).trim().slice(0, 1500),
+    };
+  }
+  return { message: message || 'Done.', actions, dropped: [...new Set(dropped)] };
 }
 

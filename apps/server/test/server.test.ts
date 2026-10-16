@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, createServices, type Services } from '../src/app.js';
 import { roleForGroups, escapeFilter } from '../src/auth/ldap.js';
-import { extractJson, pickCategory, sanitizeSteps, stripThinking } from '../src/services/ai.js';
+import { extractJson, ollamaContext, pickCategory, sanitizeSteps, stripThinking } from '../src/services/ai.js';
 import { describeFlow, parseAssistantReply, relevantActivities } from '../src/services/assistant.js';
 import { applyPatches } from '../src/services/repairs.js';
 import { compareVersions } from '../src/services/robotReleases.js';
@@ -276,6 +276,7 @@ describe('AI assistant (local model)', () => {
 
   beforeAll(async () => {
     model = createServer((req, res) => {
+      if (req.method === 'GET') return void res.writeHead(404).end(); // not Ollama (no /api/version)
       let raw = '';
       req.on('data', (c) => (raw += c));
       req.on('end', () => {
@@ -680,6 +681,44 @@ describe('AI assistant (local model)', () => {
     expect(stripThinking('reasoning that lost its opening tag</think>Answer')).toBe('Answer');
   });
 
+  it('makes the best of answers in other shapes, and says when nothing could be used', () => {
+    // What a small model wrote when the request was cut short and it never saw the format.
+    const steps = parseAssistantReply(
+      JSON.stringify({
+        steps: [
+          { type: 'browser.open_url', url: 'https://gmail.com' },
+          { type: 'control.wait', seconds: 5 },
+          { type: 'browser.type', locator: 'email:input', locator_type: 'css', value: '{{email}}' },
+          { type: 'shell.format_disk' },
+        ],
+      }),
+      null,
+    );
+    expect(steps.actions).toHaveLength(1);
+    expect(steps.actions[0]).toMatchObject({
+      type: 'add_steps',
+      after: 'end',
+      steps: [
+        { activity: 'browser.open', params: { url: 'https://gmail.com' } },
+        { activity: 'control.wait', params: { seconds: 5 } },
+        { activity: 'browser.type', params: {} },
+      ],
+    });
+    expect(steps.dropped).toEqual(['shell.format_disk']);
+    expect(steps.message).toBe('Done.');
+
+    const bare = parseAssistantReply('{"action":"add_step","step":{"activity":"control.log","settings":{"message":"Hi"}}}', null);
+    expect(bare.actions).toMatchObject([{ type: 'add_steps', steps: [{ activity: 'control.log', params: { message: 'Hi' } }] }]);
+    const variable = parseAssistantReply('{"actions":[{"action":"add_variable","name":"total","type":"number"}]}', null);
+    expect(variable.actions).toEqual([{ type: 'add_variable', name: 'total', variableType: 'number', is_input: false, description: '' }]);
+    expect(parseAssistantReply('{"response":"Which website should I open?"}', null).message).toBe('Which website should I open?');
+
+    const unusable = parseAssistantReply('{"result": {"ok": true}}', null);
+    expect(unusable.actions).toEqual([]);
+    expect(unusable.message).toContain("didn't fit what Autoflow expects");
+    expect(unusable.raw).toBe('{"result": {"ok": true}}');
+  });
+
   it('chats about the open automation and answers with actions', async () => {
     reply = () => ({
       content: JSON.stringify({ message: 'Added a log step at the end.', actions: [{ type: 'add_steps', after: 'end', steps: [{ activity: 'control.log', params: { message: 'Done' } }] }] }),
@@ -700,6 +739,36 @@ describe('AI assistant (local model)', () => {
     expect((await api('GET', '/api/audit')).body.entries.map((e: any) => e.action)).toContain('ai.assistant');
   });
 
+  it('asks Ollama for a context large enough for the whole request', async () => {
+    const asked: any[] = [];
+    const ollama = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        if (req.url === '/api/version') return void res.end(JSON.stringify({ version: '0.40.4' }));
+        asked.push({ url: req.url, body: JSON.parse(raw) });
+        res.end(JSON.stringify({ message: { role: 'assistant', content: '{"message":"Hello from Ollama.","actions":[]}' }, done: true }));
+      });
+    });
+    await new Promise<void>((resolve) => ollama.listen(0, '127.0.0.1', resolve));
+    const shown = (await api('GET', '/api/settings/ai')).body.ai;
+    await api('PUT', '/api/settings/ai', { ...shown, baseUrl: `http://127.0.0.1:${(ollama.address() as { port: number }).port}/v1` });
+    try {
+      const res = await api('POST', '/api/ai/assistant', { messages: [{ role: 'user', content: 'Hi' }], flow: CHAT_FLOW });
+      expect(res.body.message).toBe('Hello from Ollama.');
+      expect(asked).toHaveLength(1);
+      expect(asked[0].url).toBe('/api/chat');
+      expect(asked[0].body).toMatchObject({ model: 'test-model', stream: false, format: 'json', options: { num_ctx: 16_384 } });
+      expect(asked[0].body.messages[0].content).toContain('You are the assistant inside Autoflow');
+      expect((await api('POST', '/api/settings/ai/test')).body).toMatchObject({ ok: true, warning: null });
+    } finally {
+      await api('PUT', '/api/settings/ai', { ...shown, baseUrl: modelUrl });
+      await new Promise((resolve) => ollama.close(resolve));
+    }
+    expect(ollamaContext([{ role: 'user', content: 'x'.repeat(60_000) }])).toBe(32_768);
+  });
+
   it('works with model servers that refuse the JSON answer mode', async () => {
     const before = received.length;
     reply = (body) => (body.response_format ? { status: 400, content: '' } : { content: '{"message":"Hello.","actions":[]}' });
@@ -715,6 +784,9 @@ describe('AI assistant (local model)', () => {
     const answer = (promptTokens?: number) => (body: any) =>
       String(body.messages[0].content).startsWith('You are the assistant inside Autoflow') ? { content: '{"message":"OK","actions":[]}', promptTokens } : { content: 'OK' };
     reply = answer(2048);
+    // Each chat answer says so too, not only the settings test.
+    const chat = (await api('POST', '/api/ai/assistant', { messages: [{ role: 'user', content: 'Hi' }], flow: null })).body;
+    expect(chat.warning).toContain('only read 2048 of about');
     const small = (await api('POST', '/api/settings/ai/test')).body;
     expect(small).toMatchObject({ ok: true, context: { read: 2048, enough: false } });
     expect(small.context.sent).toBeGreaterThan(4000);

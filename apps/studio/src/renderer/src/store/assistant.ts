@@ -25,6 +25,10 @@ export interface ChatEntry {
   after?: Flow;
   undone?: boolean;
   error?: boolean;
+  /** About the model server (e.g. it cut the request short). */
+  warning?: string;
+  /** The model's own answer when it could not be used. */
+  raw?: string;
 }
 
 interface AssistantState {
@@ -50,7 +54,7 @@ const entryId = () => crypto.randomUUID();
 /** The conversation as the model reads it: what was said, and what Studio changed and found. */
 function history(entries: ChatEntry[]): AssistantMessage[] {
   return entries
-    .filter((e) => !e.error)
+    .filter((e) => !e.error && !e.raw) // failures and answers that could not be used are not the model's words
     .slice(-16)
     .map((e) => ({
       role: e.role,
@@ -141,6 +145,8 @@ export const useAssistant = create<AssistantState>((set, get) => {
             changes: applied.changes,
             skipped,
             todo: todo.map((i) => ({ stepId: i.step_id!, text: `${title(i.step_id!)}: ${i.message}` })),
+            ...(reply.warning ? { warning: reply.warning } : {}),
+            ...(reply.raw ? { raw: reply.raw } : {}),
             ...(applied.flow !== now.flow ? { after } : {}),
           });
           // Problems the assistant can fix itself (a wrong formula, an unknown variable...): ask it,

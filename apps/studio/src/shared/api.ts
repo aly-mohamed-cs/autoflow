@@ -120,6 +120,10 @@ export interface AssistantReply {
   actions: AssistantAction[];
   /** Step types the model named that Autoflow doesn't have (left out). */
   dropped: string[];
+  /** The model's own answer when it could not be used. */
+  raw?: string;
+  /** About the model server, e.g. it read only part of the request. */
+  warning?: string;
 }
 
 export interface PublishedFlow {

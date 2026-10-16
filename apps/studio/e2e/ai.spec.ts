@@ -23,6 +23,7 @@ test.skip(!existsSync(SERVER), 'build the server first');
 /** A stand-in for the company's local model server (OpenAI-compatible). */
 function fakeModel(dataDir: string) {
   return createHttpServer((req, res) => {
+    if (req.method === 'GET') return void res.writeHead(404).end(); // not Ollama
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
@@ -35,6 +36,8 @@ function fakeModel(dataDir: string) {
         if (last.startsWith('Studio checked the steps') && broken) {
           // The check found the formula typo below: fix that step.
           content = { message: 'Fixed the log message.', actions: [{ type: 'update_step', step: broken[1], params: { message: 'Orders: {{orders}}' } }] };
+        } else if (last.includes('something odd')) {
+          content = { result: 1 }; // not the asked-for shape
         } else if (last.includes('Done')) {
           content = { message: 'Added it.', actions: [{ type: 'add_steps', after: 'end', steps: [{ activity: 'control.log', label: 'Say done', params: { message: 'Done' } }] }] };
         } else {
@@ -139,6 +142,13 @@ test('build an automation in the AI chat, let the AI fix a failing step, then us
     await added.getByRole('button', { name: 'Undo' }).click();
     await expect(canvas.getByText('Say done', { exact: true })).toHaveCount(0);
     await expect(added.getByText('Undone')).toBeVisible();
+    // An answer that can't be used says so and shows what the model wrote.
+    await chat.getByLabel('Message to the AI assistant').fill('Say something odd');
+    await chat.getByLabel('Message to the AI assistant').press('Enter');
+    const odd = chat.getByRole('group', { name: 'Assistant answer' }).filter({ hasText: "didn't fit" });
+    await expect(odd).toBeVisible({ timeout: 15_000 });
+    await odd.getByText('What the AI model answered').click();
+    await expect(odd.getByText('{"result":1}')).toBeVisible();
     await chat.getByRole('button', { name: 'Close the AI assistant' }).click();
 
     // The drafted file name is wrong; the AI fixes the step during the test run.

@@ -101,6 +101,17 @@ export function AssistantPanel() {
           ) : (
             <div key={e.id} className="mr-4 space-y-2 rounded-lg border border-border px-3 py-2 text-[13px]" role="group" aria-label="Assistant answer">
               <p className={cn('whitespace-pre-line', e.error && 'text-danger')}>{e.text}</p>
+              {e.warning && (
+                <p className="flex items-start gap-1.5 rounded-md bg-warning-soft px-2 py-1.5 text-[12px] text-warning" role="alert">
+                  <Icon name="triangle-alert" size={13} className="mt-0.5 shrink-0" /> {e.warning}
+                </p>
+              )}
+              {e.raw && (
+                <details className="text-[12px] text-subtle">
+                  <summary className="cursor-pointer">What the AI model answered</summary>
+                  <pre className="mt-1 max-h-48 overflow-auto rounded bg-surface-2 p-2 text-[11px] whitespace-pre-wrap">{e.raw}</pre>
+                </details>
+              )}
               {!!e.changes?.length && (
                 <div className="space-y-1">
                   <ul className={cn('space-y-0.5 text-[12.5px]', e.undone && 'line-through opacity-60')} aria-label="Changes">
