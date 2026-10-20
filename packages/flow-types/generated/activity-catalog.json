@@ -1117,7 +1117,7 @@
       "category": "Browser",
       "icon": "download",
       "sentence": "Download by clicking {element} into {folder}",
-      "description": "Click a download link or button and save the file with its own name (Excel, PDF, CSV...).",
+      "description": "Click a download link or button, wait until the file is downloaded and keep it with its own name (Excel, PDF, CSV...). The next steps get the file.",
       "params": {
         "additionalProperties": false,
         "properties": {
@@ -1165,6 +1165,12 @@
           "overwrite": {
             "default": true,
             "title": "Replace if it exists",
+            "type": "boolean"
+          },
+          "open_file": {
+            "default": false,
+            "description": "Opens it with its program, e.g. Excel.",
+            "title": "Open the file when the download has finished",
             "type": "boolean"
           }
         },

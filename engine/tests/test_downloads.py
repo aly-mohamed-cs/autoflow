@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import threading
 import time
@@ -63,6 +64,13 @@ def test_a_website_name_with_the_wrong_excel_extension_is_corrected():
     lines, log = _logged()
     assert downloads.proper_name("Sales Report.xls", ".xlsx", log) == "Sales Report.xlsx"
     assert lines[0][0] == "info"
+
+
+def test_a_chosen_name_without_extension_gets_the_one_its_contents_need():
+    lines, log = _logged()
+    assert downloads.target_name("orders", "Sales Report.xls", ".xlsx", log) == "orders.xlsx"
+    assert downloads.target_name("", "Sales Report.xls", ".xlsx", log) == "Sales Report.xlsx"
+    assert downloads.target_name("orders.xls", "Sales Report.xls", ".xlsx", log) == "orders.xls"  # theirs
 
 
 def test_a_chosen_name_is_kept_with_a_warning():
@@ -163,7 +171,7 @@ def test_a_plain_click_saves_the_file_with_its_name_into_downloads(tmp_path, exp
     assert Path(variables["report"]).name == "Sales Report.xlsx"
     assert variables["rows"].rows[0]["Sales"] == 120
     assert [f.name for f in downloads_dir.iterdir()] == ["Sales Report.xlsx"]
-    assert any("Saved the downloaded file" in e.get("message", "") for e in events)
+    assert any(e.get("message", "").startswith("Downloaded ") for e in events)
 
 
 @pytest.mark.browser
@@ -220,3 +228,46 @@ def test_the_download_step_saves_one_copy_into_downloads_by_default(tmp_path, ex
     assert Path(variables["report"]) == downloads_dir / "Sales Report.xlsx"
     assert Path(variables["again"]) == downloads_dir / "Sales Report.xlsx"  # replaced (the default)
     assert [f.name for f in downloads_dir.iterdir()] == ["Sales Report.xlsx"]
+
+
+@pytest.mark.browser
+def test_the_download_step_renames_keeps_existing_files_and_opens_the_file(
+    tmp_path, export_url, downloads_dir, monkeypatch
+):
+    opened: list[str] = []
+    monkeypatch.setattr(os, "startfile", lambda path: opened.append(str(path)), raising=False)
+    reports = tmp_path / "reports"
+    settings = {"element": "export", "folder": str(reports), "file_name": "orders", "overwrite": False}
+    result, _events, variables = run_flow(tmp_path, [
+        step("browser.open", {"url": export_url, "browser": BROWSER}),
+        step("browser.download", {**settings, "open_file": True}, outputs={"file": "report"}),
+    ])
+    assert result.status == "succeeded", result.error
+    assert Path(variables["report"]) == reports / "orders.xlsx"  # the contents decide the extension
+    assert opened == [variables["report"]]
+    assert not downloads_dir.exists() or not any(downloads_dir.iterdir())
+
+    result, _events, _ = run_flow(tmp_path, [
+        step("browser.open", {"url": export_url, "browser": BROWSER}),
+        step("browser.download", settings),
+    ])
+    assert result.status == "failed" and "already exists" in result.error["message"]
+    assert [f.name for f in reports.iterdir()] == ["orders.xlsx"]
+
+
+@pytest.mark.browser
+def test_the_browser_is_a_normal_window_that_saves_downloads_itself(tmp_path, downloads_dir):
+    from autoflow_engine.activities.browser import BrowserSession
+
+    runner = FlowRunner(Flow.model_validate({"id": "n", "name": "n", "steps": []}),
+                        RunOptions(work_dir=tmp_path / "run", headless=True), lambda e: None)
+    session = BrowserSession(runner.ctx, BROWSER, True, None)
+    profile = Path(session._temp_profile)
+    try:
+        cdp = session.context.browser.new_browser_cdp_session()
+        assert cdp.send("Target.getBrowserContexts")["browserContextIds"] == []  # no private window
+        assert session.saver is not None and session.saver.folder == downloads_dir
+        assert profile.is_dir()
+    finally:
+        session.close()
+    assert not profile.exists()

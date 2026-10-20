@@ -12,6 +12,8 @@ import base64
 import contextlib
 import logging
 import queue
+import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -48,7 +50,8 @@ class DesignSession:
         self._tasks: queue.Queue[Callable[[], None]] = queue.Queue()
         self._closed = False
         self._pw: Any = None
-        self._browser: Any = None
+        self._profile: str | None = None
+        self._saver: downloads.BrowserDownloads | None = None
         self._context: Any = None
         self._mode = "off"
         self._pick_respond: Respond | None = None
@@ -145,24 +148,33 @@ class DesignSession:
             from playwright.sync_api import sync_playwright
 
             self._pw = sync_playwright().start()
+            # A normal window (not a private one), in a temporary profile removed afterwards.
+            self._profile = tempfile.mkdtemp(prefix="autoflow-design-")
             try:
-                self._browser = self._pw.chromium.launch(
-                    channel=CHANNELS.get(self._browser_name), headless=self._headless, args=["--start-maximized"]
+                self._context = self._pw.chromium.launch_persistent_context(
+                    self._profile, channel=CHANNELS.get(self._browser_name), headless=self._headless,
+                    args=["--start-maximized"], no_viewport=True, accept_downloads=True,
                 )
             except Exception as exc:
                 self._pw.stop()
                 self._pw = None
+                shutil.rmtree(self._profile, ignore_errors=True)
                 raise ActivityError(
                     f"Could not open the browser for picking: {str(exc).splitlines()[0]}",
                     "Check that Microsoft Edge is installed.",
                 ) from None
-            self._context = self._browser.new_context(no_viewport=True, accept_downloads=True)
+            try:
+                # The browser saves downloads itself into Downloads: its download list opens them.
+                self._saver = downloads.BrowserDownloads(self._context)
+            except Exception:
+                log.exception("the design browser can't save downloads itself")
+                self._saver = None
             self._context.expose_binding("__autoflowPicked", self._on_picked)
             self._context.expose_binding("__autoflowRecorded", self._on_recorded)
             self._context.expose_function("__autoflowMode", lambda: self._mode)
             self._context.add_init_script(INJECT_JS + "\nwindow.__autoflowMode && window.__autoflowMode().then(m => window.__autoflow.setMode(m));")
             self._context.on("page", self._on_new_page)
-            page = self._context.new_page()
+            page = self._context.pages[0] if self._context.pages else self._context.new_page()
             self._watch(page)
             if url:
                 page.goto(_normalize_url(url), wait_until="domcontentloaded")
@@ -186,12 +198,17 @@ class DesignSession:
         page.on("download", self._on_download)
 
     def _on_download(self, download: Any) -> None:
-        # Saved with the website's file name (the browser's own copy has a random name and is
-        # deleted when it closes); while recording, the click that started it becomes "Download file".
+        # Kept in Downloads with the website's file name; while recording, the click that started
+        # it becomes "Download file".
         if self._mode == "record":
             self._captures.append(("download", None, download.suggested_filename))
         try:
-            path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=_log_to_file)
+            if self._saver is None:
+                path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=_log_to_file)
+            else:
+                path = downloads.located(download, self._saver.folder)
+                name = downloads.target_name("", path.name, downloads.sniff(path), _log_to_file)
+                path = downloads.place(path, path.with_name(name), "replace")
             log.info("saved a download to %s", path)
             self._notify("browser.downloaded", {"file": str(path)})
         except Exception:
@@ -211,11 +228,14 @@ class DesignSession:
                     frame.evaluate("m => window.__autoflow && window.__autoflow.setMode(m)", mode)
 
     def _shutdown_browser(self) -> None:
-        for closer in (self._context, self._browser, self._pw):
+        for closer in (self._context, self._pw):
             if closer is not None:
                 with contextlib.suppress(Exception):
                     closer.stop() if closer is self._pw else closer.close()
-        self._pw = self._browser = self._context = self._last_page = None
+        self._pw = self._context = self._last_page = self._saver = None
+        if self._profile:
+            shutil.rmtree(self._profile, ignore_errors=True)
+            self._profile = None
 
     # -- picking -------------------------------------------------------------------
     def _start_pick(self, url: str | None, respond: Respond) -> None:

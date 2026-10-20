@@ -83,14 +83,18 @@ The preview shows the result using values from your last test run.
   Need to sign in first? Hold **Ctrl** while clicking to use the page normally.
 * Pages often take a moment: use **Wait for element** instead of a fixed wait.
 * **Extract table from page** copies a table into Autoflow; **Download file** saves exports.
-* Downloads: use **Download file** on the export link or button. It saves the file with the
-  website's own name (into the Downloads folder unless you choose another one), and its result
-  (**downloaded_file**) is the file for the next steps, e.g. **Read Excel file**. A recorded click
-  that downloads something becomes **Download file** by itself. A plain **Click** that starts a
-  download also saves the file into Downloads; add **Wait for file** after it.
-* The browser's own download list shows a temporary name: that is normal, the real file is in the
-  folder above. If a website calls an Excel file `.xls` but it is really `.xlsx`, Autoflow gives it
-  the right extension, so Excel opens it without a "format and extension don't match" warning.
+* Downloads: use **Download file** on the export link or button. It waits until the file is
+  completely downloaded, keeps the website's own name (in the Downloads folder unless you choose
+  another one), and its result (**downloaded_file**) is the file for the next steps, e.g. **Read
+  Excel file**. Tick **Open the file when the download has finished** to open it in Excel.
+  A recorded click that downloads something becomes **Download file** by itself.
+* The browser opens as a normal window (not a private one) and saves downloads itself, as when you
+  click by hand: its download list opens the file. A plain **Click** that starts a download also
+  lands in Downloads; add **Wait for file** after it. A file with the same name is replaced.
+* If a website calls an Excel file `.xls` but it is really `.xlsx`, Autoflow gives it the right
+  extension, so Excel opens it without a "format and extension don't match" warning. Excel shows
+  its yellow *Protected View* bar for any downloaded file (Windows marks it as coming from the
+  internet); Autoflow's Excel steps read the file anyway.
 
 ### Work in a Windows program (ERP, accounting…)
 * **Open application** starts it and waits for its window.

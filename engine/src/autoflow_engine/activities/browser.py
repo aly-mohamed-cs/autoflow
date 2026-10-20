@@ -8,7 +8,10 @@ browser steps of a run and closed automatically when the run ends.
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
+import shutil
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Literal
@@ -22,6 +25,12 @@ from ..values import Table, parse_point, to_text
 
 B = "Browser"
 _SESSION = "browser"
+log = logging.getLogger("autoflow.browser")
+
+
+def _key(download: Any) -> Any:
+    """The same download is wrapped anew in each callback: compare what's inside."""
+    return getattr(download, "_impl_obj", download)
 
 BROWSER_CHANNELS = {"edge": "msedge", "chrome": "chrome", "chromium": None}
 
@@ -34,35 +43,39 @@ class BrowserSession:
             raise ActivityError("Browser automation is not installed on this computer.") from None
         self.ctx = ctx
         self._closed = False
-        # Downloads: the "Download file" step saves its own (claimed); any other one is saved into
-        # the Downloads folder with the website's file name while the run talks to the browser.
+        # Downloads: the "Download file" step handles its own (claimed); any other one lands in the
+        # Downloads folder with the website's file name.
         self.claiming = False
         self._claimed: list[Any] = []
+        self._done: dict[Any, Path | Exception] = {}
         self._saving = 0
         self._pw = sync_playwright().start()
         channel = BROWSER_CHANNELS[browser]
         launch_args = {"channel": channel, "headless": headless, "args": ["--start-maximized"]}
+        # Always a normal window (not a private one): with a named profile it keeps logins between
+        # runs, otherwise it starts clean in a temporary profile that is removed afterwards.
+        self._temp_profile = None if profile else tempfile.mkdtemp(prefix="autoflow-browser-")
+        folder = _profiles_dir() / profile if profile else Path(self._temp_profile)
         try:
-            if profile:
-                folder = _profiles_dir() / profile
-                folder.mkdir(parents=True, exist_ok=True)
-                self.context = self._pw.chromium.launch_persistent_context(
-                    str(folder), accept_downloads=True, no_viewport=True, **launch_args
-                )
-                self.browser = None
-                self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
-            else:
-                self.browser = self._pw.chromium.launch(**launch_args)
-                self.context = self.browser.new_context(accept_downloads=True, no_viewport=True)
-                self.page = self.context.new_page()
+            folder.mkdir(parents=True, exist_ok=True)
+            self.context = self._pw.chromium.launch_persistent_context(
+                str(folder), accept_downloads=True, no_viewport=True, **launch_args
+            )
+            self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         except Exception as exc:
             self._pw.stop()
+            self._remove_temp_profile()
             name = {"edge": "Microsoft Edge", "chrome": "Google Chrome"}.get(browser, browser)
             raise ActivityError(
                 f"Could not start {name}: {str(exc).splitlines()[0]}",
                 f"Check that {name} is installed on this computer, or choose another browser.",
             ) from None
         self.context.set_default_timeout(ctx.flow.settings.default_timeout * 1000)
+        try:
+            self.saver: downloads.BrowserDownloads | None = downloads.BrowserDownloads(self.context)
+        except Exception as exc:  # then Autoflow copies each download out of Playwright's folder
+            log.warning("the browser can't save downloads itself: %s", exc)
+            self.saver = None
         for page in self.context.pages:
             self._watch(page)
         self.context.on("page", self._watch)
@@ -71,21 +84,50 @@ class BrowserSession:
         page.on("download", self._on_download)
 
     def claim(self, download: Any) -> None:
-        """The "Download file" step saves this download itself."""
-        self._claimed.append(getattr(download, "_impl_obj", download))
+        """The "Download file" step takes care of this download."""
+        self._claimed.append(_key(download))
 
     def _on_download(self, download: Any) -> None:
-        # Playwright runs this between the run's own browser calls (a step, a wait, closing).
-        if self.claiming or getattr(download, "_impl_obj", download) in self._claimed:
-            return
+        # Playwright runs this between the run's own browser calls (a step, a wait, closing); it
+        # may wait for the download to end meanwhile.
+        claimed = self.claiming or _key(download) in self._claimed
+        if claimed and self.saver is None:
+            return  # the step saves it
         self._saving += 1
         try:
-            path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=self.ctx.log)
-            self.ctx.log(f"Saved the downloaded file to {path}")
+            if self.saver is None:
+                path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=self.ctx.log)
+            else:
+                folder = self.saver.folder
+                path = downloads.located(download, folder)
+                if claimed:
+                    self._done[_key(download)] = path
+                    return
+                name = downloads.target_name("", path.name, downloads.sniff(path), self.ctx.log)
+                path = downloads.place(path, folder / name, "replace")  # like the browser itself
+            self.ctx.log(f"Downloaded {path}")
         except Exception as exc:
-            self.ctx.log(f"A download could not be saved: {str(exc).splitlines()[0]}", "warning")
+            if claimed:
+                self._done[_key(download)] = exc
+            else:
+                self.ctx.log(f"A download could not be saved: {str(exc).splitlines()[0]}", "warning")
         finally:
             self._saving -= 1
+
+    def saved(self, download: Any, seconds: float) -> Path:
+        """Wait (up to `seconds`) until the browser has saved a claimed download; the file."""
+        key = _key(download)
+        deadline = Deadline(seconds)
+        while key not in self._done:
+            if deadline.passed:
+                with contextlib.suppress(Exception):
+                    download.cancel()
+                raise ActivityError(f"The download did not finish within {seconds / 60:g} minutes.")
+            self.ctx.sleep(0.25)  # lets the browser report the end of the download
+        result = self._done.pop(key)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     def pump(self, seconds: float) -> bool:
         """Wait while the browser delivers its events (downloads are saved meanwhile)."""
@@ -117,10 +159,13 @@ class BrowserSession:
             self.ctx.pump = None
         try:
             self.context.close()
-            if self.browser is not None:
-                self.browser.close()
         finally:
             self._pw.stop()
+            self._remove_temp_profile()
+
+    def _remove_temp_profile(self) -> None:
+        if self._temp_profile:
+            shutil.rmtree(self._temp_profile, ignore_errors=True)
 
     def screenshot(self, path: Path) -> bool:
         if self.page.is_closed():
@@ -631,6 +676,8 @@ class DownloadParams(ElementParams):
     folder: str = Param("", title="Save to folder", ui="folder", placeholder="(the Downloads folder)")
     file_name: str = Param("", title="File name", placeholder="(keep the website's name)")
     overwrite: bool = Param(True, title="Replace if it exists")
+    open_file: bool = Param(False, title="Open the file when the download has finished",
+                            description="Opens it with its program, e.g. Excel.")
 
 
 @activity(
@@ -639,30 +686,48 @@ class DownloadParams(ElementParams):
     category=B,
     icon="download",
     sentence="Download by clicking {element} into {folder}",
-    description="Click a download link or button and save the file with its own name (Excel, PDF, CSV...).",
+    description="Click a download link or button, wait until the file is downloaded and keep it with its own "
+    "name (Excel, PDF, CSV...). The next steps get the file.",
     params=DownloadParams,
     outputs=[OutputDef("file", "Downloaded file", "file", default_variable="downloaded_file")],
 )
 def download(ctx: RunContext, p: DownloadParams) -> str:
     chosen = to_text(p.folder).strip()
     folder = Path(chosen) if chosen else downloads.downloads_folder()
+    name = to_text(p.file_name)
+    existing = "replace" if p.overwrite else "fail"
     target = _locate(ctx, p)
     session = _session(ctx)
-    timeout = (p.timeout if p.timeout is not None else max(ctx.flow.settings.default_timeout, 60)) * 1000
+    seconds = p.timeout if p.timeout is not None else max(ctx.flow.settings.default_timeout, 60)
+    saver = session.saver
+    # The browser saves it straight into the folder (its download list then opens it), unless
+    # it's renamed or must not replace a file: then next to the run first.
+    landing = folder if not name.strip() and p.overwrite else ctx.file_path("downloads")
     session.claiming = True
     try:
-        with session.page.expect_download(timeout=timeout) as info:
-            target.click()
-        session.claim(info.value)
-    except Exception as exc:
-        if "Timeout" in type(exc).__name__ or "Timeout" in str(exc):
-            raise ActivityError("Clicking did not start a download.", "Check that this is the right link.") from None
-        raise
+        if saver is not None:
+            saver.save_into(landing)
+        try:
+            with session.page.expect_download(timeout=seconds * 1000) as info:
+                target.click()
+            session.claim(info.value)
+        except Exception as exc:
+            if "Timeout" in type(exc).__name__ or "Timeout" in str(exc):
+                raise ActivityError("Clicking did not start a download.", "Check that this is the right link.") from None
+            raise
+        finally:
+            session.claiming = False
+        if saver is None:
+            path = downloads.save(info.value, folder, name, existing=existing, log=ctx.log)
+        else:
+            saved = session.saved(info.value, max(seconds, 1800))
+            final = downloads.target_name(name, saved.name, downloads.sniff(saved), ctx.log)
+            path = downloads.place(saved, folder / final, existing)
     finally:
-        session.claiming = False
-    path = downloads.save(
-        info.value, folder, to_text(p.file_name), existing="replace" if p.overwrite else "fail", log=ctx.log
-    )
+        if saver is not None:
+            saver.save_into(downloads.downloads_folder())
+    if p.open_file:
+        os.startfile(path)  # type: ignore[attr-defined]  # Windows only
     return str(path)
 
 

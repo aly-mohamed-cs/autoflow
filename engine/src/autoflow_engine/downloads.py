@@ -1,13 +1,17 @@
-"""Saving files a website downloads, with the website's own file name.
+"""Files a website downloads, with the website's own file name.
 
-Playwright keeps every download in a temporary folder under a random name without an
-extension, and deletes it when the browser closes. Autoflow saves each one with its real
-name instead: the "Download file" step into the folder it was given, any other download
-(a plain click on an "Export to Excel" button...) into the Downloads folder.
+Left to Playwright, a download is kept in a temporary folder under a random name without an
+extension, and deleted when the browser closes. So Autoflow lets the browser save downloads
+itself, with their real names, straight into the Downloads folder (its own download list then
+opens them) - see BrowserDownloads. If that can't be switched on, Autoflow copies each download
+out of Playwright's folder instead (save()).
 """
 
 from __future__ import annotations
 
+import os
+import shutil
+import time
 import uuid
 import zipfile
 from collections.abc import Callable
@@ -15,8 +19,80 @@ from pathlib import Path
 from typing import Any, Literal
 
 Log = Callable[[str, str], None]
+Existing = Literal["replace", "fail", "keep_both"]
 
 _EXCEL = {".xls", ".xlsx", ".xlsm"}
+PARTIAL = (".crdownload", ".tmp", ".part", ".download")
+
+
+class BrowserDownloads:
+    """The browser saves downloads itself, with their real names, into a folder Autoflow chooses."""
+
+    def __init__(self, context: Any):
+        browser = context.browser
+        if browser is None:
+            raise RuntimeError("no browser")
+        self._cdp = browser.new_browser_cdp_session()
+        # A persistent context (a normal, not private, window) is the browser's default context.
+        self._contexts = self._cdp.send("Target.getBrowserContexts").get("browserContextIds") or [None]
+        self.folder = downloads_folder()
+        self.save_into(self.folder)
+
+    def save_into(self, folder: Path) -> None:
+        folder.mkdir(parents=True, exist_ok=True)
+        for context_id in self._contexts:
+            params: dict[str, Any] = {"behavior": "allow", "downloadPath": str(folder), "eventsEnabled": True}
+            if context_id:
+                params["browserContextId"] = context_id
+            self._cdp.send("Browser.setDownloadBehavior", params)
+        self.folder = folder
+
+
+def located(download: Any, folder: Path) -> Path:
+    """Wait until the browser has saved `download` into `folder`; the file."""
+    from .errors import ActivityError
+
+    failure = download.failure()  # waits for the end of the download
+    if failure:
+        raise ActivityError(f"The download failed: {failure}")
+    path = folder / download.suggested_filename
+    if path.is_file():
+        return path
+    # The browser changed the name (a character Windows doesn't allow...): the newest file then.
+    recent = [
+        f for f in folder.iterdir()
+        if f.is_file() and not f.name.lower().endswith(PARTIAL) and time.time() - f.stat().st_mtime < 120
+    ]
+    if not recent:
+        raise ActivityError(f"The downloaded file '{download.suggested_filename}' was not found in {folder}.")
+    return max(recent, key=lambda f: f.stat().st_mtime)
+
+
+def target_name(chosen: str, website: str, kind: str | None, log: Log) -> str:
+    """The name to keep: the person's (with the website's extension if it has none) or the website's."""
+    name = chosen.strip() or website or "download"
+    own_extension = bool(Path(chosen.strip()).suffix)  # "orders" lets the contents decide
+    if not Path(name).suffix and Path(website).suffix:
+        name += Path(website).suffix
+    return proper_name(name, kind, log, chosen=own_extension)
+
+
+def place(source: Path, target: Path, existing: Existing) -> Path:
+    """Move a downloaded file to `target` (replacing, refusing or keeping both if one is there)."""
+    from .errors import ActivityError
+
+    if os.path.normcase(str(source)) == os.path.normcase(str(target)):
+        return source
+    if target.exists():
+        if existing == "fail":
+            raise ActivityError(f"'{target}' already exists.")
+        if existing == "replace":
+            target.unlink()
+        else:
+            target = unique_path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source), str(target))
+    return target
 
 
 def downloads_folder() -> Path:
@@ -45,17 +121,12 @@ def save(
     folder: Path,
     name: str = "",
     *,
-    existing: Literal["replace", "fail", "keep_both"],
+    existing: Existing,
     log: Log,
 ) -> Path:
-    """Save a Playwright download into `folder` (the website's file name unless `name` is given)."""
+    """Copy a download out of Playwright's folder into `folder` (the website's name unless `name` is given)."""
     from .errors import ActivityError
 
-    suggested = download.suggested_filename or "download"
-    chosen = bool(name.strip())
-    name = name.strip() or suggested
-    if not Path(name).suffix and Path(suggested).suffix:
-        name += Path(suggested).suffix
     folder.mkdir(parents=True, exist_ok=True)
     # First under a temporary name ("Wait for file" skips .part files): the contents decide the
     # final name, and replacing / keeping both applies to that name.
@@ -65,18 +136,10 @@ def save(
         failure = download.failure()
         if failure:
             raise ActivityError(f"The download failed: {failure}")
-        path = folder / proper_name(name, sniff(part), log, chosen=chosen)
-        if path.exists():
-            if existing == "fail":
-                raise ActivityError(f"'{path}' already exists.")
-            if existing == "replace":
-                path.unlink()
-            else:
-                path = unique_path(path)
-        part.replace(path)
+        name = target_name(name, download.suggested_filename or "download", sniff(part), log)
+        return place(part, folder / name, existing)
     finally:
         part.unlink(missing_ok=True)
-    return path
 
 
 def proper_name(name: str, kind: str | None, log: Log, *, chosen: bool = False) -> str:
