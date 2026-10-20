@@ -71,6 +71,8 @@ class BrowserSession:
                 f"Check that {name} is installed on this computer, or choose another browser.",
             ) from None
         self.context.set_default_timeout(ctx.flow.settings.default_timeout * 1000)
+        # Loading a page may take longer than finding an element (a slow portal, a new profile).
+        self.context.set_default_navigation_timeout(max(ctx.flow.settings.default_timeout, 60) * 1000)
         try:
             self.saver: downloads.BrowserDownloads | None = downloads.BrowserDownloads(self.context)
         except Exception as exc:  # then Autoflow copies each download out of Playwright's folder
