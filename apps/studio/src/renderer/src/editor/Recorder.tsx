@@ -44,6 +44,7 @@ const ACTION_TEXT: Record<RecordedAction['action'], (a: RecordedAction) => strin
   select: (a) => `Choose “${a.option}” in ${a.element?.name}`,
   check: (a) => `${a.checked ? 'Tick' : 'Untick'} ${a.element?.name}`,
   upload: (a) => `Upload a file using ${a.element?.name}`,
+  download: (a) => `Download a file with ${a.element?.name}`,
   goto: (a) => `Go to ${a.url}`,
   switch_tab: () => 'Switch to the new tab',
 };
@@ -86,9 +87,14 @@ export function Recorder() {
     const offStopped = window.autoflow.engine.onNotification('recorder.stopped', () => {
       if (useRecorder.getState().phase === 'recording') void finish(true);
     });
+    // The browser's own download list shows a temporary name: say where the real file is.
+    const offDownload = window.autoflow.engine.onNotification('browser.downloaded', (raw) => {
+      useApp.getState().toast(`Downloaded to ${(raw as { file: string }).file}`, 'success');
+    });
     return () => {
       offAction();
       offStopped();
+      offDownload();
     };
   }, []);
 

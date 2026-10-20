@@ -10,6 +10,7 @@ export interface RecordedAction {
     | 'select'
     | 'check'
     | 'upload'
+    | 'download'
     | 'goto'
     | 'switch_tab'
     | 'keys'
@@ -112,6 +113,10 @@ export function stepsFromRecording(
         break;
       case 'upload':
         step('browser.upload', { element: elementId(a.element), file: '' });
+        break;
+      case 'download':
+        // No folder: the Downloads folder of whoever runs it (this PC or a robot).
+        step('browser.download', { element: elementId(a.element) });
         break;
       case 'goto':
         if (a.url && a.url !== 'about:blank') step('browser.go_to', { url: a.url });

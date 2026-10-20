@@ -102,6 +102,14 @@ describe('stepsFromRecording', () => {
     ]);
   });
 
+  it('records a click that downloaded a file as "Download file" into the Downloads folder', () => {
+    const { steps } = stepsFromRecording(
+      [{ action: 'download', element: el('g', 'Export to Excel link', '#export') }],
+      { addOpenBrowser: false },
+    );
+    expect(steps.map((s) => [s.activity, s.params])).toEqual([['browser.download', { element: 'g' }]]);
+  });
+
   it('reuses elements already in the flow and keeps names unique', () => {
     const existing = [el('x', 'Submit button', '#go'), el('y', 'Username box', '#other')];
     const { steps, elements } = stepsFromRecording(actions.slice(0, 1).concat(actions[4]!), {

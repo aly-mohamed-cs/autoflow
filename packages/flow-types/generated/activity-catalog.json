@@ -1117,7 +1117,7 @@
       "category": "Browser",
       "icon": "download",
       "sentence": "Download by clicking {element} into {folder}",
-      "description": "Click a download link or button and save the file.",
+      "description": "Click a download link or button and save the file with its own name (Excel, PDF, CSV...).",
       "params": {
         "additionalProperties": false,
         "properties": {
@@ -1150,8 +1150,10 @@
             "x-advanced": true
           },
           "folder": {
+            "default": "",
             "title": "Save to folder",
             "type": "string",
+            "x-placeholder": "(the Downloads folder)",
             "x-ui": "folder"
           },
           "file_name": {
@@ -1166,9 +1168,6 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "folder"
-        ],
         "title": "DownloadParams",
         "type": "object"
       },

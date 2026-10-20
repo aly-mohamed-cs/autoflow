@@ -7,10 +7,13 @@ browser steps of a run and closed automatically when the run ends.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import time
 from pathlib import Path
 from typing import Any, Literal
 
+from .. import downloads
 from ..catalog import OutputDef, Param, Params, activity
 from ..errors import ActivityError
 from ..runtime.context import Deadline, RunContext, wait
@@ -31,6 +34,11 @@ class BrowserSession:
             raise ActivityError("Browser automation is not installed on this computer.") from None
         self.ctx = ctx
         self._closed = False
+        # Downloads: the "Download file" step saves its own (claimed); any other one is saved into
+        # the Downloads folder with the website's file name while the run talks to the browser.
+        self.claiming = False
+        self._claimed: list[Any] = []
+        self._saving = 0
         self._pw = sync_playwright().start()
         channel = BROWSER_CHANNELS[browser]
         launch_args = {"channel": channel, "headless": headless, "args": ["--start-maximized"]}
@@ -55,11 +63,58 @@ class BrowserSession:
                 f"Check that {name} is installed on this computer, or choose another browser.",
             ) from None
         self.context.set_default_timeout(ctx.flow.settings.default_timeout * 1000)
+        for page in self.context.pages:
+            self._watch(page)
+        self.context.on("page", self._watch)
+
+    def _watch(self, page: Any) -> None:
+        page.on("download", self._on_download)
+
+    def claim(self, download: Any) -> None:
+        """The "Download file" step saves this download itself."""
+        self._claimed.append(getattr(download, "_impl_obj", download))
+
+    def _on_download(self, download: Any) -> None:
+        # Playwright runs this between the run's own browser calls (a step, a wait, closing).
+        if self.claiming or getattr(download, "_impl_obj", download) in self._claimed:
+            return
+        self._saving += 1
+        try:
+            path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=self.ctx.log)
+            self.ctx.log(f"Saved the downloaded file to {path}")
+        except Exception as exc:
+            self.ctx.log(f"A download could not be saved: {str(exc).splitlines()[0]}", "warning")
+        finally:
+            self._saving -= 1
+
+    def pump(self, seconds: float) -> bool:
+        """Wait while the browser delivers its events (downloads are saved meanwhile)."""
+        page = next((p for p in self.context.pages if not p.is_closed()), None)
+        if page is None or self._closed:
+            return False
+        try:
+            page.wait_for_timeout(seconds * 1000)
+        except Exception:
+            return False
+        return True
+
+    def _finish_downloads(self) -> None:
+        """Before closing: save downloads a click started just before (the browser deletes them)."""
+        if self.ctx.control.cancelled:
+            return
+        self.pump(0.5)
+        give_up = time.monotonic() + 600
+        while self._saving and time.monotonic() < give_up and self.pump(0.2):
+            pass
 
     def close(self) -> None:
         if self._closed:
             return
+        with contextlib.suppress(Exception):  # the browser may already be gone
+            self._finish_downloads()
         self._closed = True
+        if self.ctx.pump == self.pump:
+            self.ctx.pump = None
         try:
             self.context.close()
             if self.browser is not None:
@@ -162,6 +217,7 @@ def open_browser(ctx: RunContext, p: OpenParams) -> None:
         session = BrowserSession(ctx, p.browser, ctx.options.headless, p.profile.strip() or None)
         ctx.resources[_SESSION] = session
         ctx.resources["screenshot"] = session.screenshot
+        ctx.pump = session.pump
         ctx.add_cleanup(_SESSION, session.close)
     elif p.new_tab:
         session.page = session.context.new_page()
@@ -572,7 +628,7 @@ def page_info(ctx: RunContext, p: PageInfoParams) -> dict[str, str]:
 
 
 class DownloadParams(ElementParams):
-    folder: str = Param(title="Save to folder", ui="folder")
+    folder: str = Param("", title="Save to folder", ui="folder", placeholder="(the Downloads folder)")
     file_name: str = Param("", title="File name", placeholder="(keep the website's name)")
     overwrite: bool = Param(True, title="Replace if it exists")
 
@@ -583,36 +639,30 @@ class DownloadParams(ElementParams):
     category=B,
     icon="download",
     sentence="Download by clicking {element} into {folder}",
-    description="Click a download link or button and save the file.",
+    description="Click a download link or button and save the file with its own name (Excel, PDF, CSV...).",
     params=DownloadParams,
     outputs=[OutputDef("file", "Downloaded file", "file", default_variable="downloaded_file")],
 )
 def download(ctx: RunContext, p: DownloadParams) -> str:
-    folder = Path(to_text(p.folder).strip())
-    if not to_text(p.folder).strip():
-        raise ActivityError("No folder was chosen.")
-    folder.mkdir(parents=True, exist_ok=True)
+    chosen = to_text(p.folder).strip()
+    folder = Path(chosen) if chosen else downloads.downloads_folder()
     target = _locate(ctx, p)
+    session = _session(ctx)
     timeout = (p.timeout if p.timeout is not None else max(ctx.flow.settings.default_timeout, 60)) * 1000
+    session.claiming = True
     try:
-        with _page(ctx).expect_download(timeout=timeout) as info:
+        with session.page.expect_download(timeout=timeout) as info:
             target.click()
+        session.claim(info.value)
     except Exception as exc:
         if "Timeout" in type(exc).__name__ or "Timeout" in str(exc):
             raise ActivityError("Clicking did not start a download.", "Check that this is the right link.") from None
         raise
-    dl = info.value
-    name = to_text(p.file_name).strip() or dl.suggested_filename
-    if not Path(name).suffix and Path(dl.suggested_filename).suffix:
-        name += Path(dl.suggested_filename).suffix
-    path = folder / name
-    if path.exists():
-        if not p.overwrite:
-            raise ActivityError(f"'{path}' already exists.")
-        path.unlink()
-    dl.save_as(str(path))
-    if dl.failure():
-        raise ActivityError(f"The download failed: {dl.failure()}")
+    finally:
+        session.claiming = False
+    path = downloads.save(
+        info.value, folder, to_text(p.file_name), existing="replace" if p.overwrite else "fail", log=ctx.log
+    )
     return str(path)
 
 

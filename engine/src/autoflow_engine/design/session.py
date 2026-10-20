@@ -20,11 +20,16 @@ from concurrent.futures import Future
 from importlib.resources import files
 from typing import Any
 
+from .. import downloads
 from ..errors import ActivityError
 from ..flow import Element, Selector
 from ..selectors.web import build_locator
 
 log = logging.getLogger("autoflow.design")
+
+
+def _log_to_file(message: str, level: str = "info") -> None:
+    log.log(logging.WARNING if level == "warning" else logging.INFO, message)
 
 Respond = Callable[..., None]  # respond(result=...) or respond(error=Exception)
 Notify = Callable[[str, dict[str, Any]], None]
@@ -151,7 +156,7 @@ class DesignSession:
                     f"Could not open the browser for picking: {str(exc).splitlines()[0]}",
                     "Check that Microsoft Edge is installed.",
                 ) from None
-            self._context = self._browser.new_context(no_viewport=True)
+            self._context = self._browser.new_context(no_viewport=True, accept_downloads=True)
             self._context.expose_binding("__autoflowPicked", self._on_picked)
             self._context.expose_binding("__autoflowRecorded", self._on_recorded)
             self._context.expose_function("__autoflowMode", lambda: self._mode)
@@ -178,6 +183,19 @@ class DesignSession:
 
     def _watch(self, page: Any) -> None:
         page.on("framenavigated", lambda frame: self._on_navigated(page, frame))
+        page.on("download", self._on_download)
+
+    def _on_download(self, download: Any) -> None:
+        # Saved with the website's file name (the browser's own copy has a random name and is
+        # deleted when it closes); while recording, the click that started it becomes "Download file".
+        if self._mode == "record":
+            self._captures.append(("download", None, download.suggested_filename))
+        try:
+            path = downloads.save(download, downloads.downloads_folder(), existing="keep_both", log=_log_to_file)
+            log.info("saved a download to %s", path)
+            self._notify("browser.downloaded", {"file": str(path)})
+        except Exception:
+            log.exception("could not save a download")
 
     def _on_navigated(self, page: Any, frame: Any) -> None:
         # Address typed by the user (not caused by a recorded click shortly before).
@@ -248,6 +266,8 @@ class DesignSession:
                     self._add_recorded(ref, payload)
                 elif kind == "goto" and self._mode == "record":
                     self._emit_action({"action": "goto", "url": payload})
+                elif kind == "download" and self._mode == "record":
+                    self._recorded_download()
             except Exception as exc:
                 log.exception("could not process %s", kind)
                 if kind == "pick" and self._pick_respond:
@@ -274,6 +294,14 @@ class DesignSession:
     def _emit_action(self, action: dict[str, Any]) -> None:
         self._recorded.append(action)
         self._notify("recorder.action", action)
+
+    def _recorded_download(self) -> None:
+        """The last click started a download: record it as "Download file" with that element."""
+        last = self._recorded[-1] if self._recorded else None
+        if not last or last.get("action") != "click" or last.get("element", {}).get("kind") != "web":
+            return  # e.g. an address typed by the person: going there downloads it again
+        self._recorded[-1] = {"action": "download", "element": last["element"]}
+        self._notify("recorder.action", {**self._recorded[-1], "replace_last": True})
 
     def element_from(self, frame: Any, info: dict[str, Any], kind_hint: str = "web") -> Element:
         mark = info.get("mark", "")

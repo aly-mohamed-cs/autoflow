@@ -204,6 +204,8 @@ class RunContext:
         self._cleanups: list[tuple[str, Callable[[], None]]] = []
         self._secrets: set[str] = set()
         self.current_step_id: str | None = None
+        # Set while a browser is open: waits let it work meanwhile (it saves downloads then).
+        self.pump: Callable[[float], bool] | None = None
         self.work_dir = options.work_dir
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self._sensitive_vars = {v.name for v in flow.variables if v.sensitive}
@@ -284,7 +286,20 @@ class RunContext:
         self.emit("log", level=level, message=message)
 
     def sleep(self, seconds: float) -> None:
-        self.control.sleep(seconds)
+        if self.pump is None:
+            self.control.sleep(seconds)
+            return
+        end = time.monotonic() + seconds
+        while True:
+            paused = self.control.paused_seconds
+            self.control.sleep(0)  # stops or pauses here
+            end += self.control.paused_seconds - paused
+            left = end - time.monotonic()
+            if left <= 0:
+                return
+            if self.pump is None or not self.pump(min(left, 0.25)):
+                self.control.sleep(left)
+                return
 
     def file_path(self, name: str) -> Path:
         """A path inside this run's working folder (screenshots, downloads...)."""
