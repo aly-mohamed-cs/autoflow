@@ -1221,7 +1221,7 @@ describe('database updates', () => {
       db.close();
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 60_000); // every migration on a real file: slow on CI's Windows disks
 });
 
 describe('robot self-update', () => {

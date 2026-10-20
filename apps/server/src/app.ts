@@ -32,7 +32,7 @@ import { Repairs } from './services/repairs.js';
 import { RobotReleases } from './services/robotReleases.js';
 import { Queues, Scheduler } from './services/triggers.js';
 
-export const VERSION = '0.5.3';
+export const VERSION = '0.5.4';
 
 export interface Services {
   config: Config;

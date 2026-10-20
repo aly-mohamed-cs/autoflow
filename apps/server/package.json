@@ -1,6 +1,6 @@
 {
   "name": "@autoflow/server",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "description": "Autoflow Orchestrator: API, scheduler, robot gateway and web dashboard host",
