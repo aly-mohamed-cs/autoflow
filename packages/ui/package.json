@@ -1,6 +1,6 @@
 {
   "name": "@autoflow/ui",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "type": "module",
   "description": "Autoflow design system: tokens, theme and React components shared by Studio and the dashboard.",
