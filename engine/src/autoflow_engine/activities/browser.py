@@ -467,7 +467,41 @@ def drag_drop(ctx: RunContext, p: DragDropParams) -> None:
 
 
 class PressKeyParams(Params):
-    keys: str = Param(title="Keys", ui="keys", placeholder="Enter, Tab, Control+A")
+    keys: str = Param(title="Keys", ui="keys", placeholder="Enter, Tab, Control+A",
+                      description="One key or a combination per comma: Enter, Tab, Esc, Down, F5, Ctrl+A...")
+
+
+# What people write -> the browser's key names (which are exact: "Enter", "Control", "ArrowDown").
+_BROWSER_KEYS = {
+    "ctrl": "Control", "control": "Control", "alt": "Alt", "shift": "Shift", "win": "Meta", "windows": "Meta",
+    "meta": "Meta", "cmd": "Meta", "enter": "Enter", "return": "Enter", "tab": "Tab", "esc": "Escape",
+    "escape": "Escape", "space": "Space", "spacebar": "Space", "del": "Delete", "delete": "Delete",
+    "backspace": "Backspace", "back": "Backspace", "ins": "Insert", "insert": "Insert", "home": "Home",
+    "end": "End", "pageup": "PageUp", "pgup": "PageUp", "pagedown": "PageDown", "pgdn": "PageDown",
+    "up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight", "arrowup": "ArrowUp",
+    "arrowdown": "ArrowDown", "arrowleft": "ArrowLeft", "arrowright": "ArrowRight", "plus": "+",
+    **{f"f{i}": f"F{i}" for i in range(1, 13)},
+}
+
+
+def browser_keys(text: str) -> list[str]:
+    """ "ctrl+a, enter" -> ["Control+a", "Enter"] (any case, common short names)."""
+    combos = []
+    for combo in [c.strip() for c in text.split(",") if c.strip()]:
+        parts = [k.strip() for k in combo.split("+") if k.strip()] or ["+"]
+        names = []
+        for key in parts:
+            name = _BROWSER_KEYS.get(key.lower().replace(" ", ""))
+            if name is None and len(key) != 1:
+                raise ActivityError(
+                    f"'{key}' is not a key name.",
+                    "Use names like Enter, Tab, Esc, Down, Backspace, F5, or a combination like Ctrl+A.",
+                )
+            names.append(name or (key.lower() if len(parts) > 1 else key))
+        combos.append("+".join(names))
+    if not combos:
+        raise ActivityError("No key was given.", "Write the key to press, e.g. Enter.")
+    return combos
 
 
 @activity(
@@ -476,11 +510,13 @@ class PressKeyParams(Params):
     category=B,
     icon="keyboard",
     sentence="Press {keys}",
+    description="Press keys in the web page, e.g. Enter to search after typing. The key goes to the box that "
+    "has the focus: click it (or type into it) first.",
     params=PressKeyParams,
 )
 def press_key(ctx: RunContext, p: PressKeyParams) -> None:
     page = _page(ctx)
-    for combo in [k.strip() for k in to_text(p.keys).split(",") if k.strip()]:
+    for combo in browser_keys(to_text(p.keys)):
         page.keyboard.press(combo)
 
 

@@ -128,6 +128,39 @@ def test_element_exists_and_wait_for_disappear(tmp_path, portal_url):
     assert variables["title"] == "Demo Vendor Portal"
 
 
+def test_key_names_are_read_like_people_write_them():
+    from autoflow_engine.activities.browser import browser_keys
+    from autoflow_engine.errors import ActivityError
+
+    assert browser_keys("enter") == ["Enter"]
+    assert browser_keys("ctrl+a, Tab, esc") == ["Control+a", "Tab", "Escape"]
+    assert browser_keys("Control+Shift+S") == ["Control+Shift+s"]
+    assert browser_keys("down, PgDn, f5, A") == ["ArrowDown", "PageDown", "F5", "A"]
+    with pytest.raises(ActivityError, match="not a key name"):
+        browser_keys("Ctlr+A")
+
+
+def test_press_key_with_everyday_key_names(tmp_path):
+    from autoflow_engine.activities.browser import _BROWSER_KEYS
+
+    page = tmp_path / "keys.html"
+    page.write_text("<input id='q' autofocus><p id='log'></p><script>"
+                    "addEventListener('keydown', e => log.textContent += e.key + ';', true)</script>", encoding="utf-8")
+    css = {"id": "log", "name": "Log", "kind": "web", "selectors": [{"strategy": "css", "value": "#log"}]}
+    every_name = ", ".join(sorted(set(_BROWSER_KEYS) - {"f5", "f11", "f12", "win", "windows", "meta", "cmd"}))
+    steps = [
+        step("browser.open", {"url": page.as_uri(), "browser": BROWSER}),
+        step("browser.press_key", {"keys": every_name}),  # the browser knows every name we map to
+        step("browser.press_key", {"keys": "enter, ctrl+a, esc"}),
+        step("browser.get_text", {"element": "log"}, outputs={"text": "seen"}),
+    ]
+    flow = Flow.model_validate({"id": "k", "name": "k", "steps": steps, "elements": [css]})
+    runner = FlowRunner(flow, RunOptions(work_dir=tmp_path / "run", headless=True), lambda e: None)
+    result = runner.run()
+    assert result.status == "succeeded", result.error
+    assert runner.ctx.variables["seen"].endswith("Enter;Control;a;Escape;")
+
+
 MOUSE_PAGE = """<!doctype html><html><body style="margin:0">
 <div id="pad" style="position:absolute;left:20px;top:20px;width:200px;height:100px;background:#ddd"></div>
 <p id="out" style="position:absolute;top:150px">none</p>

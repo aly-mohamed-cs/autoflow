@@ -685,11 +685,12 @@
       "category": "Browser",
       "icon": "keyboard",
       "sentence": "Press {keys}",
-      "description": "",
+      "description": "Press keys in the web page, e.g. Enter to search after typing. The key goes to the box that has the focus: click it (or type into it) first.",
       "params": {
         "additionalProperties": false,
         "properties": {
           "keys": {
+            "description": "One key or a combination per comma: Enter, Tab, Esc, Down, F5, Ctrl+A...",
             "title": "Keys",
             "type": "string",
             "x-placeholder": "Enter, Tab, Control+A",
