@@ -46,6 +46,13 @@ The script:
 
 Options: `-Port 9443`, `-HostName rpa.company.local`, `-PfxPath C:\certs\rpa.pfx`, `-DataDir D:\Autoflow`.
 
+> **The script can't download WinSW** (the service wrapper, from GitHub)? A proxy, firewall or
+> antivirus is blocking it. Download
+> [WinSW-x64.exe v2.12.0](https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe)
+> in a browser, or copy `deploy\windows\bin\AutoflowOrchestrator.exe` from another Autoflow server,
+> then run `.\deploy\windows\install-server.ps1 -WinswPath C:\path\to\that\file.exe`. The script
+> checks it is exactly that WinSW version before using it.
+
 At the end it prints the dashboard address, e.g. `https://rpa.company.local:8443`, and the
 certificate fingerprint. **Note the fingerprint** — robots and Studio ask you to confirm it once.
 

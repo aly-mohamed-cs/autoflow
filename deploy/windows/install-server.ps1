@@ -26,6 +26,10 @@
 
 .PARAMETER DataDir
   Where the database, screenshots and keys live. Default: <repo>\data.
+
+.PARAMETER WinswPath
+  A copy of WinSW-x64.exe (v2.12.0) to use instead of downloading it from GitHub,
+  e.g. when this computer can't reach GitHub. It is checked before use.
 #>
 
 #Requires -RunAsAdministrator
@@ -37,7 +41,8 @@ param(
     [string]$PfxPath = "",
     [SecureString]$PfxPassword,
     [string]$DataDir = "",
-    [int]$RetentionDays = 90
+    [int]$RetentionDays = 90,
+    [string]$WinswPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,6 +50,8 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not $DataDir) { $DataDir = Join-Path $Repo "data" }
 $ServiceName = "AutoflowOrchestrator"
 $WinswVersion = "v2.12.0"
+# SHA-256 of WinSW-x64.exe v2.12.0 (18,243,033 bytes): the service runs as SYSTEM, so only this exact file.
+$WinswSha256 = "05B82D46AD331CC16BDC00DE5C6332C1EF818DF8CEEFCD49C726553209B3A0DA"
 
 function Step($text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "ERROR: $text" -ForegroundColor Red; exit 1 }
@@ -157,11 +164,42 @@ Step "Registering the Windows service"
 $binDir = Join-Path $Repo "deploy\windows\bin"
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 $serviceExe = Join-Path $binDir "$ServiceName.exe"
-if (-not (Test-Path $serviceExe)) {
+function Test-Winsw($path) {
+    (Test-Path $path) -and ((Get-FileHash -Algorithm SHA256 -Path $path).Hash -eq $WinswSha256)
+}
+if (-not (Test-Winsw $serviceExe)) {  # also replaces a half-downloaded file from an earlier attempt
     $url = "https://github.com/winsw/winsw/releases/download/$WinswVersion/WinSW-x64.exe"
-    Write-Host "Downloading the service wrapper (WinSW $WinswVersion) from $url"
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $url -OutFile $serviceExe -UseBasicParsing
+    $download = "$serviceExe.download"
+    if ($WinswPath) {
+        if (-not (Test-Winsw $WinswPath)) { Fail "$WinswPath is not WinSW-x64.exe $WinswVersion (download it from $url)." }
+        Copy-Item $WinswPath $download -Force
+    } else {
+        Write-Host "Downloading the service wrapper (WinSW $WinswVersion) from $url"
+        $ProgressPreference = "SilentlyContinue"  # the progress bar makes Windows PowerShell downloads very slow
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        try {
+            # Company proxies: go through the one Windows uses, signed in as this user.
+            $proxy = [Net.WebRequest]::GetSystemWebProxy()
+            $proxy.Credentials = [Net.CredentialCache]::DefaultNetworkCredentials
+            [Net.WebRequest]::DefaultWebProxy = $proxy
+            Invoke-WebRequest -Uri $url -OutFile $download -UseBasicParsing
+        } catch {
+            Write-Host "PowerShell could not download it ($($_.Exception.Message)); trying curl."
+            try {
+                & curl.exe --location --fail --silent --show-error --ssl-revoke-best-effort --proxy-ntlm --proxy-user : -o $download $url
+            } catch {
+                Write-Host "curl is not available: $($_.Exception.Message)"
+            }
+        }
+    }
+    if (-not (Test-Winsw $download)) {
+        Remove-Item $download -Force -ErrorAction SilentlyContinue
+        Fail ("Could not get WinSW $WinswVersion (a proxy, firewall or antivirus may block it, or the file is not the expected one).`n" +
+            "  Download WinSW-x64.exe in a browser from $url`n" +
+            "  (or copy deploy\windows\bin\$ServiceName.exe from another Autoflow server), then run:`n" +
+            "  .\deploy\windows\install-server.ps1 -WinswPath <path of that file>")
+    }
+    Move-Item $download $serviceExe -Force
 }
 $xml = @"
 <service>
